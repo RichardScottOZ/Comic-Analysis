@@ -5,6 +5,9 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 
 - Note this info in FASTTRACK.md not linked in Docs
 
+# models
+- https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" to C:\Users\Richard/.cache\torch\hub\checkpoints\fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
+
 # downloads
 - Have to fill in forms 
 # EBDTheque
@@ -38,3 +41,9 @@ python benchmarks/captioning/postprocess.py \
 python comix/evaluators/captioning.py \
         -p MODEL_NAME \
         [--nlp_only | --arm_only]
+
+magi needs transformers 4.45.2
+had transformer 4.49        
+
+- There is a quantized MiniCPM here
+        - https://huggingface.co/openbmb/MiniCPM-V-2_6-int4
