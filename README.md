@@ -8,4 +8,4 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 
 # Tasks of Interest
 - Dialogue transcription
-- Therefore, needs a pipeline above that can detect panesl
+- Therefore, needs a pipeline above that can detect panels
