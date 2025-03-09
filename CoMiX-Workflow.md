@@ -8,6 +8,15 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 # models
 - https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" to C:\Users\Richard/.cache\torch\hub\checkpoints\fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
 
+## Qwen
+- to test on retail hardware - possible smaller quants - original is Qwen 2VL 72B-Intruct quant at 12.6
+- Model ID: "Qwen/Qwen2-VL-72B-Instruct-GPTQ-Int4"
+        - https://huggingface.co/Qwen/Qwen2-VL-7B-Instruct-GPTQ-Int4
+
+## MiniCPM
+- Model ID: "openbmb/MiniCPM-V-2_6"
+        - https://huggingface.co/openbmb/MiniCPM-V-2_6-int4
+
 # downloads
 - Have to fill in forms 
 # EBDTheque
