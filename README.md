@@ -9,3 +9,9 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 # Tasks of Interest
 - Dialogue transcription
 - Therefore, needs a pipeline above that can detect panels
+
+
+# Pipeline
+- See Comix repo
+- the code in detections_2000ad are adaptations of the similarly named functions in CoMix/detections to just be inference and not worry about evalutions of models
+- https://github.com/emanuelevivoli/CoMix/tree/main/benchmarks/detections
