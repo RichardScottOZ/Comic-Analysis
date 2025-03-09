@@ -4,3 +4,6 @@
 
 # DriveThruComics
 
+# Humble Bundle
+- Sometimes has sales of large collections
+
