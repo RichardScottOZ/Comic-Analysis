@@ -8,6 +8,12 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 # models
 - https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" to C:\Users\Richard/.cache\torch\hub\checkpoints\fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
 
+## quantisations
+- for captioning could try some and see how they do
+- CoMix uses:
+## Qwen 2-VL 72B Instruct
+    - Quantised to 12.6
+    - There is a 7B version could be tried on
 ## Qwen
 - to test on retail hardware - possible smaller quants - original is Qwen 2VL 72B-Intruct quant at 12.6
 - Model ID: "Qwen/Qwen2-VL-72B-Instruct-GPTQ-Int4"
@@ -15,6 +21,7 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 
 ## MiniCPM
 - Model ID: "openbmb/MiniCPM-V-2_6"
+        - Needs Flash Attention 2 - likely won't run on Windows
         - https://huggingface.co/openbmb/MiniCPM-V-2_6-int4
 
 # downloads
