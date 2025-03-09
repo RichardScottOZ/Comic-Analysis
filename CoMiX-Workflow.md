@@ -24,6 +24,14 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
         - Needs Flash Attention 2 - likely won't run on Windows
         - https://huggingface.co/openbmb/MiniCPM-V-2_6-int4
 
+## Idefics2
+- No quants made - would have to do
+
+## Idefics3
+- https://huggingface.co/HuggingFaceM4/Idefics3-8B-Llama3
+        - https://huggingface.co/2dameneko/Idefics3-8B-Llama3-nf4
+        - https://huggingface.co/leon-se/Idefics3-8B-Llama3-FP8-Dynamic
+
 # downloads
 - Have to fill in forms 
 # EBDTheque
