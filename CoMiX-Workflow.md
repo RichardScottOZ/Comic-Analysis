@@ -22,6 +22,7 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 - to test on retail hardware - possible smaller quants - original is Qwen 2VL 72B-Intruct quant at 12.6
 - Model ID: "Qwen/Qwen2-VL-72B-Instruct-GPTQ-Int4"
         - https://huggingface.co/Qwen/Qwen2-VL-7B-Instruct-GPTQ-Int4
+        - https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/tree/main
 
 ## MiniCPM
 - Model ID: "openbmb/MiniCPM-V-2_6"
