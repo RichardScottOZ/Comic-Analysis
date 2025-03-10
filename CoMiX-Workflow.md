@@ -8,6 +8,10 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 # models
 - https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth" to C:\Users\Richard/.cache\torch\hub\checkpoints\fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
 
+# flash-attention-2
+- on windows
+- https://github.com/Dao-AILab/flash-attention/issues/1469
+
 ## quantisations
 - for captioning could try some and see how they do
 - CoMix uses:
