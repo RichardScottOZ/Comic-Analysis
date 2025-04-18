@@ -27,7 +27,7 @@ https://drive.google.com/drive/folders/1i4c3ZXBEjGPAkQd2coS0_Ir2wz2q98oo
 
 ## MiniCPM
 - Model ID: "openbmb/MiniCPM-V-2_6"
-        - Needs Flash Attention 2 - likely won't run on Windows
+        - Needs Flash Attention 2 - likely won't run on Windows - can with some work
         - https://huggingface.co/openbmb/MiniCPM-V-2_6-int4
 
 ## Idefics2
