@@ -9,3 +9,6 @@ Mode                 LastWriteTime         Length Name
 - d-----        10/03/2025   7:27 PM                models--Qwen--Qwen2-VL-7B-Instruct-GPTQ-Int4 
 - d-----         9/03/2025   8:11 PM                models--ragavsachdeva--magi
 - d-----         9/03/2025   8:12 PM                models--timm--resnet50.a1_in1k
+
+
+https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct-AWQ
