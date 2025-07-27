@@ -35,11 +35,22 @@ def find_image_files(root_dir):
     return image_files
 
 def process_image(image_path, output_dir, model="qwen/qwen2.5-vl-32b-instruct:free", 
-                 temperature=0.1, top_p=1.0, skip_existing=True):
+                 temperature=0.1, top_p=1.0, skip_existing=True, input_dir=None):
     """Process a single image with the comic analysis script."""
     
     # Create output filename based on the image path
-    relative_path = image_path.relative_to(Path("data/datasets.unify/2000ad/images"))
+    if input_dir:
+        # Use the provided input directory for relative path calculation
+        input_path = Path(input_dir)
+        try:
+            relative_path = image_path.relative_to(input_path)
+        except ValueError:
+            # Fallback: use just the filename if relative path fails
+            relative_path = Path(image_path.name)
+    else:
+        # Fallback: use just the filename
+        relative_path = Path(image_path.name)
+    
     output_filename = f"{relative_path.parent}_{relative_path.stem}.json"
     output_path = Path(output_dir) / output_filename
     
@@ -105,6 +116,7 @@ def main():
     image_files = find_image_files(args.input_dir)
     
     if not image_files:
+        
         print("No image files found!")
         return
     
@@ -141,7 +153,8 @@ def main():
             args.model, 
             args.temperature, 
             args.top_p, 
-            args.skip_existing
+            args.skip_existing,
+            args.input_dir # Pass input_dir to process_image
         )
         results[result] += 1
         
