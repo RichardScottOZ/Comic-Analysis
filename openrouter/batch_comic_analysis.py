@@ -58,9 +58,13 @@ def process_image(image_path, output_dir, model="qwen/qwen2.5-vl-32b-instruct:fr
     if skip_existing and output_path.exists():
         return "skipped"
     
+    # Get the script directory to ensure correct path
+    script_dir = Path(__file__).parent
+    comictest3_path = script_dir / "comictest3.py"
+    
     # Create the command
     cmd = [
-        "python", "benchmarks/detections/openrouter/comictest3.py",
+        "python", str(comictest3_path),
         "--image-path", str(image_path),
         "--output-path", str(output_path),
         "--model", model,
