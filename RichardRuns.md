@@ -39,3 +39,30 @@ python -m comix.process.2000ad --input-path 2000AD --output-path data/datasets.u
 
   & "C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python39_64/python.exe" c:/Users/Richard/OneDrive/GIT/CoMix/benchmarks/captioning/generate_captions.py    
 
+
+## Processing via VLM API
+- Gemma 3 12B
+
+-- first run
+```python
+=== Processing Summary ===
+Total images: 13098
+Successful: 12480
+JSON parse errors: 488
+Errors: 130
+Skipped: 0
+Total time: 24457.84 seconds
+Average time per image: 1.87 seconds
+```
+
+-- second run
+```python
+=== Processing Summary ===
+Total images: 618
+Successful: 456
+JSON parse errors: 140
+Errors: 22
+Skipped: 12480
+Total time: 2185.99 seconds
+Average time per image: 3.54 seconds
+```
