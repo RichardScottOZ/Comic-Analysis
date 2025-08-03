@@ -275,7 +275,7 @@ Average time per image: 1.12 seconds
 ```
 
 - run 14
-```
+```python
 === Processing Summary ===
 Total images: 186
 Successful: 9
@@ -287,7 +287,7 @@ Average time per image: 1.11 seconds
 ```
 
 - run 15
-```
+```python
 === Processing Summary ===
 Total images: 177
 Successful: 5
@@ -299,7 +299,7 @@ Average time per image: 1.26 seconds
 ```
 
 - run 16
-```
+```python
 === Processing Summary ===
 Total images: 172
 Successful: 6
@@ -311,7 +311,7 @@ Average time per image: 1.20 seconds
 ```
 
 - run 17
-```
+```python
 === Processing Summary ===
 Total images: 166
 Successful: 6
@@ -323,7 +323,7 @@ Average time per image: 1.05 seconds
 ```
 
 - run 18
-```
+```python
 === Processing Summary ===
 Total images: 160
 Successful: 3
@@ -335,7 +335,7 @@ Average time per image: 1.07 seconds
 ```
 
 - run 19
-```
+```python
 === Processing Summary ===
 Total images: 157
 Successful: 4
@@ -347,7 +347,7 @@ Average time per image: 1.16 seconds
 ```
 
 - run 20
-```
+```python
 === Processing Summary ===
 Total images: 153
 Successful: 5
@@ -359,7 +359,7 @@ Average time per image: 1.27 seconds
 ```
 
 - run 21
-```
+```python
 === Processing Summary ===
 Total images: 148
 Successful: 4
@@ -371,7 +371,7 @@ Average time per image: 1.00 seconds
 ```
 
 - run 22
-```
+```python
 === Processing Summary ===
 Total images: 144
 Successful: 4
@@ -383,7 +383,7 @@ Average time per image: 1.08 seconds
 ```
 
 - run 23
-```
+```python
 === Processing Summary ===
 Total images: 140
 Successful: 4
@@ -395,7 +395,7 @@ Average time per image: 0.93 seconds
 ```
 
 - run 24
-```
+```python
 === Processing Summary ===
 Total images: 136
 Successful: 6
@@ -407,3 +407,17 @@ Average time per image: 0.99 seconds
 ```
 
 - run 25
+```python
+=== Processing Summary ===
+Total images: 130
+Successful: 5
+JSON parse errors: 125
+Errors: 0
+Skipped: 12968
+Total time: 147.59 seconds
+Average time per image: 1.14 seconds
+```
+
+- run 26
+```python
+```
