@@ -601,11 +601,35 @@ Average time per image: 0.85 seconds
 - run 41
 ```python
 === Processing Summary ===
-Total images: 97
-Successful: 3
-JSON parse errors: 94
+Total images: 94
+Successful: 1
+JSON parse errors: 93
 Errors: 0
-Skipped: 13001
-Total time: 82.42 seconds
-Average time per image: 0.85 seconds
+Skipped: 13004
+Total time: 96.85 seconds
+Average time per image: 1.03 seconds
+```
+
+- run 42
+```python
+=== Processing Summary ===
+Total images: 94
+Successful: 1
+JSON parse errors: 93
+Errors: 0
+Skipped: 13004
+Total time: 96.85 seconds
+Average time per image: 1.03 seconds
+```
+
+- run 43
+```python
+=== Processing Summary ===
+Total images: 94
+Successful: 1
+JSON parse errors: 93
+Errors: 0
+Skipped: 13004
+Total time: 96.85 seconds
+Average time per image: 1.03 seconds
 ```
