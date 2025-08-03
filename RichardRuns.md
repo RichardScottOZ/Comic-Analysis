@@ -51,6 +51,17 @@ So this makes the input part significantly cheaper using one of this family.
 - 12B at openrouter is 0.03/0.03  - and is the clear choice for cheap testing
 - Mistral 3.1 smal 24B is 0.027/0.027 by uses more than double the input tokens
 
+- here's some ballpark
+
+| Model (via OpenRouter) | Avg. Input Tokens (per image) | Avg. Output Tokens (per image) | Image Input Cost | Text Input Cost | Text Output Cost | Total Projected Cost |
+|---|---|---|---|---|---|---|
+| Gemma 3 12B | 660 | 1,118 | $0.00 | $19.80 | $33.54 | ~$53.34 |
+| Gemma 3 27B | 662 | 1,272 | $26.00 | $59.58 | $216.24 | ~$301.82 |
+| Kimi VL A3B Thinking | 1,446 | 2,649 | $0.00 | $54.95 | $100.66 | ~$155.61 |
+| Mistral Small 3.1 24B | 2,257 | 1,319 | $0.00 | $112.85 | $131.90 | ~$244.75 |
+| Mistral Small 3.2 24B | 2,194 | 1,306 | $0.00 | $109.70 | $130.60 | ~$240.30 |
+| Phi-4 Multimodal Instruct | 2,453 | 1,273 | $177.00 | $122.65 | $127.30 | ~$426.95 |
+
 ### Gemma 3 12B
 
 -- first run
