@@ -870,6 +870,6 @@ Successful: 0
 JSON parse errors: 66
 Errors: 0
 Skipped: 13032
-Total time: 101.27 seconds
-Average time per image: 1.53 seconds
+Total time: 88.49 seconds
+Average time per image: 1.34 seconds
 ```
