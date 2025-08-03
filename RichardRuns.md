@@ -113,3 +113,17 @@ Skipped: 13030
 Total time: 872.34 seconds
 Average time per image: 12.83 seconds
 ```
+
+## Horizon Beta
+- first run
+- this model is fast [open ai rumour] - but had twice the json error rate of Gemma 12B!
+```python
+=== Processing Summary ===
+Total images: 13098
+Successful: 11929
+JSON parse errors: 1168
+Errors: 1
+Skipped: 0
+Total time: 8319.45 seconds
+Average time per image: 0.64 seconds
+```
