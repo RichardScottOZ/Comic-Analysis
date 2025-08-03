@@ -116,7 +116,9 @@ Average time per image: 12.83 seconds
 
 ## Horizon Beta
 - first run
-- this model is fast [open ai rumour] - but had twice the json error rate of Gemma 12B!
+- this model is fast [open ai rumour] 
+    - but had twice the json error rate of Gemma 12B!
+    - users 1463 input tokens per image as opposed to 660
 ```python
 === Processing Summary ===
 Total images: 13098
