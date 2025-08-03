@@ -636,4 +636,16 @@ Average time per image: 1.27 seconds
 
 - run 44
 ```python
+=== Processing Summary ===
+Total images: 92
+Successful: 5
+JSON parse errors: 87
+Errors: 0
+Skipped: 13006
+Total time: 115.30 seconds
+Average time per image: 1.25 seconds
+```
+
+- run 45
+```python
 ```
