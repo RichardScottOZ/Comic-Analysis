@@ -44,7 +44,7 @@ python -m comix.process.2000ad --input-path 2000AD --output-path data/datasets.u
 - C:\Users\Richard\OneDrive\GIT\CoMix\benchmarks\detections\openrouter>python batch_comic_analysis_multi.py --input-dir "C:\Users\Richard\OneDrive\GIT\CoMix\data\datasets.unify\2000ad\images" --max-images 20000  --output-dir gemma3122000adbigtest --model google/gemma-3-12b-it --api-key bananasplitsapikey
 
 ## Processing via VLM API
-- Gemma 3 12B
+### Gemma 3 12B
 
 -- first run
 ```python
