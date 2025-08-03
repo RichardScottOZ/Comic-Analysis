@@ -44,6 +44,13 @@ python -m comix.process.2000ad --input-path 2000AD --output-path data/datasets.u
 - C:\Users\Richard\OneDrive\GIT\CoMix\benchmarks\detections\openrouter>python batch_comic_analysis_multi.py --input-dir "C:\Users\Richard\OneDrive\GIT\CoMix\data\datasets.unify\2000ad\images" --max-images 20000  --output-dir gemma3122000adbigtest --model google/gemma-3-12b-it --api-key bananasplitsapikey
 
 ## Processing via VLM API
+- This is output token variable - input tokens will be fairly consistent for a given resolution for a given model
+Gemma 3 bonus is that it does a reduction - it appears that a 1000x1300 or 2000x3000 input images is about the same input tokens
+So this makes the input part significantly cheaper using one of this family.
+- 4B at openrouter is 0.02/0.04
+- 12B at openrouter is 0.03/0.03  - and is the clear choice for cheap testing
+- Mistral 3.1 smal 24B is 0.027/0.027 by uses more than double the input tokens
+
 ### Gemma 3 12B
 
 -- first run
