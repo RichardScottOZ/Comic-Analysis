@@ -372,4 +372,16 @@ Average time per image: 1.00 seconds
 
 - run 22
 ```
+=== Processing Summary ===
+Total images: 144
+Successful: 4
+JSON parse errors: 140
+Errors: 0
+Skipped: 12954
+Total time: 155.02 seconds
+Average time per image: 1.08 seconds
+```
+
+-run 23
+```
 ```
