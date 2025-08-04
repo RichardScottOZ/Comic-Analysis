@@ -90,3 +90,26 @@ python benchmarks\detections\openrouter\convert_to_cbz.py --input-dir "E:\Comics
 python benchmarks\detections\openrouter\convert_to_cbz.py --input-dir "E:\Comics" --max-files 50      
 
 # Extract CBZ
+```python
+python extract_calibre_comics.py --input-dir "D:\CalibreComics" --output-dir "D:\CalibreComics_extracted"
+Scanning directory: D:\CalibreComics
+Found 3753 comic archive files
+
+Processing 3753 comic files...
+Input directory: D:\CalibreComics
+Output directory: D:\CalibreComics_extracted
+Preserve structure: False
+Skip existing: False
+Processing 3753 comics
+Using 32 worker processes
+Success: 3750, Errors: 0, Extraction Errors: 3: 100%|███████████████████████████| 3753/3753 [17:20:15<00:00, 16.63s/it]
+
+=== Extraction Summary ===
+Total comics: 3753
+Successful: 3750
+Extraction errors: 3
+Errors: 0
+Skipped: 0
+Total time: 62416.08 seconds
+Average time per comic: 16.63 seconds
+```
