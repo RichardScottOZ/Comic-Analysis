@@ -77,3 +77,16 @@ had transformer 4.49
 
 - There is a quantized MiniCPM here
         - https://huggingface.co/openbmb/MiniCPM-V-2_6-int4
+
+
+# Convert to cbz
+- - Basic usage (convert in same directory)
+python benchmarks\detections\openrouter\convert_to_cbz.py --input-dir "E:\Comics"
+
+- With custom output directory
+python benchmarks\detections\openrouter\convert_to_cbz.py --input-dir "E:\Comics" --output-dir "E:\Comics_Converted" --max-workers 12
+
+- Test with limited files
+python benchmarks\detections\openrouter\convert_to_cbz.py --input-dir "E:\Comics" --max-files 50      
+
+# Extract CBZ
