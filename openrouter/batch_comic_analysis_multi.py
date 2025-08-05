@@ -207,7 +207,15 @@ def find_image_files(root_dir):
             for image_file in subdir.glob("*.jpg"):  # Focus on jpg files based on the structure
                 if image_file.is_file():
                     image_files.append(image_file)
-    
+
+            for image_file in subdir.glob("*.jpeg"):  # Focus on jpg files based on the structure
+                if image_file.is_file():
+                    image_files.append(image_file)
+
+            for image_file in subdir.glob("*.png"):  # Focus on jpg files based on the structure
+                if image_file.is_file():
+                    image_files.append(image_file)
+
     print(f"Found {len(image_files)} image files")
     return image_files
 
