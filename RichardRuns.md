@@ -872,4 +872,8 @@ Errors: 0
 Skipped: 13032
 Total time: 88.49 seconds
 Average time per image: 1.34 seconds
+
 ```
+
+
+python batch_comic_analysis_multi.py --input-dir "E:\amazon" --max-images 2000000 --output-dir "E:\amazon_analysis" --model openrouter/horizon-beta --api-key bananasplitsapikey
