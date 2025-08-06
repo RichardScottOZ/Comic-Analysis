@@ -260,10 +260,36 @@ def find_image_files(input_dir, extensions=('.jpg', '.jpeg', '.png', '.bmp', '.t
         print(f"Scanning for {ext} files...")
         files = list(input_path.rglob(f"*{ext}"))
         files.extend(input_path.rglob(f"*{ext.upper()}"))
-        image_files.extend(files)
-        print(f"Found {len(files)} {ext} files")
+        
+        # Debug: Check for duplicates
+        original_count = len(files)
+        unique_files = list(set(files))
+        duplicate_count = original_count - len(unique_files)
+        
+        if duplicate_count > 0:
+            print(f"  WARNING: Found {duplicate_count} duplicate files for {ext}")
+        
+        image_files.extend(unique_files)
+        print(f"Found {len(unique_files)} unique {ext} files")
     
-    print(f"Found {len(image_files)} total image files")
+    # Final deduplication check
+    original_total = len(image_files)
+    image_files = list(set(image_files))
+    final_dedup_count = original_total - len(image_files)
+    
+    if final_dedup_count > 0:
+        print(f"WARNING: Removed {final_dedup_count} duplicate files across all extensions")
+    
+    print(f"Found {len(image_files)} total unique image files")
+    
+    # Debug: Show some sample paths to verify they're valid
+    if len(image_files) > 0:
+        print("Sample files found:")
+        for i, file in enumerate(image_files[:5]):
+            print(f"  {i+1}: {file}")
+        if len(image_files) > 5:
+            print(f"  ... and {len(image_files) - 5} more files")
+    
     return sorted(image_files)
 
 def main():
@@ -361,10 +387,10 @@ def main():
         
         try:
             # Determine output path - flatten structure
-            # Use just the filename with a unique identifier to avoid conflicts
-            image_name = image_file.stem
             # Create a unique identifier from the path to avoid name conflicts
-            unique_id = str(image_file.relative_to(input_dir)).replace('\\', '_').replace('/', '_').replace('.', '_')
+            relative_path = image_file.relative_to(input_dir)
+            # Remove the file extension before creating the unique ID
+            unique_id = str(relative_path.with_suffix('')).replace('\\', '_').replace('/', '_')
             output_path = output_dir / f"{unique_id}.json"
             
             # Skip if output exists and skip-existing is set
