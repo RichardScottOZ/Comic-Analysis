@@ -19,3 +19,23 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 
 - install pytorch as per pytorch site instructions
 - using CUDA 11.8 so far
+
+# VLMS - current generation
+- Some newer VLMs can basically zero shot this problem to some degree, including some cheap models
+
+# NOTES
+# Gemini 4B - can do basics
+- fails on some perpeptually?
+- yet to be understood why
+- perhaps look at fourier analysis?
+
+# Gemma 12B - can handle some failures of 4B
+
+# Mistral 3.1
+- character A and character B only generally but can handle gemini failures
+
+# Qwen 2.5 VL Instruct failed on same that gemini 4B did
+
+# Phi4 not very good
+
+# Lllama 11B failed to process
