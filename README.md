@@ -39,3 +39,16 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 # Phi4 not very good
 
 # Lllama 11B failed to process
+
+
+# Mistral 3.1
+- character A and character B only generally but can handle gemini failures
+
+# Qwen 2.5 VL Instruct failed on same that gemini 4B did
+
+# Gemini Flash 1.5 - can do missing - some null captions and characters
+
+# Gemini Flash 2.5 flash lite - can do missing 
+- good, but output is 8 times more expensive than gemma 4B - which could run locally
+- quite a few connection errors with google as the provider
+- on the last hardest 660 had  1/3 errors and 1/5 json errors
