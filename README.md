@@ -44,11 +44,22 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 # Mistral 3.1
 - character A and character B only generally but can handle gemini failures
 
-# Qwen 2.5 VL Instruct failed on same that gemini 4B did
+# Qwen 2.5 VL Instruct 
+- failed on same that gemini 4B did
 
-# Gemini Flash 1.5 - can do missing - some null captions and characters
+# Gemini Flash 1.5 
+- can do missing - some null captions and characters
 
-# Gemini Flash 2.5 flash lite - can do missing 
+# Gemini Flash 2.5 flash lite
+- can do missing 
 - good, but output is 8 times more expensive than gemma 4B - which could run locally
 - quite a few connection errors with google as the provider
 - on the last hardest 660 had  1/3 errors and 1/5 json errors
+
+# GPT Nano 4.1 says unsupported image type?
+- so not as good as google which can handle
+
+# Meta Llama 4 Scout
+- much better, success on 300 out of 500 images left at the end 
+- also 0.08/0.3 compared to 0.10/0.40 for Gemini Flash Lite 2.5 - so way better
+- GMI Cloud provider big problems
