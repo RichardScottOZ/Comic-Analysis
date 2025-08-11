@@ -66,6 +66,7 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 
 
 # Future Research
+- https://arxiv.org/abs/2503.08561
 - https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
 
 - https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
