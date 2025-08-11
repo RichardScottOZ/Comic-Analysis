@@ -63,3 +63,11 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 - much better, success on 300 out of 500 images left at the end 
 - also 0.08/0.3 compared to 0.10/0.40 for Gemini Flash Lite 2.5 - so way better
 - GMI Cloud provider big problems
+
+
+# Future Research
+- https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
+
+- https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
+
+- A Deep Learning Pipeline for the Synthesis of Graphic Novels - https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
