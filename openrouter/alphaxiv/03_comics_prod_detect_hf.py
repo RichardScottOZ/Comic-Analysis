@@ -133,6 +133,60 @@ class HF_GroundingDINO:
             dets.append(((x1,y1,x2,y2), float(s), cls))
         return dets, (H, W)
 
+
+    # mapping helpers once at module level
+    PHRASE_TO_CLASS = {p:k for k, lst in PROMPTS.items() for p in lst}
+    LOWER_MAP = {k.lower(): v for k, v in PHRASE_TO_CLASS.items()}
+    CAPTION = ", ".join(PHRASE_TO_CLASS.keys())
+
+    @torch.no_grad()
+    def infer(self, image_bgr, box_threshold=0.30, text_threshold=0.25):
+        H, W = image_bgr.shape[:2]
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled="cuda" in self.device):
+            inputs = self.processor(images=image_rgb, text=CAPTION, return_tensors="pt").to(self.device)
+            outputs = self.model(**inputs)
+
+            # Use 'threshold' (new) and fall back to 'box_threshold' (old) if needed
+            try:
+                processed = self.processor.post_process_grounded_object_detection(
+                    outputs=outputs, input_ids=inputs["input_ids"],
+                    target_sizes=[(H, W)],
+                    threshold=box_threshold,      # new arg name
+                    text_threshold=text_threshold
+                )[0]
+            except TypeError:
+                processed = self.processor.post_process_grounded_object_detection(
+                    outputs=outputs, input_ids=inputs["input_ids"],
+                    target_sizes=[(H, W)],
+                    box_threshold=box_threshold,  # older transformers
+                    text_threshold=text_threshold
+                )[0]
+
+        boxes = processed["boxes"].tolist()     # xyxy
+        scores = processed["scores"].tolist()
+
+        # HF returns 'text_labels' (strings) and 'labels' (indices). Prefer text_labels.
+        phrases = processed.get("text_labels", None)
+        if phrases is None:
+            # Fallback: map indices to strings if needed (rare; most builds include text_labels)
+            idxs = processed.get("labels", [])
+            # As a simple fallback, treat idxs as best-effort and skip if we can't map reliably:
+            phrases = [None for _ in idxs]
+
+        dets = []
+        for (x1,y1,x2,y2), s, ph in zip(boxes, scores, phrases):
+            if ph is None:
+                continue
+            key = ph if ph in PHRASE_TO_CLASS else ph.lower()
+            cls = PHRASE_TO_CLASS.get(key, LOWER_MAP.get(key))
+            if cls is None:
+                continue
+            dets.append(((x1,y1,x2,y2), float(s), cls))
+        return dets, (H, W)
+        
+
 def ensure_dir(p: Path):
     p.mkdir(parents=True, exist_ok=True)
 
@@ -140,8 +194,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, help="Root folder with books (each a folder of pages)")
     ap.add_argument("--out", required=True, help="Output folder")
-    ap.add_argument("--model-id", default="IDEA-Research/grounding-dino-swint-ogc",
-                    help="HF model id, e.g. IDEA-Research/grounding-dino-swint-ogc")
+    ap.add_argument("--model-id", default="IDEA-Research/grounding-dino-base",
+                    help="HF model id, e.g. IDEA-Research/grounding-dino-base")
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--box-thr", type=float, default=0.30)
     ap.add_argument("--text-thr", type=float, default=0.25)

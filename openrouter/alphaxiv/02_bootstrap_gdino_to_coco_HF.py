@@ -55,7 +55,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--img-dir", required=True, help="Directory with images for one split (e.g., images/train)")
     ap.add_argument("--out-json", required=True, help="Where to write bootstrap COCO JSON")
-    ap.add_argument("--model-id", default="IDEA-Research/grounding-dino-swint-ogc")
+    ap.add_argument("--model-id", default="IDEA-Research/grounding-dino-base")
     ap.add_argument("--device", default="cuda:0")
     ap.add_argument("--box-thr", type=float, default=0.30)
     ap.add_argument("--text-thr", type=float, default=0.25)
