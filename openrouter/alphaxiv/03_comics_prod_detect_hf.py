@@ -41,6 +41,20 @@ def list_books(root):
             except PermissionError:
                 continue
 
+def list_books(root):
+    root = Path(root)
+    # if root itself contains images, treat it as one book
+    has_img = any(p.suffix.lower() in IMG_EXTS for p in root.iterdir() if p.is_file())
+    if has_img:
+        yield root
+        return
+    # otherwise, iterate subfolders
+    for d in sorted(root.iterdir()):
+        if d.is_dir():
+            if any((d/f).suffix.lower() in IMG_EXTS for f in os.listdir(d)):
+                yield d
+
+
 def list_images(book_dir):
     for fn in sorted(os.listdir(book_dir)):
         if Path(fn).suffix.lower() in IMG_EXTS:
