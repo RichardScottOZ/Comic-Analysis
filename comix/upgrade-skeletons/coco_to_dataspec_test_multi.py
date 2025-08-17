@@ -130,7 +130,7 @@ def build_adjacency(panel_boxes: List[List[float]], order: List[int], k_fallback
 # --------- Single image processor (for multiprocessing)
 def process_single_image(args):
     """Process a single image - designed for multiprocessing"""
-    img_id, anns, cat_map, imginfo, vlm_pages_dir, panel_thr, panel_nms, text_thr, char_thr, balloon_thr, rtl = args
+    img_id, anns, cat_map, imginfo, vlm_pages_dir, panel_thr, panel_nms, text_thr, char_thr, balloon_thr, rtl, output_dir, skip_existing = args
     
     # Resolve image path and size
     if img_id in imginfo:
@@ -148,6 +148,14 @@ def process_single_image(args):
             with Image.open(alt) as im:
                 W, H = im.size
             path = alt
+
+    # Check if output file already exists (for skip-existing)
+    out_name = os.path.basename(path)
+    out_name = os.path.splitext(out_name)[0] + '.json'
+    output_path = os.path.join(output_dir, out_name)
+    
+    if skip_existing and os.path.exists(output_path):
+        return None  # Skip this image
 
     # Collect boxes per category
     panels, panel_scores = [], []
@@ -322,13 +330,20 @@ def process_single_image(args):
         }
         page['panels'].append(panel_rec)
 
-    return page
+    # Write the file immediately
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(page, f, ensure_ascii=False, indent=2)
+        return {'page': page, 'filename': out_name, 'status': 'written'}
+    except Exception as e:
+        return {'page': page, 'filename': out_name, 'status': 'error', 'error': str(e)}
 
 # --------- Core converter with multiprocessing
 def build_pages_from_coco_multi(coco_path: str, vlm_pages_dir: str=None,
                                panel_thr=0.75, panel_nms=0.25,
                                text_thr=0.5, char_thr=0.6, balloon_thr=0.5,
-                               rtl=False, limit=None, num_workers=None) -> List[Dict]:
+                               rtl=False, limit=None, num_workers=None,
+                               output_dir: str=None, skip_existing: bool=False) -> List[Dict]:
     
     print("Loading COCO data...")
     with open(coco_path, 'r', encoding='utf-8') as f:
@@ -360,25 +375,28 @@ def build_pages_from_coco_multi(coco_path: str, vlm_pages_dir: str=None,
     work_items = []
     for img_id, anns in anns_by_img.items():
         work_items.append((img_id, anns, cat_map, imginfo, vlm_pages_dir, 
-                          panel_thr, panel_nms, text_thr, char_thr, balloon_thr, rtl))
+                          panel_thr, panel_nms, text_thr, char_thr, balloon_thr, rtl, output_dir, skip_existing))
     
     # Apply limit
     if limit is not None:
         work_items = work_items[:limit]
+        print(f"DEBUG: Applied limit of {limit} images")
     
     print(f"Processing {len(work_items)} images (out of {len(anns_by_img)} total in dataset)")
     print(f"Using {num_workers or mp.cpu_count()} workers")
+    if skip_existing:
+        print("Skip-existing mode: Will skip files that already exist")
     
     # Process with multiprocessing
     start_time = time.time()
-    pages = []
+    results = []
     
     if num_workers == 1:
         # Single-threaded for debugging
         for item in tqdm(work_items, desc="Processing images"):
             result = process_single_image(item)
             if result is not None:
-                pages.append(result)
+                results.append(result)
     else:
         # Multiprocessing
         with mp.Pool(processes=num_workers) as pool:
@@ -387,12 +405,23 @@ def build_pages_from_coco_multi(coco_path: str, vlm_pages_dir: str=None,
                 total=len(work_items),
                 desc="Processing images"
             ))
-            pages = [r for r in results if r is not None]
+            results = [r for r in results if r is not None]
+    
+    # Count results by status
+    written_count = sum(1 for r in results if r['status'] == 'written')
+    error_count = sum(1 for r in results if r['status'] == 'error')
+    skipped_count = len(work_items) - len(results) if skip_existing else 0
     
     elapsed_time = time.time() - start_time
-    print(f"\nCompleted processing {len(pages)} pages successfully in {elapsed_time:.1f} seconds")
+    print(f"\nCompleted processing in {elapsed_time:.1f} seconds")
+    print(f"Files written: {written_count}")
+    print(f"Files with errors: {error_count}")
+    if skip_existing:
+        print(f"Files skipped (already existed): {skipped_count}")
     print(f"Average time per image: {elapsed_time/len(work_items):.2f} seconds")
     
+    # Return just the page data for compatibility
+    pages = [r['page'] for r in results if r['status'] == 'written']
     return pages
 
 if __name__ == '__main__':
@@ -405,6 +434,7 @@ if __name__ == '__main__':
     ap.add_argument('--out', required=True)
     ap.add_argument('--limit', type=int, default=None, help='limit processing to first N images (for testing)')
     ap.add_argument('--workers', type=int, default=None, help='number of worker processes (default: CPU count)')
+    ap.add_argument('--skip-existing', action='store_true', help='skip processing images that already have output files')
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
@@ -419,14 +449,9 @@ if __name__ == '__main__':
         args.coco, 
         vlm_pages_dir=args.vlm_dir, 
         limit=args.limit,
-        num_workers=args.workers
+        num_workers=args.workers,
+        output_dir=args.out,
+        skip_existing=args.skip_existing
     )
     
-    print(f"Writing {len(pages)} page JSONs to {args.out}...")
-    for p in tqdm(pages, desc="Writing files"):
-        out_name = os.path.basename(p['page_image_path'])
-        out_name = os.path.splitext(out_name)[0] + '.json'
-        with open(os.path.join(args.out, out_name), 'w', encoding='utf-8') as f:
-            json.dump(p, f, ensure_ascii=False, indent=2)
-    
-    print(f'Successfully wrote {len(pages)} page JSONs to {args.out}') 
+    print(f'Processing complete! Files written incrementally to {args.out}') 
