@@ -150,8 +150,71 @@ def process_single_image(args):
             path = alt
 
     # Check if output file already exists (for skip-existing)
-    out_name = os.path.basename(path)
-    out_name = os.path.splitext(out_name)[0] + '.json'
+    # Create unique filename based on full path to avoid conflicts
+    def create_unique_filename(image_path):
+        """Create a unique filename from the image path"""
+        # Normalize path and split
+        clean_path = norm_path(image_path)
+        path_parts = [p for p in clean_path.split('/') if p]
+        
+        if len(path_parts) >= 2:
+            # Extract comic name and page info
+            comic_name = path_parts[-2]  # Second to last part (comic title/issue)
+            page_name = os.path.splitext(path_parts[-1])[0]  # Last part without extension
+            
+            # Clean up names for filesystem safety
+            comic_name = re.sub(r'[<>:"/\\|?*]', '_', comic_name)
+            page_name = re.sub(r'[<>:"/\\|?*]', '_', page_name)
+            
+            # Handle the specific pattern from the data:
+            # "Abe Sapien 1 Dark and Terrible - Unknown_00023.jpg"
+            # Split by underscore to separate comic name from page number
+            if '_' in page_name:
+                parts = page_name.split('_')
+                if len(parts) >= 2:
+                    # Last part should be the page number
+                    potential_page_num = parts[-1]
+                    if potential_page_num.isdigit():
+                        # Extract comic name from the filename
+                        comic_from_filename = '_'.join(parts[:-1])
+                        return f"{comic_from_filename}_page_{potential_page_num}.json"
+            
+            # Handle various page naming patterns
+            # Look for page numbers in the filename
+            page_match = re.search(r'(\d+)', page_name)
+            if page_match:
+                page_num = page_match.group(1)
+                # If the page name is just a number or contains "page", "pg", etc.
+                if (page_name.isdigit() or 
+                    re.search(r'\b(page|pg|p)\b', page_name.lower())):
+                    return f"{comic_name}_page_{page_num}.json"
+                else:
+                    # Page name has other text, keep the full name
+                    return f"{comic_name}_{page_name}.json"
+            else:
+                # No number found, check if it's a special page type
+                page_lower = page_name.lower()
+                if any(keyword in page_lower for keyword in ['cover', 'title', 'credits', 'back']):
+                    return f"{comic_name}_{page_name}.json"
+                else:
+                    # Generic page without number, try to extract any number from comic name
+                    comic_match = re.search(r'(\d+)', comic_name)
+                    if comic_match:
+                        issue_num = comic_match.group(1)
+                        return f"{comic_name}_page_{page_name}.json"
+                    else:
+                        return f"{comic_name}_{page_name}.json"
+                
+        elif len(path_parts) == 1:
+            # Single filename, use as is
+            page_name = os.path.splitext(path_parts[0])[0]
+            page_name = re.sub(r'[<>:"/\\|?*]', '_', page_name)
+            return f"{page_name}.json"
+        else:
+            # Fallback: use image_id as filename
+            return f"image_{img_id}.json"
+    
+    out_name = create_unique_filename(path)
     output_path = os.path.join(output_dir, out_name)
     
     if skip_existing and os.path.exists(output_path):
