@@ -9,3 +9,21 @@ python benchmarks\detections_2000ad\faster_rcnn.py --input-path "E:\CalibreComic
 
 
 python benchmarks\detections\openrouter\coco_to_dataspect_test.py --coco E:\CalibreComics\test_dections\predictions.json --vlm_dir E:\CalibreComics_analysis --out E:\CalibreComics_datacontract-test --limit 10
+
+# Test with 10 images, 8 workers
+python benchmarks\detections\openrouter\coco_to_dataspect_test_multi.py --coco E:\CalibreComics\test_dections\predictions.json --vlm_dir E:\CalibreComics_analysis --out E:\CalibreComics_datacontract-test --limit 10 --workers 8
+
+# Full processing with all CPU cores
+python benchmarks\detections\openrouter\coco_to_dataspect_test_multi.py --coco E:\CalibreComics\test_dections\predictions.json --vlm_dir E:\CalibreComics_analysis --out E:\CalibreComics_datacontract-test --workers 32
+
+# Debug mode (single-threaded)
+python benchmarks\detections\openrouter\coco_to_dataspect_test_multi.py --coco E:\CalibreComics\test_dections\predictions.json --vlm_dir E:\CalibreComics_analysis --out E:\CalibreComics_datacontract-test --limit 10 --workers 1
+
+# Skip files that already exist (great for resuming interrupted runs)
+python benchmarks\detections\openrouter\coco_to_dataspect_test_multi.py --coco E:\CalibreComics\test_dections\predictions.json --vlm_dir E:\CalibreComics_analysis --out E:\CalibreComics_datacontract-test --workers 16 --skip-existing
+
+
+### DO AMAZON detections - for text bosrs etc.
+
+
+python benchmarks\detections_2000ad\faster_rcnn.py --input-path "E:\amazon_analysis" --output-path E:\amazon\test_dections\predictions.json  --save-vis 196 --conf-threshold 0.5         
