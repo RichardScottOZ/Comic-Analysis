@@ -28,10 +28,16 @@ class SimpleDataset(Dataset):
         
         # Walk through the directory structure
         count = 0
+        # Define supported image extensions
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.webp', '.gif'}
+        
         for root, dirs, files in os.walk(self.root_dir):
             for file in files:
-                self.image_paths.append(os.path.join(root, file))
-                self.book_chapters.append(root)
+                # Only process files with image extensions
+                file_ext = os.path.splitext(file)[1].lower()
+                if file_ext in image_extensions:
+                    self.image_paths.append(os.path.join(root, file))
+                    self.book_chapters.append(root)
 
         #for book_chapter_dir in sorted(self.root_dir.iterdir()):
             #if book_chapter_dir.is_dir():
@@ -48,12 +54,20 @@ class SimpleDataset(Dataset):
         #page_no = self.image_paths[idx].stem  # Get the filename without extension
         page_no = self.image_paths[idx].split('\\')[-1]  # Get the filename without extension
         
-        # Load and transform image
-        img = Image.open(img_path).convert('RGB')
-        if self.transform:
-            img = self.transform(img)
-        
-        return img, (img_path, book_chapter, page_no)
+        # Load and transform image with error handling
+        try:
+            img = Image.open(img_path).convert('RGB')
+            if self.transform:
+                img = self.transform(img)
+            return img, (img_path, book_chapter, page_no)
+        except Exception as e:
+            print(f"Error loading image {img_path}: {e}")
+            # Return a placeholder image or skip this file
+            # For now, we'll create a black image as placeholder
+            img = Image.new('RGB', (1024, 1024), color='black')
+            if self.transform:
+                img = self.transform(img)
+            return img, (img_path, book_chapter, page_no)
 
 def get_transform():
     transforms = []
@@ -167,12 +181,18 @@ def main():
 
                 # Save visualization if requested
                 if args.save_vis and batch_idx < args.save_vis:
+                    print("vis for image path", img_path)
+                    print(f"Number of detections before filtering: {len(results['boxes'])}")
+                    print(f"Number of detections after filtering (conf > {args.conf_threshold}): {len(boxes)}")
+                    print(f"Max confidence score: {results['scores'].max().item():.3f}")
+                    
                     import matplotlib.pyplot as plt
                     from matplotlib.patches import Rectangle
                     
                     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
                     ax.imshow(Image.open(img_path))
                     
+                    # Use the filtered boxes and labels (above confidence threshold)
                     for box, label in zip(boxes, labels):
                         x1, y1, x2, y2 = box.tolist()
                         cls = label.item() - 1
@@ -199,6 +219,7 @@ def main():
                     plt.close()
 
     # Save results
+    print("output path:",args.output_path)
     os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
     with open(args.output_path, 'w') as f:
         json.dump(coco_output, f)
