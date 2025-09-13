@@ -877,3 +877,18 @@ Average time per image: 1.34 seconds
 
 
 python batch_comic_analysis_multi.py --input-dir "E:\amazon" --max-images 2000000 --output-dir "E:\amazon_analysis" --model openrouter/horizon-beta --api-key bananasplitsapikey
+
+
+
+### Closure Lite
+
+python train_closure_lite.py     --json_dir "E:\amazon_datacontract-test"     --image_root "E:\amazon"     --output_dir "./closure_lite_output"     --batch_size 4     --epochs 5     --wandb_project "closure-lite-amazon"     --resume "./closure_lite_output/best_checkpoint.pth"
+
+python benchmarks/detections/openrouter/train_closure_lite.py \
+    --json_dir "E:/amazon_datacontract-test" \
+    --image_root "E:/amazon" \
+    --output_dir "benchmarks/detections/openrouter/closure_lite_output" \
+    --batch_size 4 \
+    --epochs 5 \
+    --lr 3e-4 \
+    --resume "benchmarks/detections/openrouter/closure_lite_output/best_checkpoint.pth"
