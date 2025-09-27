@@ -62,14 +62,18 @@ def standardize_path(original_path: str, source: str) -> str:
 
 def clean_series_name(name: str) -> str:
     """Clean and standardize series names"""
+    # Remove volume information first to avoid duplication
+    name_no_volume = re.sub(r'\s+(v\d+|\(\d{4}-\d{4}\)|\d{4})', '', name)
+    
     # Remove special characters, normalize spaces
-    cleaned = re.sub(r'[^\w\s]', '', name)
+    cleaned = re.sub(r'[^\w\s]', '', name_no_volume)
     cleaned = re.sub(r'\s+', '_', cleaned.strip())
     return cleaned.lower()
 
 def extract_volume(name: str) -> str:
     """Extract volume information"""
     # Look for patterns like "v03", "2016-2018", etc.
+    # Remove the volume info from the name to avoid duplication
     volume_match = re.search(r'(v\d+|\(\d{4}-\d{4}\)|\d{4})', name)
     return volume_match.group(1) if volume_match else 'unknown'
 
