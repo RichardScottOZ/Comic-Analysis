@@ -72,3 +72,12 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 - https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
 
 - A Deep Learning Pipeline for the Synthesis of Graphic Novels - https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
+
+# TODO
+- Run model to make embeddings
+- Make sure text is as close to right panels as we can
+- We got 25% alignment betwen fast-rcnn and various vlm runs - so need to work out what is best and affordable there
+    - do we need to ocr fast rcnn
+- Consider cover identification by embedding
+    - will it just work
+    - do we need to cluster or supervise to detect - not all 1 panel pages will be covers - some will be ads
