@@ -892,3 +892,91 @@ python benchmarks/detections/openrouter/train_closure_lite.py \
     --epochs 5 \
     --lr 3e-4 \
     --resume "benchmarks/detections/openrouter/closure_lite_output/best_checkpoint.pth"
+
+
+### Closure Lite Simple
+- prevent attention collapse of other version
+
+```python
+ python benchmarks/detections/openrouter/train_closure_lite_simple.py --json_list_file "perfect_match_training/perfect_match_jsons.txt" --image_root "E:\amazon" --output_dir "closure_lite_simple_full_output" --batch_size 4 --epochs 8 --lr 1e-4 --wandb_project "closure-lite-simple-full-extended" --num_heads 4 --temperature 0.1 --resume "closure_lite_simple_full_output/best_checkpoint.pth"    
+
+
+  python benchmarks/detections/openrouter/train_closure_lite_simple.py --json_list_file "perfect_match_training/perfect_match_jsons.txt" --image_root "E:\amazon" --output_dir "closure_lite_simple_full_output" --batch_size 4 --epochs 5 --lr 1e-4 --wandb_project "closure-lite-simple-full" --num_heads 4 --temperature 0.1
+Using device: cuda
+wandb: Using wandb-core as the SDK backend.  Please refer to https://wandb.me/wandb-core for more information.
+wandb: (1) Create a W&B account
+wandb: (2) Use an existing W&B account
+wandb: (3) Don't visualize my results
+wandb: Enter your choice: 3
+wandb: You chose "Don't visualize my results"
+wandb: Tracking run with wandb version 0.19.9
+wandb: W&B syncing is set to `offline` in this directory.
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Creating dataloader...
+Loading JSON list from perfect_match_training/perfect_match_jsons.txt
+Using JSON list file: perfect_match_training/perfect_match_jsons.txt
+Successfully loaded 212736 JSON paths using latin-1 encoding
+Creating dataset with 212736 JSON files
+Image root: /mnt/e/amazon
+Dataset initialized with 212736 JSON files
+Pages will be loaded on-demand during training
+Created dataloader with 212736 samples
+Creating model with simple framework (no sequence processing)...
+Some weights of ViTModel were not initialized from the model checkpoint at google/vit-base-patch16-224 and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Some weights of RobertaModel were not initialized from the model checkpoint at roberta-base and are newly initialized: ['pooler.dense.bias', 'pooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Total parameters: 212,469,515
+Trainable parameters: 212,469,515
+Trainable percentage: 100.0%
+/mnt/c/Users/Richard/OneDrive/GIT/CoMix/benchmarks/detections/openrouter/train_closure_lite_simple.py:297: FutureWarning: `torch.cuda.amp.GradScaler(args...)` is deprecated. Please use `torch.amp.GradScaler('cuda', args...)` instead.
+  scaler = torch.cuda.amp.GradScaler()
+Starting training with simple framework...
+Epoch 1/5
+Epoch 1:   0%|                                                                                | 0/53184 [00:00<?, ?it/s]/mnt/c/Users/Richard/OneDrive/GIT/CoMix/benchmarks/detections/openrouter/train_closure_lite_simple.py:130: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast():
+Epoch 1:  19%|▏| 10000/53184 [1:46:36<7:23:38,  1.62it/s, Loss=0.1578, Avg=0.2619, MPM=0.0000, AvgMPM=0.0000, POP=0.0001Saved intermediate checkpoint at batch 10000
+Epoch 1:  38%|▍| 20000/53184 [3:36:00<9:24:16,  1.02s/it, Loss=0.2790, Avg=0.2496, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 20000
+Epoch 1:  56%|▌| 30000/53184 [5:22:49<4:15:12,  1.51it/s, Loss=0.3577, Avg=0.2361, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 30000
+Epoch 1:  75%|▊| 40000/53184 [7:08:38<2:37:20,  1.40it/s, Loss=0.3126, Avg=0.2900, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 40000
+Epoch 1:  94%|▉| 50000/53184 [8:54:03<47:53,  1.11it/s, Loss=0.3626, Avg=0.2935, MPM=0.0000, AvgMPM=0.0000, POP=0.0000, Saved intermediate checkpoint at batch 50000
+Epoch 1: 100%|█| 53184/53184 [9:27:49<00:00,  1.56it/s, Loss=0.2027, Avg=0.2184, MPM=0.0000, AvgMPM=0.0000, POP=0.0000,
+Epoch 1 - Avg Loss: 0.2697 MPM: 0.0000 POP: 0.0036 RPP: 0.5372
+New best model saved! Loss: 0.2697
+Epoch 2/5
+Epoch 2:  19%|▏| 10000/53184 [1:37:23<4:15:55,  2.81it/s, Loss=0.1975, Avg=0.2808, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 10000
+Epoch 2:  38%|▍| 20000/53184 [3:24:34<6:18:06,  1.46it/s, Loss=0.0835, Avg=0.2124, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 20000
+Epoch 2:  56%|▌| 30000/53184 [5:12:38<2:56:46,  2.19it/s, Loss=0.4726, Avg=0.2604, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 30000
+Epoch 2:  75%|▊| 40000/53184 [6:59:48<1:34:00,  2.34it/s, Loss=0.1832, Avg=0.1893, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 40000
+Epoch 2:  94%|▉| 50000/53184 [8:45:44<33:24,  1.59it/s, Loss=0.2522, Avg=0.1887, MPM=0.0000, AvgMPM=0.0000, POP=0.0000, Saved intermediate checkpoint at batch 50000
+Epoch 2: 100%|█| 53184/53184 [9:19:26<00:00,  1.58it/s, Loss=0.2673, Avg=0.2258, MPM=0.0000, AvgMPM=0.0000, POP=0.0000,
+Epoch 2 - Avg Loss: 0.2312 MPM: 0.0000 POP: 0.0000 RPP: 0.4623
+New best model saved! Loss: 0.2312
+Epoch 3/5
+Epoch 3:  19%|▏| 10000/53184 [1:37:44<6:29:14,  1.85it/s, Loss=0.1203, Avg=0.1730, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 10000
+Epoch 3:  38%|▍| 20000/53184 [3:24:02<5:56:02,  1.55it/s, Loss=0.1321, Avg=0.1594, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 20000
+Epoch 3:  56%|▌| 30000/53184 [5:12:56<6:15:44,  1.03it/s, Loss=0.0008, Avg=0.1174, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 30000
+Epoch 3:  75%|▊| 40000/53184 [6:58:11<2:35:25,  1.41it/s, Loss=0.2314, Avg=0.2419, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 40000
+Epoch 3:  94%|▉| 50000/53184 [8:42:22<54:19,  1.02s/it, Loss=0.4444, Avg=0.2080, MPM=0.0000, AvgMPM=0.0000, POP=0.0000, Saved intermediate checkpoint at batch 50000
+Epoch 3: 100%|█| 53184/53184 [9:15:30<00:00,  1.60it/s, Loss=0.0470, Avg=0.1420, MPM=0.0000, AvgMPM=0.0000, POP=0.0000,
+Epoch 3 - Avg Loss: 0.2077 MPM: 0.0000 POP: 0.0000 RPP: 0.4154
+New best model saved! Loss: 0.2077
+Epoch 4/5
+Epoch 4:  19%|▏| 10000/53184 [1:36:11<10:17:40,  1.17it/s, Loss=0.1288, Avg=0.1664, MPM=0.0000, AvgMPM=0.0000, POP=0.000Saved intermediate checkpoint at batch 10000
+Epoch 4:  38%|▍| 20000/53184 [3:22:53<4:49:19,  1.91it/s, Loss=0.1687, Avg=0.1819, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 20000
+Epoch 4:  56%|▌| 30000/53184 [5:10:35<5:12:30,  1.24it/s, Loss=0.0663, Avg=0.1604, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 30000
+Epoch 4:  75%|▊| 40000/53184 [7:01:01<1:48:35,  2.02it/s, Loss=0.1610, Avg=0.1960, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 40000
+Epoch 4:  94%|▉| 50000/53184 [8:54:02<36:45,  1.44it/s, Loss=0.2190, Avg=0.2320, MPM=0.0000, AvgMPM=0.0000, POP=0.0000, Saved intermediate checkpoint at batch 50000
+Epoch 4: 100%|█| 53184/53184 [9:29:27<00:00,  1.56it/s, Loss=0.2827, Avg=0.1880, MPM=0.0000, AvgMPM=0.0000, POP=0.0000,
+Epoch 4 - Avg Loss: 0.1806 MPM: 0.0000 POP: 0.0001 RPP: 0.3611
+New best model saved! Loss: 0.1806
+Epoch 5/5
+Epoch 5:  19%|▏| 10000/53184 [1:42:17<8:25:30,  1.42it/s, Loss=0.1029, Avg=0.1296, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 10000
+Epoch 5:  38%|▍| 20000/53184 [3:27:18<4:44:56,  1.94it/s, Loss=0.1038, Avg=0.1356, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 20000
+Epoch 5:  56%|▌| 30000/53184 [5:12:32<3:06:20,  2.07it/s, Loss=0.2238, Avg=0.1807, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 30000
+Epoch 5:  75%|▊| 40000/53184 [6:57:24<1:52:58,  1.95it/s, Loss=0.2544, Avg=0.1718, MPM=0.0000, AvgMPM=0.0000, POP=0.0000Saved intermediate checkpoint at batch 40000
+Epoch 5:  94%|▉| 50000/53184 [8:42:17<32:53,  1.61it/s, Loss=0.4480, Avg=0.2127, MPM=0.0000, AvgMPM=0.0000, POP=0.0000, Saved intermediate checkpoint at batch 50000
+Epoch 5: 100%|█| 53184/53184 [9:15:23<00:00,  1.60it/s, Loss=0.2308, Avg=0.1743, MPM=0.0000, AvgMPM=0.0000, POP=0.0000,
+Epoch 5 - Avg Loss: 0.1508 MPM: 0.0000 POP: 0.0000 RPP: 0.3015
+New best model saved! Loss: 0.1508
+```
