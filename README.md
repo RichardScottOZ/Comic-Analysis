@@ -81,3 +81,16 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 - Consider cover identification by embedding
     - will it just work
     - do we need to cluster or supervise to detect - not all 1 panel pages will be covers - some will be ads
+
+## Embeddings
+ Embedding Generation Strategy:
+1. What We Need to Generate:
+Panel embeddings (P) - Raw panel representations
+Page embeddings (E_page) - Aggregated page-level representations
+Reading order embeddings - For sequence understanding
+2. Dataset Coverage:
+Amazon perfect matches: 212K pages
+CalibreComics perfect matches: TBD (after processing)
+Combined dataset: All high-quality samples
+3. Technical Approach:
+Option A: Batch Processing Script
