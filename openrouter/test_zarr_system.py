@@ -179,11 +179,12 @@ def main():
     print(f"\n✅ All tests completed successfully!")
     print(f"Test dataset saved to: {zarr_path}")
     
-    # Clean up
-    import shutil
-    if os.path.exists(zarr_path):
-        shutil.rmtree(zarr_path)
-        print(f"Test dataset cleaned up")
+    # Clean up (commented out to keep test dataset)
+    # import shutil
+    # if os.path.exists(zarr_path):
+    #     shutil.rmtree(zarr_path)
+    #     print(f"Test dataset cleaned up")
+    print(f"Test dataset kept at: {zarr_path}")
 
 if __name__ == "__main__":
     main()
