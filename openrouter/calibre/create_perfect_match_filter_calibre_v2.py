@@ -109,12 +109,15 @@ def normalize_image_key_from_img_path(img_path: str) -> str:
 _VLM_DATA = None
 _VLM_INDEX = None
 _VLM_EAGER = False
+# Global threshold for text coverage used in per-image scoring (set by main analyzer)
+_MIN_TEXT_COVERAGE = 0.8
 
-def _init_worker(vlm_data, vlm_index, eager):
-    global _VLM_DATA, _VLM_INDEX, _VLM_EAGER
+def _init_worker(vlm_data, vlm_index, eager, min_text_cov):
+    global _VLM_DATA, _VLM_INDEX, _VLM_EAGER, _MIN_TEXT_COVERAGE
     _VLM_DATA = vlm_data
     _VLM_INDEX = vlm_index
     _VLM_EAGER = eager
+    _MIN_TEXT_COVERAGE = float(min_text_cov) if min_text_cov is not None else 0.8
 
 def load_coco_data(coco_file):
     """Load COCO detection data"""
@@ -1180,6 +1183,7 @@ def analyze_image_alignment(args):
                 else:
                     rcnn_panels = len([d for d in detections if d.get('category_id') == 1])
                 row = {
+                    'image_id': image_id,
                     'image_path': img_path,
                     'rcnn_panels': rcnn_panels,
                     'vlm_panels': 0,
@@ -1330,9 +1334,9 @@ def analyze_image_alignment(args):
             quality_score += 2
         elif 0.8 <= panel_ratio <= 1.2:
             quality_score += 1
-        if text_coverage >= min_text_coverage:
+        if text_coverage >= _MIN_TEXT_COVERAGE:
             quality_score += 1
-        elif text_coverage >= max(0.0, min_text_coverage - 0.2):
+        elif text_coverage >= max(0.0, _MIN_TEXT_COVERAGE - 0.2):
             quality_score += 0.5
         if 1 <= vlm_panels <= 15:
             quality_score += 1
@@ -1341,6 +1345,7 @@ def analyze_image_alignment(args):
         is_perfect_match = (panel_ratio == 1.0)
         vlm_json_path = _VLM_INDEX['key_to_path'].get(vlm_key_used) if 'key_to_path' in _VLM_INDEX else None
         row = {
+            'image_id': image_id,
             'image_path': img_path,
             'rcnn_panels': rcnn_panels,
             'vlm_panels': vlm_panels,
@@ -1595,7 +1600,7 @@ def test_normalization():
     print("\n[DEBUG] NORMALIZATION TESTING COMPLETE")
     print("=" * 60)
 
-def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, limit=None, allow_partial_match=False, fast_only=False, fuzzy_max_candidates=200, verbose_fuzzy=False, eager_vlm_load=False, log_misses=False, vlm_map: str = None, panel_category_ids=None, panel_category_names=None, keep_unmatched=False, first_failure=False, image_roots=None, require_image_exists=False, min_text_coverage: float = 0.8):
+def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, limit=None, allow_partial_match=False, fast_only=False, fuzzy_max_candidates=200, verbose_fuzzy=False, eager_vlm_load=False, log_misses=False, vlm_map: str = None, panel_category_ids=None, panel_category_names=None, keep_unmatched=False, first_failure=False, image_roots=None, require_image_exists=False, min_text_coverage: float = 0.8, emit_json_list=None, emit_all_json_lists: bool = False, json_list_out: str = None, json_require_exists: bool = False, emit_dataspec_for=None, emit_dataspec_all: bool = False, emit_dataspec_everything: bool = False, dataspec_out_dir: str = None, dataspec_require_equal_counts: bool = False, dataspec_min_det_score: float = 0.0, dataspec_list_out: str = None, dataspec_limit: int = None):
     """Analyze alignment between COCO detections and VLM data for Calibre comics"""
     # Create fuzzy matches log file
     with open("fuzzy_matches.log", "w", encoding="utf-8") as f:
@@ -1624,10 +1629,11 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
     print(f"Selected panel category id(s): {sorted(selected_ids) if selected_ids else '[default id==1]'}")
     vlm_data, vlm_index = load_vlm_data(vlm_dir, eager=eager_vlm_load, vlm_map=vlm_map)
     # Ensure globals are populated for single-threaded execution paths
-    global _VLM_DATA, _VLM_INDEX, _VLM_EAGER
+    global _VLM_DATA, _VLM_INDEX, _VLM_EAGER, _MIN_TEXT_COVERAGE
     _VLM_DATA = vlm_data
     _VLM_INDEX = vlm_index
     _VLM_EAGER = eager_vlm_load
+    _MIN_TEXT_COVERAGE = float(min_text_coverage) if min_text_coverage is not None else 0.8
     # Debug: print comprehensive diagnostics about key normalization
     print("\n--- DEBUG: Key Normalization Diagnostics ---")
     import re
@@ -1799,7 +1805,7 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
             if r is not None:
                 results.append(r)
     elif num_workers > 1:
-        with mp.Pool(num_workers, initializer=_init_worker, initargs=(vlm_data, vlm_index, eager_vlm_load)) as pool:
+        with mp.Pool(num_workers, initializer=_init_worker, initargs=(vlm_data, vlm_index, eager_vlm_load, min_text_coverage)) as pool:
             results = list(tqdm(
                 pool.imap(analyze_image_alignment, analysis_args),
                 total=len(analysis_args),
@@ -1899,6 +1905,279 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
     except Exception as e:
         print(f"Warning: text summary error: {e}")
 
+    # ----------------------------------------------------
+    # Optional: Emit DataSpec JSON list(s) in one pass
+    # ----------------------------------------------------
+    try:
+        import os as _os
+        def _collect_jsons(sub_df):
+            paths = []
+            if 'vlm_json_path' not in sub_df.columns:
+                return paths
+            for p in sub_df['vlm_json_path']:
+                if isinstance(p, str) and p.lower().endswith('.json'):
+                    if (not json_require_exists) or _os.path.exists(p):
+                        paths.append(p)
+            # de-dupe and sort for determinism
+            return sorted(list(dict.fromkeys(paths)))
+
+        def _write_list(paths, out_path):
+            if not paths:
+                print(f"Note: No JSON paths to write for {out_path}")
+                # still create an empty file for pipeline consistency
+                with open(out_path, 'w', encoding='utf-8') as f:
+                    pass
+                return
+            with open(out_path, 'w', encoding='utf-8') as f:
+                for p in paths:
+                    f.write(str(p).strip() + "\n")
+            print(f"🧾 JSON list written: {out_path} ({len(paths)} items)")
+
+        # Optionally filter to only images that exist when upstream required
+        base_filter = df
+        if 'image_exists' in df.columns and require_image_exists:
+            base_filter = df[df['image_exists'] == True]
+
+        # Build common subsets
+        subsets = {
+            'perfect': base_filter[base_filter['is_perfect_match'] == True],
+            'near_perfect': base_filter[base_filter['panel_count_ratio'].between(0.9, 1.1) & ~base_filter['is_perfect_match']],
+            'high_quality': base_filter[base_filter['quality_score'] >= 4],
+            'medium_quality': base_filter[base_filter['quality_score'] == 3],
+        }
+        if 'vlm_panels_with_text' in base_filter.columns:
+            subsets['perfect_with_text'] = base_filter[(base_filter['is_perfect_match'] == True) & (base_filter['vlm_panels_with_text'] > 0)]
+
+        def _default_out(name: str) -> str:
+            return output_csv.replace('.csv', f'_{name}_jsons.txt')
+
+        # Emit per user request
+        if emit_all_json_lists:
+            for name, sdf in subsets.items():
+                paths = _collect_jsons(sdf)
+                _write_list(paths, _default_out(name))
+        elif emit_json_list:
+            # If a single category provided and a custom output specified, honor it
+            if isinstance(emit_json_list, (list, tuple)):
+                reqs = list(emit_json_list)
+            else:
+                reqs = [emit_json_list]
+            for i, name in enumerate(reqs):
+                sdf = subsets.get(name)
+                if sdf is None:
+                    print(f"Warning: unknown --emit_json_list category '{name}'. Allowed: {', '.join(subsets.keys())}")
+                    continue
+                paths = _collect_jsons(sdf)
+                out_path = json_list_out if (json_list_out and len(reqs) == 1 and i == 0) else _default_out(name)
+                _write_list(paths, out_path)
+    except Exception as e:
+        print(f"Warning: failed to emit JSON list(s): {e}")
+
+    # ----------------------------------------------------
+    # Optional: Emit DataSpec JSON files for training in one pass
+    # ----------------------------------------------------
+    try:
+        # Quick exit if not requested
+        do_emit = bool(emit_dataspec_all) or bool(emit_dataspec_everything) or (emit_dataspec_for is not None and len(emit_dataspec_for) > 0)
+        if not do_emit:
+            return
+        if not dataspec_out_dir:
+            print("Warning: --dataspec_out_dir is required to emit DataSpec JSONs; skipping.")
+            return
+        os.makedirs(dataspec_out_dir, exist_ok=True)
+
+        # Reuse the same subset logic as above
+        base_filter = df
+        if 'image_exists' in df.columns and require_image_exists:
+            base_filter = df[df['image_exists'] == True]
+        subsets = {
+            'perfect': base_filter[base_filter['is_perfect_match'] == True],
+            'near_perfect': base_filter[base_filter['panel_count_ratio'].between(0.9, 1.1) & ~base_filter['is_perfect_match']],
+            'high_quality': base_filter[base_filter['quality_score'] >= 4],
+            'medium_quality': base_filter[base_filter['quality_score'] == 3],
+        }
+        if 'vlm_panels_with_text' in base_filter.columns:
+            subsets['perfect_with_text'] = base_filter[(base_filter['is_perfect_match'] == True) & (base_filter['vlm_panels_with_text'] > 0)]
+        # Everything = any matched VLM page regardless of quality
+        if 'has_vlm_data' in base_filter.columns:
+            subsets['everything'] = base_filter[base_filter['has_vlm_data'] == True]
+
+        # Determine which set(s) to emit
+        if emit_dataspec_everything:
+            wanted_sets = ['everything']
+        else:
+            wanted_sets = list(subsets.keys()) if emit_dataspec_all else (list(emit_dataspec_for) if isinstance(emit_dataspec_for, (list, tuple)) else [emit_dataspec_for])
+        wanted_sets = [w for w in wanted_sets if w in subsets]
+        if not wanted_sets:
+            # Exclude the synthetic 'everything' from the guidance list to avoid confusion
+            allowed_names = [k for k in subsets.keys() if k != 'everything']
+            print("Warning: no valid --emit_dataspec_for subset(s) selected; allowed: " + ', '.join(allowed_names))
+            return
+
+        # Helper to aggregate text from a VLM panel dict
+        def _aggregate_text(panel_obj: dict) -> dict:
+            out = {'dialogue': [], 'narration': [], 'sfx': []}
+            def _add(val, bucket='dialogue'):
+                if isinstance(val, str) and val.strip():
+                    out[bucket].append(val.strip())
+                elif isinstance(val, (list, tuple)):
+                    for v in val:
+                        if isinstance(v, str) and v.strip():
+                            out[bucket].append(v.strip())
+            t = panel_obj.get('text')
+            if isinstance(t, dict):
+                for k in ('dialogue','narration','sfx','caption'):
+                    _add(t.get(k), 'dialogue' if k=='dialogue' else ('narration' if k in ('narration','caption') else 'sfx'))
+                for k,v in t.items():
+                    if k not in ('dialogue','narration','sfx','caption'):
+                        _add(v, 'dialogue')
+            elif isinstance(t, (list, tuple)):
+                _add(t, 'dialogue')
+            elif isinstance(t, str):
+                _add(t, 'dialogue')
+            _add(panel_obj.get('caption'), 'narration')
+            _add(panel_obj.get('description'), 'narration')
+            _add(panel_obj.get('title') or panel_obj.get('alt'), 'narration')
+            _add(panel_obj.get('key_elements'), 'narration')
+            _add(panel_obj.get('actions'), 'narration')
+            sp = panel_obj.get('speakers')
+            if isinstance(sp, list):
+                for s in sp:
+                    if isinstance(s, dict):
+                        txt = s.get('dialogue') or s.get('text')
+                        st = str(s.get('speech_type') or s.get('type') or '').lower()
+                        if txt:
+                            if any(tok in st for tok in ('narration','caption','narrator')):
+                                _add(txt, 'narration')
+                            elif any(tok in st for tok in ('sfx','sound','onomatopoeia','effect')):
+                                _add(txt, 'sfx')
+                            else:
+                                _add(txt, 'dialogue')
+            for k in ('ocr','ocr_text','ocr_lines','texts'):
+                _add(panel_obj.get(k), 'dialogue')
+            return out
+
+        # Helper to extract VLM panels list from the stored row data
+        def _extract_panels_from_vlm(v):
+            try:
+                if isinstance(v, dict):
+                    if isinstance(v.get('panels'), list):
+                        return v.get('panels')
+                    for k in ['result', 'page', 'data']:
+                        sub = v.get(k)
+                        if isinstance(sub, dict) and isinstance(sub.get('panels'), list):
+                            return sub.get('panels')
+                        if isinstance(sub, list) and sub and isinstance(sub[0], dict) and isinstance(sub[0].get('panels'), list):
+                            return sub[0].get('panels')
+                    if any(k in v for k in ['bbox', 'text', 'mask', 'polygon']):
+                        return [v]
+                    return []
+                if isinstance(v, list):
+                    if len(v) == 1 and isinstance(v[0], dict):
+                        if isinstance(v[0].get('panels'), list):
+                            return v[0].get('panels')
+                    if v and isinstance(v[0], dict) and any(k in v[0] for k in ['bbox', 'text', 'mask', 'polygon']):
+                        return v
+                return []
+            except Exception:
+                return []
+
+        # Build a reverse map from image_id to its detections filtered by score and category
+        def _dets_for_image_id(img_id):
+            dets = image_detections.get(img_id, [])
+            boxes = []
+            for d in dets:
+                try:
+                    if dataspec_min_det_score and float(d.get('score', 1.0)) < float(dataspec_min_det_score):
+                        continue
+                    if selected_ids:
+                        if d.get('category_id') not in selected_ids:
+                            continue
+                    bbox = d.get('bbox') or d.get('box')
+                    if isinstance(bbox, (list, tuple)) and len(bbox) == 4:
+                        x,y,w,h = [float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3])]
+                        boxes.append([x,y,w,h])
+                except Exception:
+                    continue
+            # Sort top-to-bottom, then left-to-right
+            boxes.sort(key=lambda b: (b[1], b[0]))
+            return boxes
+
+        total_written = 0
+        written_paths = []
+        for subset_name in wanted_sets:
+            sdf = subsets.get(subset_name)
+            if sdf is None or sdf.empty:
+                print(f"Note: subset '{subset_name}' is empty; skipping.")
+                continue
+            # Optional limit for quick smoke tests
+            rows_iter = sdf.itertuples(index=False)
+            if dataspec_limit is not None:
+                rows_iter = list(rows_iter)[:int(dataspec_limit)]
+            for row in tqdm(rows_iter, desc=f"Emitting DataSpec ({subset_name})"):
+                try:
+                    # Pandas namedtuple fields access
+                    row_dict = row._asdict() if hasattr(row, '_asdict') else dict(row._asdict())
+                except Exception:
+                    # Fallback to Series
+                    try:
+                        row_dict = row._asdict()
+                    except Exception:
+                        row_dict = dict(row._asdict()) if hasattr(row, '_asdict') else {}
+                try:
+                    img_id = row_dict.get('image_id')
+                    vlm_json_path = row_dict.get('vlm_json_path')
+                    vlm_obj = row_dict.get('vlm_data')
+                    page_image_path = row_dict.get('resolved_image_path') or row_dict.get('image_path')
+                    if not page_image_path or (require_image_exists and not (isinstance(page_image_path, str) and os.path.exists(page_image_path))):
+                        continue
+                    det_boxes = _dets_for_image_id(img_id)
+                    if not det_boxes:
+                        continue
+                    panels_vlm = _extract_panels_from_vlm(vlm_obj)
+                    texts = [_aggregate_text(p) for p in panels_vlm if isinstance(p, dict)]
+                    if dataspec_require_equal_counts and texts and (len(det_boxes) != len(texts)):
+                        continue
+                    K = min(len(det_boxes), len(texts) if texts else len(det_boxes))
+                    if K == 0:
+                        continue
+                    panels_out = []
+                    for i in range(K):
+                        x,y,w,h = det_boxes[i]
+                        t = texts[i] if i < len(texts) else {'dialogue': [], 'narration': [], 'sfx': []}
+                        panels_out.append({
+                            'panel_coords': [int(x), int(y), max(1,int(w)), max(1,int(h))],
+                            'text': t
+                        })
+                    spec_obj = {
+                        'page_image_path': page_image_path,
+                        'panels': panels_out
+                    }
+                    # Derive output filename primarily from VLM JSON path when available
+                    if isinstance(vlm_json_path, str) and vlm_json_path.lower().endswith('.json'):
+                        base_out = os.path.splitext(os.path.basename(vlm_json_path))[0] + '.json'
+                    else:
+                        # fallback to image filename
+                        base_out = os.path.splitext(os.path.basename(str(page_image_path)))[0] + '.json'
+                    out_path = os.path.join(dataspec_out_dir, base_out)
+                    with open(out_path, 'w', encoding='utf-8') as f:
+                        json.dump(spec_obj, f, ensure_ascii=False)
+                    total_written += 1
+                    written_paths.append(out_path)
+                except Exception:
+                    continue
+        print(f"Wrote {total_written} DataSpec JSONs to {dataspec_out_dir}")
+        if dataspec_list_out:
+            try:
+                with open(dataspec_list_out, 'w', encoding='utf-8') as f:
+                    for p in written_paths:
+                        f.write(p + "\n")
+                print(f"Saved DataSpec list: {dataspec_list_out}")
+            except Exception as e:
+                print(f"Warning: failed to write dataspec_list_out: {e}")
+    except Exception as e:
+        print(f"Warning: failed to emit DataSpec JSONs: {e}")
+
 def main():
     parser = argparse.ArgumentParser(description='Create perfect match filter for CalibreComics dataset (v2)')
     parser.add_argument('--coco', help='Path to COCO detection JSON file')
@@ -1921,6 +2200,20 @@ def main():
     parser.add_argument('--image_roots', type=str, help='One or more base directories to resolve image files for training (comma or semicolon separated)')
     parser.add_argument('--require_image_exists', action='store_true', help='Mark rows with image_exists False if no file found under image_roots')
     parser.add_argument('--min_text_coverage', type=float, default=0.8, help='Minimum fraction of panels with text to award full text point (default 0.8). Half point if >= min-0.2')
+    # One-pass DataSpec JSON list emission
+    parser.add_argument('--emit_json_list', action='append', choices=['perfect','perfect_with_text','near_perfect','high_quality','medium_quality'], help='Emit a DataSpec JSON list for the selected subset (can repeat).')
+    parser.add_argument('--emit_all_json_lists', action='store_true', help='Emit JSON lists for all standard subsets: perfect, perfect_with_text, near_perfect, high_quality, medium_quality.')
+    parser.add_argument('--json_list_out', type=str, help='When emitting a single JSON list via --emit_json_list, write to this path instead of the default.')
+    parser.add_argument('--json_require_exists', action='store_true', help='Only include JSON paths that exist on disk when building the list(s).')
+    # One-pass DataSpec JSON emission
+    parser.add_argument('--emit_dataspec_for', action='append', choices=['perfect','perfect_with_text','near_perfect','high_quality','medium_quality'], help='Emit DataSpec JSONs for the selected subset (can repeat).')
+    parser.add_argument('--emit_dataspec_all', action='store_true', help='Emit DataSpec JSONs for all standard subsets.')
+    parser.add_argument('--emit_dataspec_everything', action='store_true', help='Emit DataSpec JSONs for all pages with a VLM match (ignores quality tiers).')
+    parser.add_argument('--dataspec_out_dir', type=str, help='Directory where DataSpec JSONs will be written.')
+    parser.add_argument('--dataspec_require_equal_counts', action='store_true', help='Only emit DataSpec when RCNN count == VLM panel count.')
+    parser.add_argument('--dataspec_min_det_score', type=float, default=0.0, help='Minimum detection score for panels used in DataSpec.')
+    parser.add_argument('--dataspec_list_out', type=str, help='Optional path to write list of generated DataSpec JSONs.')
+    parser.add_argument('--dataspec_limit', type=int, help='Optional limit when emitting DataSpec for quick smoke tests.')
     args = parser.parse_args()
     
     if args.test_normalization:
@@ -1949,6 +2242,18 @@ def main():
             image_roots=args.image_roots,
             require_image_exists=args.require_image_exists,
             min_text_coverage=args.min_text_coverage,
+            emit_json_list=args.emit_json_list,
+            emit_all_json_lists=args.emit_all_json_lists,
+            json_list_out=args.json_list_out,
+            json_require_exists=args.json_require_exists,
+            emit_dataspec_for=args.emit_dataspec_for,
+            emit_dataspec_all=args.emit_dataspec_all,
+            emit_dataspec_everything=args.emit_dataspec_everything,
+            dataspec_out_dir=args.dataspec_out_dir,
+            dataspec_require_equal_counts=args.dataspec_require_equal_counts,
+            dataspec_min_det_score=args.dataspec_min_det_score,
+            dataspec_list_out=args.dataspec_list_out,
+            dataspec_limit=args.dataspec_limit,
         )
 
 if __name__ == "__main__":
