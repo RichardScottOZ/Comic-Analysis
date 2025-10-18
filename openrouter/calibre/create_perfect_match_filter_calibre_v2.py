@@ -1600,7 +1600,7 @@ def test_normalization():
     print("\n[DEBUG] NORMALIZATION TESTING COMPLETE")
     print("=" * 60)
 
-def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, limit=None, allow_partial_match=False, fast_only=False, fuzzy_max_candidates=200, verbose_fuzzy=False, eager_vlm_load=False, log_misses=False, vlm_map: str = None, panel_category_ids=None, panel_category_names=None, keep_unmatched=False, first_failure=False, image_roots=None, require_image_exists=False, min_text_coverage: float = 0.8, emit_json_list=None, emit_all_json_lists: bool = False, json_list_out: str = None, json_require_exists: bool = False, emit_dataspec_for=None, emit_dataspec_all: bool = False, emit_dataspec_everything: bool = False, dataspec_out_dir: str = None, dataspec_require_equal_counts: bool = False, dataspec_min_det_score: float = 0.0, dataspec_list_out: str = None, dataspec_limit: int = None):
+def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, limit=None, allow_partial_match=False, fast_only=False, fuzzy_max_candidates=200, verbose_fuzzy=False, eager_vlm_load=False, log_misses=False, vlm_map: str = None, panel_category_ids=None, panel_category_names=None, keep_unmatched=False, first_failure=False, image_roots=None, require_image_exists=False, min_text_coverage: float = 0.8, emit_json_list=None, emit_all_json_lists: bool = False, json_list_out: str = None, json_require_exists: bool = False, emit_dataspec_for=None, emit_dataspec_all: bool = False, emit_dataspec_everything: bool = False, dataspec_out_dir: str = None, dataspec_require_equal_counts: bool = False, dataspec_min_det_score: float = 0.0, dataspec_list_out: str = None, dataspec_limit: int = None, dataspec_debug_skips_out: str = None, dataspec_naming: str = 'preserve_tree'):
     """Analyze alignment between COCO detections and VLM data for Calibre comics"""
     # Create fuzzy matches log file
     with open("fuzzy_matches.log", "w", encoding="utf-8") as f:
@@ -2105,6 +2105,7 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
 
         total_written = 0
         written_paths = []
+        skip_records = []  # collect debug info when a page is skipped
         for subset_name in wanted_sets:
             sdf = subsets.get(subset_name)
             if sdf is None or sdf.empty:
@@ -2130,16 +2131,51 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                     vlm_obj = row_dict.get('vlm_data')
                     page_image_path = row_dict.get('resolved_image_path') or row_dict.get('image_path')
                     if not page_image_path or (require_image_exists and not (isinstance(page_image_path, str) and os.path.exists(page_image_path))):
+                        # Should rarely happen due to prior base_filter; log if debugging requested
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'missing_image'
+                            })
                         continue
                     det_boxes = _dets_for_image_id(img_id)
                     if not det_boxes:
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'no_dets_after_threshold'
+                            })
                         continue
                     panels_vlm = _extract_panels_from_vlm(vlm_obj)
                     texts = [_aggregate_text(p) for p in panels_vlm if isinstance(p, dict)]
                     if dataspec_require_equal_counts and texts and (len(det_boxes) != len(texts)):
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'equal_count_mismatch',
+                                'rcnn_count': len(det_boxes),
+                                'vlm_count': len(texts)
+                            })
                         continue
                     K = min(len(det_boxes), len(texts) if texts else len(det_boxes))
                     if K == 0:
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'zero_pairs'
+                            })
                         continue
                     panels_out = []
                     for i in range(K):
@@ -2153,18 +2189,63 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                         'page_image_path': page_image_path,
                         'panels': panels_out
                     }
-                    # Derive output filename primarily from VLM JSON path when available
-                    if isinstance(vlm_json_path, str) and vlm_json_path.lower().endswith('.json'):
-                        base_out = os.path.splitext(os.path.basename(vlm_json_path))[0] + '.json'
+                    # Build output path according to naming strategy
+                    out_path = None
+                    if dataspec_naming == 'hash':
+                        # Use hashed suffix to ensure uniqueness within a flat folder
+                        import hashlib as _hashlib
+                        if isinstance(vlm_json_path, str) and vlm_json_path.lower().endswith('.json'):
+                            stem = os.path.splitext(os.path.basename(vlm_json_path))[0]
+                        else:
+                            stem = os.path.splitext(os.path.basename(str(page_image_path)))[0]
+                        _hash_src = str(page_image_path or img_id or stem)
+                        _short = _hashlib.md5(_hash_src.encode('utf-8', errors='ignore')).hexdigest()[:8]
+                        base_out = f"{stem}__{_short}.json"
+                        out_path = os.path.join(dataspec_out_dir, base_out)
                     else:
-                        # fallback to image filename
-                        base_out = os.path.splitext(os.path.basename(str(page_image_path)))[0] + '.json'
-                    out_path = os.path.join(dataspec_out_dir, base_out)
+                        # preserve_tree (default): mirror source structure to avoid collisions
+                        # Prefer mirroring VLM JSON tree when available
+                        rel_dir = ''
+                        base_name = None
+                        if isinstance(vlm_json_path, str) and vlm_json_path.lower().endswith('.json') and isinstance(vlm_dir, str) and os.path.isdir(vlm_dir):
+                            try:
+                                rel = os.path.relpath(vlm_json_path, vlm_dir)
+                                rel = rel.replace('\\', '/')
+                                rel_dir = os.path.dirname(rel)
+                                base_name = os.path.splitext(os.path.basename(vlm_json_path))[0] + '.json'
+                            except Exception:
+                                pass
+                        if not base_name:
+                            # Fall back to mirroring the image path tail: Series/Container/File
+                            try:
+                                imgp = str(page_image_path)
+                                imgp_norm = imgp.replace('\\','/')
+                                parts = [p for p in imgp_norm.split('/') if p]
+                                # pick last 2 folders for context (e.g., Series/JPG4CBZ)
+                                rel_bits = parts[-3:-1] if len(parts) >= 3 else parts[:-1]
+                                rel_dir = '/'.join(rel_bits) if rel_bits else ''
+                                base_name = os.path.splitext(os.path.basename(imgp_norm))[0] + '.json'
+                            except Exception:
+                                # Last resort: flat with image stem
+                                base_name = os.path.splitext(os.path.basename(str(page_image_path)))[0] + '.json'
+                                rel_dir = ''
+                        # Join and ensure the directory exists
+                        out_dir = os.path.join(dataspec_out_dir, rel_dir) if rel_dir else dataspec_out_dir
+                        os.makedirs(out_dir, exist_ok=True)
+                        out_path = os.path.join(out_dir, base_name)
                     with open(out_path, 'w', encoding='utf-8') as f:
                         json.dump(spec_obj, f, ensure_ascii=False)
                     total_written += 1
                     written_paths.append(out_path)
-                except Exception:
+                except Exception as _e:
+                    if dataspec_debug_skips_out:
+                        skip_records.append({
+                            'image_id': row_dict.get('image_id'),
+                            'image_path': row_dict.get('image_path'),
+                            'resolved_image_path': row_dict.get('resolved_image_path') or row_dict.get('image_path'),
+                            'vlm_json_path': row_dict.get('vlm_json_path'),
+                            'reason': f'exception:{type(_e).__name__}'
+                        })
                     continue
         print(f"Wrote {total_written} DataSpec JSONs to {dataspec_out_dir}")
         if dataspec_list_out:
@@ -2175,6 +2256,20 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                 print(f"Saved DataSpec list: {dataspec_list_out}")
             except Exception as e:
                 print(f"Warning: failed to write dataspec_list_out: {e}")
+        if dataspec_debug_skips_out and skip_records:
+            try:
+                import csv as _csv
+                with open(dataspec_debug_skips_out, 'w', encoding='utf-8', newline='') as _f:
+                    fieldnames = ['image_id','image_path','resolved_image_path','vlm_json_path','reason','rcnn_count','vlm_count']
+                    writer = _csv.DictWriter(_f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for rec in skip_records:
+                        if 'rcnn_count' not in rec: rec['rcnn_count'] = ''
+                        if 'vlm_count' not in rec: rec['vlm_count'] = ''
+                        writer.writerow(rec)
+                print(f"Saved DataSpec skip debug log: {dataspec_debug_skips_out} ({len(skip_records)} rows)")
+            except Exception as e:
+                print(f"Warning: failed to write dataspec_debug_skips_out: {e}")
     except Exception as e:
         print(f"Warning: failed to emit DataSpec JSONs: {e}")
 
@@ -2214,6 +2309,8 @@ def main():
     parser.add_argument('--dataspec_min_det_score', type=float, default=0.0, help='Minimum detection score for panels used in DataSpec.')
     parser.add_argument('--dataspec_list_out', type=str, help='Optional path to write list of generated DataSpec JSONs.')
     parser.add_argument('--dataspec_limit', type=int, help='Optional limit when emitting DataSpec for quick smoke tests.')
+    parser.add_argument('--dataspec_debug_skips_out', type=str, help='Optional CSV path to log pages skipped during DataSpec emission with reasons.')
+    parser.add_argument('--dataspec_naming', type=str, choices=['preserve_tree','hash'], default='preserve_tree', help="Naming strategy for DataSpec files: 'preserve_tree' mirrors source dirs (default), 'hash' appends a short hash in a flat folder.")
     args = parser.parse_args()
     
     if args.test_normalization:
@@ -2254,6 +2351,8 @@ def main():
             dataspec_min_det_score=args.dataspec_min_det_score,
             dataspec_list_out=args.dataspec_list_out,
             dataspec_limit=args.dataspec_limit,
+            dataspec_debug_skips_out=args.dataspec_debug_skips_out,
+            dataspec_naming=args.dataspec_naming,
         )
 
 if __name__ == "__main__":
