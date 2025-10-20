@@ -15,9 +15,65 @@ from pathlib import Path
 import wandb
 from tqdm import tqdm
 import math
+import contextlib
 
 # Import our modules
 from closure_lite_framework import ClosureLite
+from closure_lite_simple_framework import ClosureLiteSimple
+
+# --- AMP compatibility helpers (support both torch.amp and torch.cuda.amp) ---
+def _get_autocast(device: torch.device):
+    """Return an autocast context manager compatible with the installed torch.
+    Prefers torch.amp.autocast; falls back to torch.cuda.amp.autocast or no-op on CPU.
+    """
+    # Prefer new API when available
+    if hasattr(torch, 'amp') and hasattr(torch.amp, 'autocast'):
+        # Try with device type positional or keyword, depending on torch version
+        try:
+            return torch.amp.autocast(device_type='cuda' if device.type == 'cuda' else 'cpu')
+        except TypeError:
+            try:
+                return torch.amp.autocast('cuda' if device.type == 'cuda' else 'cpu')
+            except Exception:
+                pass
+    # Fallback to legacy CUDA autocast when on GPU
+    if device.type == 'cuda' and hasattr(torch.cuda, 'amp') and hasattr(torch.cuda.amp, 'autocast'):
+        return torch.cuda.amp.autocast()
+    # CPU: no autocast
+    return contextlib.nullcontext()
+
+
+def _make_grad_scaler(device: torch.device):
+    """Create a GradScaler compatible with the installed torch and device.
+    Uses torch.amp.GradScaler when available; falls back to torch.cuda.amp.GradScaler.
+    On CPU, returns a no-op scaler.
+    """
+    if hasattr(torch, 'amp') and hasattr(torch.amp, 'GradScaler'):
+        # New API; handle versions that require positional device vs none
+        try:
+            return torch.amp.GradScaler('cuda' if device.type == 'cuda' else 'cpu')
+        except TypeError:
+            try:
+                return torch.amp.GradScaler()
+            except Exception:
+                pass
+    if device.type == 'cuda' and hasattr(torch.cuda, 'amp') and hasattr(torch.cuda.amp, 'GradScaler'):
+        return torch.cuda.amp.GradScaler()
+    # CPU: provide a simple no-op scaler
+    class _DummyScaler:
+        def scale(self, loss):
+            return loss
+        def unscale_(self, optimizer):
+            return None
+        def step(self, optimizer):
+            optimizer.step()
+        def update(self):
+            return None
+        def state_dict(self):
+            return {}
+        def load_state_dict(self, sd):
+            return None
+    return _DummyScaler()
 from closure_lite_dataset import ComicsPageDataset, collate_pages
 
 def convert_windows_to_wsl_path(path: str) -> str:
@@ -136,8 +192,8 @@ def train_epoch(model, dataloader, optimizer, scheduler, scaler, device, epoch):
             
             optimizer.zero_grad()
             
-            # Forward pass with mixed precision
-            with torch.cuda.amp.autocast():
+            # Forward pass with mixed precision (version-agnostic AMP)
+            with _get_autocast(device):
                 loss, components = model(batch)
                 # Check for NaN early and print helpful diagnostics
                 if torch.isnan(loss) or any(math.isnan(v) for v in components.values()):
@@ -167,19 +223,18 @@ def train_epoch(model, dataloader, optimizer, scheduler, scaler, device, epoch):
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
             
-            # Optionally guard against NaN gradients/params
-            grad_is_nan = False
+            # Optionally guard against NaN/Inf gradients: zero them instead of skipping entire step
+            bad_grads = []
             for n, p in model.named_parameters():
-                if p.grad is not None and torch.isnan(p.grad.detach()).any():
-                    grad_is_nan = True
-                    print(f"NaN gradient in {n} at batch {batch_idx}; skipping optimizer step.")
-                    break
-            if grad_is_nan:
-                scaler.update()
-                continue
+                if p.grad is not None:
+                    g = p.grad.detach()
+                    if torch.isnan(g).any() or torch.isinf(g).any():
+                        p.grad.data = torch.where(torch.isfinite(g), g, torch.zeros_like(g))
+                        bad_grads.append(n)
+            if bad_grads:
+                print(f"Clamped/zeroed invalid gradients in {len(bad_grads)} params at batch {batch_idx} (e.g., {bad_grads[:2]})")
             scaler.step(optimizer)
             scaler.update()
-            scheduler.step()
             
             # Update running averages
             running_loss = 0.9 * running_loss + 0.1 * loss.item()
@@ -254,6 +309,14 @@ def main():
                        help='Wandb project name')
     parser.add_argument('--resume', type=str, default=None, 
                        help='Path to checkpoint to resume from')
+    parser.add_argument('--model', type=str, choices=['simple','full'], default='simple',
+                       help="Model variant to use: 'simple' = ClosureLiteSimple (no seq), 'full' = ClosureLite")
+    # Simple-model MPM options (opt-in; defaults keep current behavior)
+    parser.add_argument('--mpm_denoise', action='store_true', help='Enable denoising MPM head in Simple model')
+    parser.add_argument('--mpm_context_recon', action='store_true', help='Enable context reconstruction MPM head in Simple model')
+    parser.add_argument('--mpm_weight', type=float, default=0.0, help='Weight for extra MPM loss terms (Simple only)')
+    parser.add_argument('--mpm_noise_std', type=float, default=0.1, help='Noise std for denoising MPM (Simple only)')
+    parser.add_argument('--mpm_stopgrad', action='store_true', help='Stop gradient into targets for extra MPM (Simple only)')
     
     args = parser.parse_args()
     
@@ -288,16 +351,28 @@ def main():
     
     # Create model
     print("Creating model...")
-    model = ClosureLite().to(device)
+    if args.model == 'simple':
+        model = ClosureLiteSimple(
+            mpm_denoise=args.mpm_denoise,
+            mpm_context_recon=args.mpm_context_recon,
+            mpm_weight=args.mpm_weight,
+            mpm_noise_std=args.mpm_noise_std,
+            mpm_stopgrad=args.mpm_stopgrad
+        ).to(device)
+        print("Using Closure-Lite Simple framework (no sequence model).")
+    else:
+        model = ClosureLite().to(device)
+        print("Using Closure-Lite Full framework.")
     
     # Create optimizer and scheduler
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    # Cosine schedule stepped per epoch (T_max in epochs)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs, eta_min=args.lr * 0.1
     )
     
-    # Mixed precision training
-    scaler = torch.cuda.amp.GradScaler()
+    # Mixed precision training (version-agnostic AMP)
+    scaler = _make_grad_scaler(device)
     
     # Resume from checkpoint if specified
     start_epoch = 1
@@ -327,6 +402,9 @@ def main():
         
         print(f"Epoch {epoch} - Avg Loss: {avg_loss:.4f} MPM: {avg_mpm:.4f} POP: {avg_pop:.4f} RPP: {avg_rpp:.4f}")
         
+        # Advance LR schedule once per epoch (matching T_max=epochs)
+        scheduler.step()
+
         # Log to wandb
         wandb.log({
             'epoch': epoch,
@@ -334,7 +412,7 @@ def main():
             'L_mpm': avg_mpm,
             'L_pop': avg_pop,
             'L_rpp': avg_rpp,
-            'lr': scheduler.get_last_lr()[0]
+            'lr': scheduler.get_last_lr()[0] if hasattr(scheduler, 'get_last_lr') else optimizer.param_groups[0]['lr']
         })
         
         # Save checkpoint
