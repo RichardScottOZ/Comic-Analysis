@@ -7,13 +7,62 @@ import os
 import torch
 import numpy as np
 from PIL import Image, ImageFile
+import warnings
 # Allow loading of truncated images to avoid runtime crashes on partially corrupted files
 ImageFile.LOAD_TRUNCATED_IMAGES = True
+# Disable decompression bomb warnings for very large comic pages; we immediately crop and downscale panels.
+try:
+    Image.MAX_IMAGE_PIXELS = None
+    warnings.simplefilter('ignore', Image.DecompressionBombWarning)
+except Exception:
+    pass
+
+def _safe_open_image(img_path: str):
+    """Open very large images safely, disabling decompression-bomb checks and
+    falling back to a blank canvas on failure so training can continue.
+    """
+    # Ensure checks are disabled right before open (defensive in case other code reset it)
+    try:
+        Image.MAX_IMAGE_PIXELS = None
+    except Exception:
+        pass
+    try:
+        img = Image.open(img_path).convert('RGB')
+        # Force actual read to catch issues early
+        img.load()
+        return img
+    except Exception as e:
+        print(f"[Dataset WARNING] Could not open image '{img_path}': {e}. Using a blank fallback and continuing.")
+        # 2:3 aspect placeholder typical for a comic page
+        return Image.new('RGB', (1024, 1536), color=(0,0,0))
 import torchvision.transforms as T
 from transformers import AutoTokenizer
 from pathlib import Path
 import re
 from closure_lite_framework import build_adjacency_and_next, comp_features_for_panel
+
+def _load_json_with_fallbacks(json_path: str):
+    """Robustly load a JSON file trying UTF-8 first, then common fallbacks.
+    Returns a Python object or raises the last exception if all attempts fail.
+    """
+    # Try strict UTF-8 first (most DataSpec files are UTF-8)
+    encs = [
+        ("utf-8", "strict"),
+        ("utf-8-sig", "strict"),
+        ("cp1252", "strict"),
+        ("latin-1", "strict"),
+        ("utf-8", "replace"),  # as a last resort, replace bad bytes in strings
+    ]
+    last_err = None
+    for enc, err in encs:
+        try:
+            with open(json_path, 'r', encoding=enc, errors=err) as f:
+                return json.load(f)
+        except Exception as e:
+            last_err = e
+            continue
+    # If we reach here, all attempts failed
+    raise last_err if last_err else RuntimeError(f"Failed to read JSON: {json_path}")
 
 def _to_wsl_path(p: str) -> str:
     """Convert Windows drive paths (e.g., E:\foo or E:/foo or E:foo) to WSL (/mnt/e/foo) when on POSIX.
@@ -138,12 +187,11 @@ class ComicsPageDataset(torch.utils.data.Dataset):
         # Load the first page from JSON
         page = None
         try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    page = data
-                elif isinstance(data, list) and data and isinstance(data[0], dict):
-                    page = data[0]
+            data = _load_json_with_fallbacks(json_path)
+            if isinstance(data, dict):
+                page = data
+            elif isinstance(data, list) and data and isinstance(data[0], dict):
+                page = data[0]
         except Exception:
             page = None
 
@@ -271,12 +319,11 @@ class ComicsPageDataset(torch.utils.data.Dataset):
         # Load page data on-demand
         json_path = self.json_paths[idx]
         try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-                if isinstance(data, dict): 
-                    data = [data]
-                # Use first page from file (most files have 1 page)
-                page = data[0]
+            data = _load_json_with_fallbacks(json_path)
+            if isinstance(data, dict): 
+                data = [data]
+            # Use first page from file (most files have 1 page)
+            page = data[0]
         except Exception as e:
             print(f"Error loading {json_path}: {e}")
             # Return a dummy page if loading fails
@@ -330,9 +377,9 @@ class ComicsPageDataset(torch.utils.data.Dataset):
 
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"Image not found: {img_path}")
-    # Cache is already updated in resolve_image_path
+        # Cache is already updated in resolve_image_path
         
-        img = Image.open(img_path).convert('RGB')
+        img = _safe_open_image(img_path)
         W, H = img.size
 
         # --- Helper: robustly extract a panel bbox from varied schemas ---
@@ -474,7 +521,13 @@ class ComicsPageDataset(torch.utils.data.Dataset):
         crops, texts, comps, boxes = [], [], [], []
         for p in panels[:self.max_panels]:
             x,y,w,h = p['panel_coords']
-            crop = img.crop((x, y, x+w, y+h))
+            # Clamp to page bounds to tolerate slight size errors
+            x = max(0, min(int(x), W-1))
+            y = max(0, min(int(y), H-1))
+            w = max(1, int(w)); h = max(1, int(h))
+            x2 = max(x+1, min(x+w, W))
+            y2 = max(y+1, min(y+h, H))
+            crop = img.crop((x, y, x2, y2))
             crops.append(self.tf(crop))
             # aggregate text
             tdict = p.get('text', {}) or {}
