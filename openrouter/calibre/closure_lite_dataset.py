@@ -6,7 +6,7 @@ import json
 import os
 import torch
 import numpy as np
-from PIL import Image, ImageFile
+from PIL import Image, ImageFile, ImageOps
 import warnings
 # Allow loading of truncated images to avoid runtime crashes on partially corrupted files
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -19,7 +19,7 @@ except Exception:
 
 def _safe_open_image(img_path: str):
     """Open very large images safely, disabling decompression-bomb checks and
-    falling back to a blank canvas on failure so training can continue.
+    performing an eager load. If opening still fails, raise an error with context.
     """
     # Ensure checks are disabled right before open (defensive in case other code reset it)
     try:
@@ -27,14 +27,18 @@ def _safe_open_image(img_path: str):
     except Exception:
         pass
     try:
-        img = Image.open(img_path).convert('RGB')
+        img = Image.open(img_path)
+        # Normalize orientation based on EXIF to avoid landscape/rotation oddities
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+        img = img.convert('RGB')
         # Force actual read to catch issues early
         img.load()
         return img
     except Exception as e:
-        print(f"[Dataset WARNING] Could not open image '{img_path}': {e}. Using a blank fallback and continuing.")
-        # 2:3 aspect placeholder typical for a comic page
-        return Image.new('RGB', (1024, 1536), color=(0,0,0))
+        raise RuntimeError(f"Failed to open image '{img_path}': {e}")
 import torchvision.transforms as T
 from transformers import AutoTokenizer
 from pathlib import Path
