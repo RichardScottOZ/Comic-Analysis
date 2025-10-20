@@ -221,7 +221,12 @@ def loss_rpp(logits_neighbors, next_idx, adj_mask):
 class ClosureLiteSimple(nn.Module):
     """CLOSURE-Lite model that skips problematic sequence processing"""
     
-    def __init__(self, d=384, num_heads=4, temperature=0.1):
+    def __init__(self, d=384, num_heads=4, temperature=0.1,
+                 mpm_denoise: bool = False,
+                 mpm_context_recon: bool = False,
+                 mpm_weight: float = 0.0,
+                 mpm_noise_std: float = 0.1,
+                 mpm_stopgrad: bool = False):
         super().__init__()
         self.atom = PanelAtomizerLite(comp_in_dim=7, d=d)
         # Skip GutterSeqLite entirely - use raw panel embeddings directly!
@@ -229,6 +234,21 @@ class ClosureLiteSimple(nn.Module):
         self.next_head = NextPanelHead(d=d)
         # POP classifier for page order prediction
         self.pop_classifier = POPClassifier(input_dim=3*d)
+        # Optional MPM variants (disabled by default)
+        self.mpm_denoise = mpm_denoise
+        self.mpm_context_recon = mpm_context_recon
+        self.mpm_weight = float(mpm_weight or 0.0)
+        self.mpm_noise_std = mpm_noise_std
+        self.mpm_stopgrad = mpm_stopgrad
+        if self.mpm_denoise:
+            self.denoise_head = nn.Sequential(
+                nn.Linear(d, 2*d), nn.GELU(), nn.Linear(2*d, d)
+            )
+        if self.mpm_context_recon:
+            # context: page embedding (d) + comp feats (7)
+            self.context_head = nn.Sequential(
+                nn.Linear(d + 7, 2*d), nn.GELU(), nn.Linear(2*d, d)
+            )
     
     def forward(self, batch):
         B,N,_,_,_ = batch['images'].shape
@@ -240,6 +260,7 @@ class ClosureLiteSimple(nn.Module):
         # Panel embeddings
         P_flat = self.atom(images, input_ids, attention_mask, comp_feats)  # (B*N,D)
         P = P_flat.view(B, N, -1)
+        C = comp_feats.view(B, N, -1)
         
         # Mask one panel per page for MPM; handle pages with zero panels gracefully
         counts = batch['panel_mask'].sum(dim=1)
@@ -250,7 +271,29 @@ class ClosureLiteSimple(nn.Module):
         logits_neighbors = self.next_head(P)
 
         # Losses
-        L_mpm = loss_mpm(P, P, masked_idxs)  # Use P for both pred and true since we're not doing sequence processing
+        L_mpm_base = loss_mpm(P, P, masked_idxs)  # baseline (degenerate) MPM
+
+        # Optional additional MPM terms
+        L_mpm_extra = torch.tensor(0.0, device=P.device)
+        if (self.mpm_denoise or self.mpm_context_recon) and any((isinstance(mi, int) and mi < N) for mi in masked_idxs):
+            losses = []
+            for b, mi in enumerate(masked_idxs):
+                if not (isinstance(mi, int) and 0 <= mi < N):
+                    continue
+                p_true = P[b, mi]
+                if self.mpm_stopgrad:
+                    p_true = p_true.detach()
+                if self.mpm_denoise:
+                    noise = torch.randn_like(p_true) * self.mpm_noise_std
+                    p_tilde = p_true + noise
+                    p_hat = self.denoise_head(p_tilde)
+                    losses.append(F.mse_loss(p_hat, p_true))
+                if self.mpm_context_recon:
+                    ctx = torch.cat([E_page[b], C[b, mi]], dim=-1)
+                    p_hat2 = self.context_head(ctx)
+                    losses.append(F.mse_loss(p_hat2, p_true))
+            if losses:
+                L_mpm_extra = torch.stack(losses).mean()
         
         # POP-lite: sample positives/negatives by shuffling E_page within batch
         E2 = E_page[torch.randperm(B)]
@@ -261,12 +304,35 @@ class ClosureLiteSimple(nn.Module):
         L_rpp = loss_rpp(logits_neighbors, batch['next_idx'], batch['adj_mask'])
 
         # Combine losses
-        L = L_mpm + 0.3*L_pop + 0.5*L_rpp
+        L = L_mpm_base + self.mpm_weight * L_mpm_extra + 0.3*L_pop + 0.5*L_rpp
         
         return L, {
-            'L_mpm': L_mpm.item(), 
+            'L_mpm': (L_mpm_base + self.mpm_weight * L_mpm_extra).item(),
+            'L_mpm_base': L_mpm_base.item(),
+            'L_mpm_extra': L_mpm_extra.item(),
             'L_pop': L_pop.item(), 
             'L_rpp': L_rpp.item()
+        }
+
+    @torch.no_grad()
+    def analyze(self, batch):
+        """Return panel embeddings, page embedding, and attention weights for visualization.
+        Expects the same batch format as forward; processes one batch at a time.
+        """
+        self.eval()
+        B,N,_,_,_ = batch['images'].shape
+        images = batch['images'].flatten(0,1)
+        input_ids = batch['input_ids'].flatten(0,1)
+        attention_mask = batch['attention_mask'].flatten(0,1)
+        comp_feats = batch['comp_feats'].flatten(0,1)
+        P_flat = self.atom(images, input_ids, attention_mask, comp_feats)
+        P = P_flat.view(B, N, -1)
+        E_page, attn = self.han.panels_to_page(P, batch['panel_mask'])
+        return {
+            'P': P,                      # (B,N,D)
+            'E_page': E_page,            # (B,D)
+            'attention': attn,           # (B,N)
+            'panel_mask': batch['panel_mask']
         }
 
 # ============================================================================
