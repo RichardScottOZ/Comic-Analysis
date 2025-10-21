@@ -582,10 +582,11 @@ class ComicsPageDataset(torch.utils.data.Dataset):
         }
         # Add original page data for visualization
         batch['original_page'] = page
-        # Also add the JSON file name and resolved image path for reference
+        # Also add the JSON path, JSON file name and resolved image path for reference
+        batch['json_path'] = json_path
         batch['json_file'] = os.path.basename(json_path)
         batch['image_path'] = img_path
-        
+
         return batch
 
 def collate_pages(batch_list):
@@ -593,7 +594,7 @@ def collate_pages(batch_list):
     keys = batch_list[0].keys()
     out = {}
     for k in keys:
-        if k in ('original_page', 'json_file', 'image_path'):
+        if k in ('original_page', 'json_file', 'json_path', 'image_path'):
             out[k] = [b[k] for b in batch_list]  # Keep as list of dicts/strings
         elif k in ('panel_mask', 'next_idx'):
             out[k] = torch.stack([b[k] for b in batch_list], dim=0)  # (B,N) or (B,N)
@@ -647,6 +648,75 @@ def create_dataloader(json_dir, image_root, batch_size=4, max_panels=12, rtl=Fal
         pin_memory=True
     )
     return dataloader
+
+def create_dataloader_from_list(json_list_file: str, image_root: str, batch_size: int = 4,
+                                num_workers: int = 2, max_samples: int | None = None,
+                                max_panels: int = 12, rtl: bool = False,
+                                seed: int | None = None, dedupe: bool = True,
+                                sample_without_replacement: bool = True):
+    """Create a DataLoader from a text file listing JSON paths (one per line).
+    Paths are normalized using the same WSL-aware converter used elsewhere.
+    """
+    json_list_file = _to_wsl_path(json_list_file)
+    image_root = _to_wsl_path(image_root)
+    encodings = ['utf-8', 'utf-8-sig', 'cp1252', 'latin-1', 'iso-8859-1']
+    lines: list[str] = []
+    last_err: Exception | None = None
+    for enc in encodings:
+        try:
+            with open(json_list_file, 'r', encoding=enc, errors='strict') as f:
+                lines = [l.strip() for l in f if l.strip()]
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if not lines:
+        raise RuntimeError(f"Failed to read list file '{json_list_file}': {last_err}")
+    paths = []
+    for l in lines:
+        p = _to_wsl_path(l)
+        if os.path.exists(p):
+            paths.append(p)
+        else:
+            # try original literal
+            if os.path.exists(l):
+                paths.append(l)
+    # Optional de-duplication by normalized path (case-insensitive on Windows)
+    if dedupe and paths:
+        normed = []
+        seen = set()
+        for p in paths:
+            key = os.path.normcase(os.path.normpath(p))
+            if key not in seen:
+                seen.add(key)
+                normed.append(p)
+        if len(normed) != len(paths):
+            try:
+                print(f"[create_dataloader_from_list] De-duplicated list: {len(paths)} -> {len(normed)} unique paths")
+            except Exception:
+                pass
+        paths = normed
+
+    # Optional sampling
+    if max_samples and max_samples > 0 and len(paths) > max_samples:
+        import random
+        rng = random.Random(seed) if seed is not None else random
+        if sample_without_replacement:
+            paths = rng.sample(paths, k=max_samples)
+        else:
+            # With replacement (rarely needed)
+            paths = [rng.choice(paths) for _ in range(max_samples)]
+    if not paths:
+        raise ValueError(f"No valid JSON paths found in list: {json_list_file}")
+    dataset = ComicsPageDataset(paths, image_root, max_panels=max_panels, rtl=rtl)
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=collate_pages,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
 
 if __name__ == "__main__":
     # Test the dataset
