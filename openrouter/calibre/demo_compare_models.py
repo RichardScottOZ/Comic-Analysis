@@ -10,6 +10,7 @@ Usage example (Windows PowerShell):
     --models "name=base_simple;ckpt=path\\to\\base\\best_checkpoint.pth;variant=simple" \
              "name=denoise;ckpt=path\\to\\denoise\\best_checkpoint.pth;variant=simple" \
              "name=context;ckpt=path\\to\\context\\best_checkpoint.pth;variant=simple" \
+             "name=context_denoise;ckpt=path\\to\\context_denoise\\best_checkpoint.pth;variant=simple" \
     --max_pages 16 --seed 42 --out_dir ./demo_out
 
 This script keeps computation light and focuses on extracting analyzable outputs via model.analyze(...).
@@ -307,106 +308,159 @@ def main():
     writer.writerow(header)
 
     # Iterate pages and render per-model comparisons (separate PNG per model, per page)
+    pages_processed = 0
     for bidx, batch in enumerate(dl):
-        for midx, (entry, model) in enumerate(zip(entries, models)):
-            res = batch_analyze(model, dict(batch), device)
-            # Prepare figure layout (image + 4 diagnostics), matching the simple demo style
-            fig = plt.figure(figsize=(18, 10))
-            gs = fig.add_gridspec(2,3)
-            ax_img = fig.add_subplot(gs[:,0])
-            ax_sim = fig.add_subplot(gs[0,1])
-            ax_attn = fig.add_subplot(gs[0,2])
-            ax_umap = fig.add_subplot(gs[1,1])
-            ax_flow = fig.add_subplot(gs[1,2])
-            page_data = batch.get('original_page', [{}])[0]
-            img_path = batch.get('image_path', [None])[0]
-            page_name = os.path.basename(page_data.get('page_image_path') or img_path or f'page_{bidx}.png')
-            # Render page like the original simple demo
-            _plot_page_like_simple(
-                fig,
-                (ax_img, ax_sim, ax_attn, ax_umap, ax_flow),
-                img_path,
-                page_data,
-                res.get('attention'),
-                res.get('P'),
-                f"{entry['name']} · {page_name} · batch{bidx}",
-                boxes_norm=(batch.get('boxes')[0].detach().cpu().numpy() if isinstance(batch.get('boxes'), torch.Tensor) else None)
-            )
-            out = Path(args.out_dir) / f"batch{bidx}_{entry['name']}.png"
-            fig.tight_layout()
-            fig.savefig(out, dpi=150, bbox_inches='tight')
-            plt.close(fig)
+        # how many samples are in this batch (last batch may be smaller)
+        try:
+            actual_B = batch.get('images').shape[0] if isinstance(batch.get('images'), torch.Tensor) else len(batch.get('image_path', []))
+        except Exception:
+            actual_B = len(batch.get('image_path', [])) if batch.get('image_path') else args.batch_size
+        print(f"[DEBUG] Processing batch {bidx + 1} with up to {actual_B} samples")
+        # Analyze each model once for this batch and store results
+        res_list = [batch_analyze(model, dict(batch), device) for (_, model) in zip(entries, models)]
+        for s in range(actual_B):
+            if pages_processed >= args.max_pages:
+                break
+            # Prepare figure layout will be done per-model below; create per-sample context now
+            for midx, entry in enumerate(entries):
+                res = res_list[midx]
+                # Prepare figure layout (image + 4 diagnostics), matching the simple demo style
+                fig = plt.figure(figsize=(18, 10))
+                gs = fig.add_gridspec(2,3)
+                ax_img = fig.add_subplot(gs[:,0])
+                ax_sim = fig.add_subplot(gs[0,1])
+                ax_attn = fig.add_subplot(gs[0,2])
+                ax_umap = fig.add_subplot(gs[1,1])
+                ax_flow = fig.add_subplot(gs[1,2])
 
-            # --- CSV metrics (mirror original simple demo prints) ---
-            # Resolve the exact boxes used for this figure
-            bx = batch.get('boxes')
-            bx_np = bx[0].detach().cpu().numpy() if isinstance(bx, torch.Tensor) else None
-            used_boxes_px, src, n_json, n_bb = _resolve_used_panels(page_data, bx_np, img_path)
-            num_actual = len(used_boxes_px)
+                # Per-sample page data / image path
+                page_data = batch.get('original_page', [{}])[s]
+                img_path = batch.get('image_path', [None])[s]
+                page_name = os.path.basename(page_data.get('page_image_path') or img_path or f'page_{bidx}_{s}.png')
 
-            P = res.get('P')
-            a = res.get('attention')
-            Pm = P[0, :num_actual].detach().cpu().numpy() if (P is not None and num_actual > 0) else np.zeros((0, 1))
-            av = a[0, :num_actual].detach().cpu().numpy() if (a is not None and num_actual > 0) else np.zeros((0,))
+                # Extract per-sample normalized boxes if provided
+                boxes_tensor = batch.get('boxes')
+                boxes_norm = None
+                if isinstance(boxes_tensor, torch.Tensor):
+                    try:
+                        boxes_np = boxes_tensor.detach().cpu().numpy()
+                        boxes_norm = boxes_np[s]
+                    except Exception:
+                        boxes_norm = None
 
-            # Pairwise cosine sims summary
-            max_sim = 0.0
-            max_pair = (-1, -1)
-            mean_sim = 0.0
-            if Pm.shape[0] > 1:
-                Pn = Pm / (np.linalg.norm(Pm, axis=1, keepdims=True) + 1e-8)
-                sim = np.clip(Pn @ Pn.T, 0.0, 1.0)
-                iu = np.triu_indices(sim.shape[0], k=1)
-                flat = sim[iu]
-                if flat.size > 0:
-                    max_idx = int(flat.argmax())
-                    max_sim = float(flat[max_idx])
-                    # Map back to pair
-                    pairs = list(zip(iu[0], iu[1]))
-                    max_pair = pairs[max_idx]
-                    mean_sim = float(flat.mean())
+                # Render page like the original simple demo for this sample
+                _plot_page_like_simple(
+                    fig,
+                    (ax_img, ax_sim, ax_attn, ax_umap, ax_flow),
+                    img_path,
+                    page_data,
+                    res.get('attention'),
+                    res.get('P'),
+                    f"{entry['name']} · {page_name} · batch{bidx}.{s}",
+                    boxes_norm=(boxes_norm if boxes_norm is not None else None)
+                )
 
-            # Attention summaries
-            if av.size > 0:
-                att_max = float(av.max())
-                att_max_idx = int(av.argmax())
-                # entropy with small eps
-                p = av / (av.sum() + 1e-8)
-                att_entropy = float(-(p * np.log(p + 1e-12)).sum())
-                att_vec_str = '|'.join(f"{x:.6f}" for x in av.tolist())
-            else:
-                att_max = 0.0
-                att_max_idx = -1
-                att_entropy = 0.0
-                att_vec_str = ''
+                out = Path(args.out_dir) / f"batch{bidx}_s{s}_{entry['name']}.png"
+                fig.tight_layout()
+                fig.savefig(out, dpi=150, bbox_inches='tight')
+                plt.close(fig)
+                print(f"[DEBUG] Saving figure for batch {bidx}, sample {s}, model {entry.get('name','')}, page {page_name}")
 
-            comic_dir = os.path.basename(os.path.dirname(img_path)) if img_path else ''
-            used_boxes_str = '|'.join(','.join(str(int(v)) for v in b) for b in used_boxes_px)
-            row = [
-                bidx,
-                entry.get('name',''),
-                entry.get('variant',''),
-                page_name,
-                img_path,
-                comic_dir,
-                batch.get('json_file',[None])[0],
-                batch.get('json_path',[None])[0],
-                src,
-                n_json,
-                n_bb,
-                num_actual,
-                used_boxes_str,
-                f"{max_sim:.6f}",
-                f"({max_pair[0]},{max_pair[1]})",
-                f"{mean_sim:.6f}",
-                f"{att_max:.6f}",
-                att_max_idx,
-                f"{att_entropy:.6f}",
-                att_vec_str,
-            ]
-            writer.writerow(row)
-        if (bidx+1) * args.batch_size >= args.max_pages:
-            break
+                # --- CSV metrics (mirror original simple demo prints) ---
+                # Resolve the exact boxes used for this figure
+                bx = batch.get('boxes')
+                if isinstance(bx, torch.Tensor):
+                    try:
+                        bx_all = bx.detach().cpu().numpy()
+                        bx_np = bx_all[s]
+                    except Exception:
+                        bx_np = None
+                else:
+                    bx_np = None
+
+                used_boxes_px, src, n_json, n_bb = _resolve_used_panels(page_data, np.asarray(boxes_norm) if boxes_norm is not None else None, img_path)
+                num_actual = len(used_boxes_px)
+
+                P = res.get('P')
+                a = res.get('attention')
+                # Index per-sample from model outputs (P: B x N x D ; a: B x N)
+                try:
+                    P_s = P[s]
+                except Exception:
+                    P_s = P[0] if P is not None else None
+                try:
+                    a_s = a[s]
+                except Exception:
+                    a_s = a[0] if a is not None else None
+
+                Pm = P_s[:num_actual].detach().cpu().numpy() if (P_s is not None and num_actual > 0) else np.zeros((0, 1))
+                av = a_s[:num_actual].detach().cpu().numpy() if (a_s is not None and num_actual > 0) else np.zeros((0,))
+
+                # Pairwise cosine sims summary
+                max_sim = 0.0
+                max_pair = (-1, -1)
+                mean_sim = 0.0
+                if Pm.shape[0] > 1:
+                    Pn = Pm / (np.linalg.norm(Pm, axis=1, keepdims=True) + 1e-8)
+                    sim = np.clip(Pn @ Pn.T, 0.0, 1.0)
+                    iu = np.triu_indices(sim.shape[0], k=1)
+                    flat = sim[iu]
+                    if flat.size > 0:
+                        max_idx = int(flat.argmax())
+                        max_sim = float(flat[max_idx])
+                        # Map back to pair
+                        pairs = list(zip(iu[0], iu[1]))
+                        max_pair = pairs[max_idx]
+                        mean_sim = float(flat.mean())
+
+                # Attention summaries
+                if av.size > 0:
+                    att_max = float(av.max())
+                    att_max_idx = int(av.argmax())
+                    # entropy with small eps
+                    p = av / (av.sum() + 1e-8)
+                    att_entropy = float(-(p * np.log(p + 1e-12)).sum())
+                    att_vec_str = '|'.join(f"{x:.6f}" for x in av.tolist())
+                else:
+                    att_max = 0.0
+                    att_max_idx = -1
+                    att_entropy = 0.0
+                    att_vec_str = ''
+
+                comic_dir = os.path.basename(os.path.dirname(img_path)) if img_path else ''
+                used_boxes_str = '|'.join(','.join(str(int(v)) for v in b) for b in used_boxes_px)
+                # Use current pages_processed as the page index for all model rows
+                page_index = pages_processed
+                row = [
+                    page_index,
+                    entry.get('name',''),
+                    entry.get('variant',''),
+                    page_name,
+                    img_path,
+                    comic_dir,
+                    batch.get('json_file',[None])[s] if batch.get('json_file') else None,
+                    batch.get('json_path',[None])[s] if batch.get('json_path') else None,
+                    src,
+                    n_json,
+                    n_bb,
+                    num_actual,
+                    used_boxes_str,
+                    f"{max_sim:.6f}",
+                    f"({max_pair[0]},{max_pair[1]})",
+                    f"{mean_sim:.6f}",
+                    f"{att_max:.6f}",
+                    att_max_idx,
+                    f"{att_entropy:.6f}",
+                    att_vec_str,
+                ]
+                writer.writerow(row)
+                print(f"[DEBUG] Writing CSV row for batch {bidx}, sample {s}, model {entry.get('name','')}, page {page_name}")
+            # Finished all models for this sample -> count one page
+            pages_processed += 1
+            print(f"[DEBUG] Completed page {pages_processed} (batch {bidx}, sample {s})")
+            # outer break if we've reached the required pages
+            if pages_processed >= args.max_pages:
+                break
 
     csv_f.close()
     print(f"Saved figures under: {args.out_dir}")
