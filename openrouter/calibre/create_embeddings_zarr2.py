@@ -1292,35 +1292,62 @@ def main():
     
     print("Embedding generation complete!")
     print(f"Dataset saved to: {output_path}")
-    print(f"Total pages: {len(ds.page_id)}")
-    print(f"Amazon pages: {len(amazon_data)}")
-    if calibre_data:
-        print(f"CalibreComics pages: {len(calibre_data)}")
 
-    # Compute mean page embedding (ignore empty/zero rows) and print summary.
+    # Re-open the saved Zarr store as a final check and print its summary.
     try:
-        page_embs = np.array(ds['page_embeddings'].values)
-        norms = np.linalg.norm(page_embs, axis=1)
-        valid_mask = norms > 1e-6
-        valid_count = int(np.sum(valid_mask))
-        if valid_count > 0:
-            mean_emb = page_embs[valid_mask].mean(axis=0).astype(np.float32)
-        else:
-            mean_emb = np.zeros((int(ds.attrs.get('embedding_dim', page_embs.shape[1]) if page_embs.size else 0),), dtype=np.float32)
+        ds_saved = xr.open_zarr(output_path)
+        # Print the XArray dataset representation (concise) so users can inspect dims/vars.
+        try:
+            print(ds_saved)
+        except Exception:
+            # Fallback: print dims and data_vars summary
+            try:
+                print(f"Dataset dims: {ds_saved.dims}")
+                print(f"Data variables: {list(ds_saved.data_vars.keys())}")
+            except Exception:
+                pass
 
-        # Print a concise numeric summary to stdout (first 16 values and L2 norm)
-        preview = np.array2string(mean_emb[:16], precision=6, separator=', ')
-        l2 = float(np.linalg.norm(mean_emb)) if mean_emb.size else 0.0
-        print(f"Mean page embedding (first 16 dims): {preview}")
-        print(f"Mean embedding L2 norm: {l2:.6f}  (computed from {valid_count} pages)")
+        # Totals based on the saved dataset
+        try:
+            total_pages = int(ds_saved.dims.get('page_id', 0))
+        except Exception:
+            try:
+                total_pages = int(len(ds_saved['page_id']))
+            except Exception:
+                total_pages = 0
+        print(f"Total pages: {total_pages}")
+        print(f"Amazon pages: {len(amazon_data)}")
+        if calibre_data:
+            print(f"CalibreComics pages: {len(calibre_data)}")
 
-        # Save only if the user requested it
-        if args.save_mean:
-            mean_path = os.path.join(args.output_dir, 'mean_page_embedding.npy')
-            np.save(mean_path, mean_emb)
-            print(f"Saved mean page embedding to: {mean_path}")
+        # Compute mean page embedding (ignore empty/zero rows) from the saved dataset
+        try:
+            page_embs = np.array(ds_saved['page_embeddings'].values)
+            if page_embs.size:
+                norms = np.linalg.norm(page_embs, axis=1)
+                valid_mask = norms > 1e-6
+                valid_count = int(np.sum(valid_mask))
+                if valid_count > 0:
+                    mean_emb = page_embs[valid_mask].mean(axis=0).astype(np.float32)
+                else:
+                    mean_emb = np.zeros((int(ds_saved.attrs.get('embedding_dim', page_embs.shape[1]) if page_embs.size else 0),), dtype=np.float32)
+
+                preview = np.array2string(mean_emb[:16], precision=6, separator=', ')
+                l2 = float(np.linalg.norm(mean_emb)) if mean_emb.size else 0.0
+                print(f"Mean page embedding (first 16 dims): {preview}")
+                print(f"Mean embedding L2 norm: {l2:.6f}  (computed from {valid_count} pages)")
+
+                if args.save_mean:
+                    mean_path = os.path.join(args.output_dir, 'mean_page_embedding.npy')
+                    np.save(mean_path, mean_emb)
+                    print(f"Saved mean page embedding to: {mean_path}")
+            else:
+                print("Saved dataset contains no page embeddings (empty).")
+        except Exception as e:
+            print(f"Warning: failed to compute mean embedding from saved dataset: {e}")
+
     except Exception as e:
-        print(f"Warning: failed to compute mean embedding: {e}")
+        print(f"Warning: failed to re-open saved Zarr for final check: {e}")
 
 if __name__ == "__main__":
     main()
