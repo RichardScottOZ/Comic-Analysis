@@ -121,15 +121,23 @@ def generate_key_variants_from_jsonpath(vlm_path: Path) -> List[str]:
 
 def build_image_index(image_root: Path):
     fn_idx = {}
-    for root, _, files in os.walk(image_root):
+    dir_idx = {}
+    for root, dirs, files in os.walk(image_root):
+        # record directory normalized keys
+        try:
+            dname = os.path.basename(root).lower()
+            dnorm = re.sub(r'[^a-z0-9]+', '', dname)
+            dir_idx.setdefault(dnorm, []).append(root)
+        except Exception:
+            pass
         for f in files:
             full = os.path.join(root, f)
             fn = f.lower()
             fn_idx.setdefault(fn, []).append(full)
-    return fn_idx
+    return fn_idx, dir_idx
 
 
-def try_resolve_hint(hint: str, image_root: Path, fn_idx) -> str | None:
+def try_resolve_hint(hint: str, image_root: Path, fn_idx, dir_idx) -> str | None:
     if not hint:
         return None
     # direct join
@@ -182,6 +190,50 @@ def try_resolve_hint(hint: str, image_root: Path, fn_idx) -> str | None:
         for k in fn_idx.keys():
             if token in k:
                 return fn_idx[k][0]
+
+    # 5) directory-name heuristics: try to find a directory whose normalized name matches
+    # the hint's parent or stem when extraction added suffixes like '._1'
+    try:
+        # if hint contains a path component, prefer the parent part
+        if '/' in hint or '\\' in hint:
+            parent_part = os.path.dirname(hint).replace('\\','/').split('/')[-1]
+        else:
+            # derive a parent-like token from stem by removing trailing numeric tokens
+            parent_part = re.sub(r'[\._-]?\d{1,6}$', '', stem)
+        parent_norm = re.sub(r'[^a-z0-9]+', '', parent_part.lower())
+        # direct normalized dir match
+        if parent_norm in dir_idx:
+            # attempt to find a matching file inside the directory using stem or numeric
+            for dpath in dir_idx[parent_norm]:
+                # try file equal to stem + common extensions
+                for ext in ('.jpg', '.jpeg', '.png'):
+                    candf = os.path.join(dpath, stem + ext)
+                    if os.path.exists(candf):
+                        return candf
+                # try numeric variants if stem ends with digits
+                mnum = re.search(r'(\d{1,6})$', stem)
+                if mnum:
+                    num = mnum.group(1)
+                    for fn in (f"{num}.jpg", f"{num.zfill(3)}.jpg", f"{num.zfill(4)}.jpg"):
+                        candf = os.path.join(dpath, fn)
+                        if os.path.exists(candf):
+                            return candf
+                # fallback: return first image file in directory
+                try:
+                    for entry in os.listdir(dpath):
+                        if entry.lower().endswith(('.jpg', '.jpeg', '.png')):
+                            return os.path.join(dpath, entry)
+                except Exception:
+                    pass
+        # try looser matching: find any dir whose normalized name contains parent_norm
+        for dn, paths in dir_idx.items():
+            if parent_norm and parent_norm in dn:
+                for dpath in paths:
+                    for entry in os.listdir(dpath):
+                        if entry.lower().endswith(('.jpg', '.jpeg', '.png')):
+                            return os.path.join(dpath, entry)
+    except Exception:
+        pass
     return None
 
 
@@ -204,7 +256,10 @@ def main():
     print(f"Found {len(vlm_files)} VLM JSON files")
 
     image_root = Path(args.image_root) if args.image_root else None
-    fn_idx = build_image_index(image_root) if image_root and image_root.exists() else {}
+    if image_root and image_root.exists():
+        fn_idx, dir_idx = build_image_index(image_root)
+    else:
+        fn_idx, dir_idx = {}, {}
 
     key_to_jsons: Dict[str, List[str]] = {}
     json_to_image: Dict[str, str] = {}
@@ -234,7 +289,7 @@ def main():
         # attempt to resolve to image if root provided
         resolved = None
         if image_root:
-            resolved = try_resolve_hint(hint or os.path.splitext(os.path.basename(str(vf)))[0], image_root, fn_idx)
+            resolved = try_resolve_hint(hint or os.path.splitext(os.path.basename(str(vf)))[0], image_root, fn_idx, dir_idx)
             if resolved:
                 json_to_image[str(vf)] = resolved
                 image_to_jsons.setdefault(resolved, []).append(str(vf))
