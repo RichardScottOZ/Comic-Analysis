@@ -521,6 +521,14 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
         'key_to_path': key_to_path,
         'eager': eager,
     }
+    # If a mapping_obj was loaded earlier (vlm_map), expose it for downstream
+    # consumers so emissions can prefer the deterministic json->image mapping
+    # when producing DataSpec JSONs.
+    try:
+        if 'mapping_obj' in locals() and mapping_obj is not None:
+            vlm_index['json_to_image_map'] = mapping_obj
+    except Exception:
+        pass
     return vlm_data, vlm_index
 
 
@@ -2683,7 +2691,25 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                     img_id = row_dict.get('image_id')
                     vlm_json_path = row_dict.get('vlm_json_path')
                     vlm_obj = row_dict.get('vlm_data')
-                    page_image_path = row_dict.get('resolved_image_path') or row_dict.get('image_path')
+                    # Prefer deterministic mapping from vlm_map when available: json_path -> image_path
+                    page_image_path = None
+                    try:
+                        if vlm_json_path and isinstance(_VLM_INDEX, dict) and _VLM_INDEX.get('json_to_image_map'):
+                            mapped = _VLM_INDEX['json_to_image_map'].get(vlm_json_path) or _VLM_INDEX['json_to_image_map'].get(os.path.abspath(vlm_json_path))
+                            if mapped:
+                                # If mapping is not absolute and image_roots were provided, try to resolve relative mapping
+                                if not os.path.isabs(mapped) and roots_list:
+                                    for r in roots_list:
+                                        cand = os.path.join(r, mapped)
+                                        if os.path.exists(cand):
+                                            mapped = cand
+                                            break
+                                page_image_path = mapped
+                    except Exception:
+                        page_image_path = None
+                    # Fallback to any earlier resolved path or stored image_path
+                    if not page_image_path:
+                        page_image_path = row_dict.get('resolved_image_path') or row_dict.get('image_path')
                     if not page_image_path or (require_image_exists and not (isinstance(page_image_path, str) and os.path.exists(page_image_path))):
                         # Should rarely happen due to prior base_filter; log if debugging requested
                         if dataspec_debug_skips_out:
