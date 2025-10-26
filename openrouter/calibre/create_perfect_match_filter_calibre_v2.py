@@ -2,11 +2,13 @@ import os
 import json
 import pandas as pd
 import numpy as np
+import hashlib
 from pathlib import Path
 import argparse
 import time
 from tqdm import tqdm
 import multiprocessing as mp
+import collections
 from functools import partial
 
 # --------------------------------------
@@ -56,26 +58,75 @@ def normalize_image_key_from_img_path(img_path: str) -> str:
             if base_name.startswith(pref):
                 base_name = base_name[len(pref):]
                 break
+        # Additional heuristic for flattened names: if the flattened filename
+        # embeds a generic container token (e.g., '..._jpg4cbz_...') then the
+        # tokens before that token are likely the series title. Extract them
+        # to use as the folder component to avoid key collapse across series.
+        try:
+            toks = base_name.split('_')
+            gen_tokens = {'jpg4cbz', 'pages', 'page', 'images', 'extracted', 'calibrecomics', 'working', 'working_files', 'workingfiles'}
+            for i, t in enumerate(toks):
+                if t in gen_tokens and i > 0:
+                    # use tokens before the generic marker as the folder
+                    folder_from_flat = '_'.join(toks[:i])
+                    if folder_from_flat:
+                        folder = normalize_folder_name(folder_from_flat)
+                        # also trim the base_name to drop the leading series part
+                        base_name = '_'.join(toks[i:])
+                    break
+        except Exception:
+            pass
 
     # Clean or derive folder name
     folder_raw = os.path.basename(folder_path) if folder_path else ''
     folder = normalize_folder_name(folder_raw)
-    generic_markers = {"calibrecomics_extracted", "calibrecomics", "images", "extracted", "jpg4cbz", "pages", "page", "scans"}
-    if folder in generic_markers or "extracted" in folder:
-        # Derive a title from filename prefix (strip trailing page tokens)
+    generic_markers = {"calibrecomics_extracted", "calibrecomics", "images", "extracted", "jpg4cbz", "pages", "page", "scans", "working", "working_files", "workingfiles", "calibrecomics_analysis", "calibrecomicsanalysis"}
+
+    # Helper: strip noisy suffixes commonly produced by extraction tools
+    def _strip_noisy_suffix(s: str) -> str:
+        if not s:
+            return s
+        s = re.sub(r'(_files|_files_cover|_files_cover_\w+|_cover|_thumb|_thumbnail)$', '', s)
+        return s
+
+    # Build ancestor preference list (closest non-generic ancestor wins)
+    try:
+        ancestor_candidates = []
+        if folder_path:
+            p = folder_path.replace('\\','/').strip('/')
+            parts = [pt for pt in p.split('/') if pt]
+            # consider last up to 3 ancestors: immediate folder, parent, grandparent
+            for i in range(1, min(4, len(parts)+1)):
+                cand = parts[-i]
+                cand_norm = normalize_folder_name(_strip_noisy_suffix(cand))
+                ancestor_candidates.append(cand_norm)
+    except Exception:
+        ancestor_candidates = [folder]
+
+    # If immediate folder is a generic container, prefer the nearest non-generic ancestor
+    if folder in generic_markers or any(g in folder for g in ('extracted', 'calibrecomics')):
         title = base_name
         # Drop trailing jpg4cbz/page/number suffixes
         title = re.sub(r'_(?:jpg4cbz_)?\d{1,6}$', '', title)
         title = re.sub(r'_?page[_\-]?\d{1,6}$', '', title)
-        # Replace separators and trim
         title = re.sub(r'[\s\-]+', '_', title).strip('_')
-        if title:
-            folder = normalize_folder_name(title)
-        # Prefer parent-of-parent folder if available and non-generic
-        if parent_path and not flattened:
-            pp = normalize_folder_name(os.path.basename(parent_path))
-            if pp and pp not in generic_markers and len(pp) > 2:
-                folder = pp
+
+        use_parent = False
+        if not title or title.isdigit() or len(title) <= 3:
+            use_parent = True
+
+        # Prefer nearest non-generic ancestor (immediate parent, grandparent, ...)
+        chosen = None
+        for cand in ancestor_candidates:
+            if cand and cand not in generic_markers and len(cand) > 2:
+                chosen = cand
+                break
+
+        if chosen:
+            folder = chosen
+        elif not use_parent and title:
+            folder = normalize_folder_name(_strip_noisy_suffix(title))
+        # Otherwise leave folder as-is (will collapse to a numeric if necessary)
 
     # Try multiple page identification strategies
     m = re.search(r'(jpg4cbz_\d+)', base_name)
@@ -472,6 +523,82 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
     }
     return vlm_data, vlm_index
 
+
+def _compute_file_hash(path: str, algo: str = 'sha1', max_read: int = None):
+    """Compute hex digest for a file. Reads in streaming mode. max_read limits bytes (None = full file)."""
+    try:
+        h = hashlib.new(algo)
+        with open(path, 'rb') as fh:
+            total = 0
+            while True:
+                chunk = fh.read(1024 * 1024)
+                if not chunk:
+                    break
+                if max_read is not None and total + len(chunk) > max_read:
+                    need = max_read - total
+                    if need > 0:
+                        h.update(chunk[:need])
+                    break
+                h.update(chunk)
+                total += len(chunk)
+        return h.hexdigest()
+    except Exception:
+        return None
+
+
+def _write_duplicate_debug(offender_key, sample_rows, out_base, sample_limit=10, compute_hash=False):
+    """Write a single JSON object per offender containing aggregated debug info.
+    offender_key: normalized_key string
+    sample_rows: iterable of rows (dict-like) matching the key
+    out_base: output_csv base path to derive filenames
+    """
+    out_debug = out_base.replace('.csv', f'_{offender_key}_duplicate_key_debug.jsonl')
+    written = 0
+    try:
+        with open(out_debug, 'w', encoding='utf-8') as odf:
+            for r in sample_rows:
+                if written >= sample_limit:
+                    break
+                rec = {}
+                rec['normalized_key'] = offender_key
+                rec['image_path'] = r.get('image_path')
+                rec['resolved_image_path'] = r.get('resolved_image_path')
+                rec['vlm_json_path'] = r.get('vlm_json_path')
+                rec['vlm_key'] = r.get('vlm_key')
+                rec['quality_score'] = r.get('quality_score')
+                rec['image_exists'] = bool(r.get('resolved_image_path') and os.path.exists(str(r.get('resolved_image_path'))))
+                # file stats when available
+                if rec['image_exists'] and compute_hash:
+                    try:
+                        p = str(r.get('resolved_image_path'))
+                        rec['file_size'] = os.path.getsize(p)
+                        sh = _compute_file_hash(p, algo='sha1', max_read=5 * 1024 * 1024)
+                        rec['sha1_prefix'] = sh[:16] if sh else None
+                    except Exception:
+                        rec['file_size'] = None
+                        rec['sha1_prefix'] = None
+                else:
+                    # If resolved path not present, but image_path is local, attempt size for traceability
+                    try:
+                        ip = r.get('image_path')
+                        if ip and os.path.exists(str(ip)):
+                            rec['file_size'] = os.path.getsize(str(ip))
+                            if compute_hash:
+                                sh = _compute_file_hash(str(ip), algo='sha1', max_read=5 * 1024 * 1024)
+                                rec['sha1_prefix'] = sh[:16] if sh else None
+                        else:
+                            rec['file_size'] = None
+                            rec['sha1_prefix'] = None
+                    except Exception:
+                        rec['file_size'] = None
+                        rec['sha1_prefix'] = None
+
+                odf.write(json.dumps(rec, ensure_ascii=False) + '\n')
+                written += 1
+        print(f"Wrote duplicate debug for key {offender_key}: {out_debug} (sample {written})")
+    except Exception as e:
+        print(f"Warning: failed to write duplicate debug for {offender_key}: {e}")
+
 def analyze_image_alignment(args):
     # Normalization function - EXACTLY matching the one in load_vlm_data
     import re, os
@@ -674,6 +801,41 @@ def analyze_image_alignment(args):
                 for c in candidates:
                     if os.path.exists(c):
                         return c
+            except Exception:
+                pass
+            # Additional heuristic: when no image_roots are provided and the
+            # COCO `image_id` (from the original dataset) encodes a drive/root
+            # (e.g., 'E:\CalibreComics_extracted_...'), attempt to construct an
+            # absolute path by prefixing the drive/root from the image_id to the
+            # (relative) image_path and check existence. This handles cases where
+            # COCO contains a flattened path or the CSV `image_path` is relative
+            # and the user didn't supply --image_roots.
+            try:
+                import re as __re
+                iid = str(image_id) if image_id is not None else ''
+                # Normalize separators for matching
+                iid_norm = iid.replace('/', '\\')
+                m = __re.match(r'^([A-Za-z]:)', iid_norm)
+                if m:
+                    drive = m.group(1)  # e.g., 'E:'
+                    cand = os.path.normpath(os.path.join(drive + os.sep, img_path_str))
+                    if os.path.exists(cand):
+                        return cand
+                    # Try replacing forward slashes in img_path_str
+                    cand2 = os.path.normpath(os.path.join(drive + os.sep, img_path_str.replace('/', os.sep)))
+                    if os.path.exists(cand2):
+                        return cand2
+                    # Some COCO entries use underscores instead of backslashes in the
+                    # flattened image_id; try substituting the first '_' after known
+                    # container tokens with a backslash and test.
+                    # Example: 'E:\CalibreComics_extracted_13thfloor...' ->
+                    # 'E:\CalibreComics_extracted\\13thfloor...'
+                    if '_' in img_path_str and '\\' not in img_path_str:
+                        parts = img_path_str.split('_', 1)
+                        if len(parts) == 2:
+                            cand3 = os.path.normpath(os.path.join(drive + os.sep, parts[0] + os.sep + parts[1]))
+                            if os.path.exists(cand3):
+                                return cand3
             except Exception:
                 pass
             return None
@@ -1386,7 +1548,7 @@ def analyze_image_alignment(args):
             return {'_first_failure': True}
         return None
 
-def test_normalization():
+def test_normalization(skip_vlm=True):
     """Test normalization logic with comprehensive examples to help debug key matching"""
     import os, re, glob, json
     from collections import defaultdict
@@ -1478,7 +1640,7 @@ def test_normalization():
         if not folder_path:
             parts = img_path.split('/')
             folder_path = parts[-2] if len(parts) > 1 else ''
-        
+
         # Clean folder name
         folder = os.path.basename(folder_path)
         folder = re.sub(r'[\s_-]+', '_', folder.strip()).lower()
@@ -1538,64 +1700,67 @@ def test_normalization():
                 print(f"{name}: ERROR - {str(e)}")
                 results[i][name] = f"ERROR: {str(e)}"
     
-    # Try to find VLM files matching our examples
-    print("\n[DEBUG] CHECKING FOR MATCHING VLM FILES")
-    print("=" * 60)
-    
-    # Collect JSON files for testing
-    json_files = []
-    json_keys = {}
-    
-    # First check if the debug folder exists
-    if os.path.exists(debug_folder):
-        for root, dirs, files in os.walk(debug_folder):
-            for file in files:
-                if file.lower().endswith('.json'):
-                    full_path = os.path.join(root, file)
-                    json_files.append(full_path)
-                    # Generate keys for each JSON file
-                    base_name = os.path.splitext(os.path.basename(full_path))[0]
-                    key = re.sub(r'[\s_-]+', '_', base_name.lower())
-                    json_keys[key] = full_path
-                    # Also add a variant with numbers extracted
-                    number_match = re.search(r'(\d+)', base_name)
-                    if number_match:
-                        folder_part = re.sub(r'[^\w]+', '_', os.path.basename(os.path.dirname(full_path)).lower())
-                        num = number_match.group(1)
-                        num_key = f"{folder_part}_{num}"
-                        json_keys[num_key] = full_path
-        
-        # Print found JSON files
-        print(f"Found {len(json_files)} JSON files in {debug_folder}")
-        print(f"Generated {len(json_keys)} lookup keys")
-        
-        # Check for each example if we can find a match
-        for i, example in enumerate(examples):
-            print(f"\n[Example {i+1} Matches]")
-            
-            found_match = False
-            for strategy_name, key in results[i].items():
-                if isinstance(key, str) and not key.startswith("ERROR:"):
-                    if key in json_keys:
-                        found_match = True
-                        match_file = os.path.basename(json_keys[key])
-                        print(f"✓ Match found with {strategy_name}: {key} → {match_file}")
-                        
-                        # Try to peek inside the JSON file
-                        try:
-                            with open(json_keys[key], 'r', encoding='utf-8') as f:
-                                data = json.load(f)
-                                if isinstance(data, dict):
-                                    print(f"  JSON structure: {list(data.keys())[:5]}...")
-                                else:
-                                    print(f"  JSON type: {type(data)}")
-                        except Exception as e:
-                            print(f"  Error loading JSON: {e}")
-                            
-            if not found_match:
-                print("✗ No match found with any strategy")
+    # Optionally try to find VLM files matching our examples (disabled by default)
+    if not skip_vlm:
+        print("\n[DEBUG] CHECKING FOR MATCHING VLM FILES")
+        print("=" * 60)
+
+        # Collect JSON files for testing
+        json_files = []
+        json_keys = {}
+
+        # First check if the debug folder exists
+        if os.path.exists(debug_folder):
+            for root, dirs, files in os.walk(debug_folder):
+                for file in files:
+                    if file.lower().endswith('.json'):
+                        full_path = os.path.join(root, file)
+                        json_files.append(full_path)
+                        # Generate keys for each JSON file
+                        base_name = os.path.splitext(os.path.basename(full_path))[0]
+                        key = re.sub(r'[\s_-]+', '_', base_name.lower())
+                        json_keys[key] = full_path
+                        # Also add a variant with numbers extracted
+                        number_match = re.search(r'(\d+)', base_name)
+                        if number_match:
+                            folder_part = re.sub(r'[^\w]+', '_', os.path.basename(os.path.dirname(full_path)).lower())
+                            num = number_match.group(1)
+                            num_key = f"{folder_part}_{num}"
+                            json_keys[num_key] = full_path
+
+            # Print found JSON files
+            print(f"Found {len(json_files)} JSON files in {debug_folder}")
+            print(f"Generated {len(json_keys)} lookup keys")
+
+            # Check for each example if we can find a match
+            for i, example in enumerate(examples):
+                print(f"\n[Example {i+1} Matches]")
+
+                found_match = False
+                for strategy_name, key in results[i].items():
+                    if isinstance(key, str) and not key.startswith("ERROR:"):
+                        if key in json_keys:
+                            found_match = True
+                            match_file = os.path.basename(json_keys[key])
+                            print(f"✓ Match found with {strategy_name}: {key} → {match_file}")
+
+                            # Try to peek inside the JSON file
+                            try:
+                                with open(json_keys[key], 'r', encoding='utf-8') as f:
+                                    data = json.load(f)
+                                    if isinstance(data, dict):
+                                        print(f"  JSON structure: {list(data.keys())[:5]}...")
+                                    else:
+                                        print(f"  JSON type: {type(data)}")
+                            except Exception as e:
+                                print(f"  Error loading JSON: {e}")
+
+                if not found_match:
+                    print("✗ No match found with any strategy")
+        else:
+            print(f"Debug folder {debug_folder} does not exist - skipping JSON matching tests")
     else:
-        print(f"Debug folder {debug_folder} does not exist - skipping JSON matching tests")
+        print("\n[DEBUG] VLM matching skipped for normalization tests (use flag to enable).")
         
     print("\n[DEBUG] NORMALIZATION TESTING COMPLETE")
     print("=" * 60)
@@ -1653,8 +1818,8 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
         if not folder_path:
             parts = img_path.split('/')
             folder_path = parts[-2] if len(parts) > 1 else ''
-        
-        # Clean folder name - use last folder component only
+
+        # Clean folder name
         folder = os.path.basename(folder_path)
         folder = re.sub(r'[\s_-]+', '_', folder.strip()).lower()
         
@@ -1795,6 +1960,17 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
         print(f"Limited analysis to {limit} images")
     print(f"Analyzing {len(analysis_args)} images...")
     results = []
+    # Pre-compute duplicate-failure policy so we can do early checks while
+    # processing (avoids waiting until all images are analyzed). These are the
+    # same globals consulted later when producing the final duplicate report.
+    fail_on_duplicates = globals().get('_ANALYZE_FAIL_ON_DUPES', False)
+    duplicate_tolerance = int(globals().get('_ANALYZE_DUPLICATE_TOLERANCE', 0))
+    allowed_max = 1 + max(0, int(duplicate_tolerance))
+    SAMPLE_ROWS_PER_KEY = int(globals().get('_ANALYZE_DUP_SAMPLE_ROWS', 10))
+    dump_all_dup_rows = bool(globals().get('_ANALYZE_DUMP_ALL_DUP_ROWS', False))
+    require_confirm_dump_all = bool(globals().get('_ANALYZE_CONFIRM_DUMP_ALL', False))
+    # Counter to track seen normalized keys during streaming processing
+    _dup_counter = collections.Counter()
     if first_failure:
         # Force single-threaded for deterministic early-exit diagnostics
         for args in tqdm(analysis_args, desc="Analyzing images"):
@@ -1804,16 +1980,125 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                 return
             if r is not None:
                 results.append(r)
+                # Perform incremental duplicate check if enabled
+                if fail_on_duplicates:
+                    try:
+                        nk = normalize_image_key_from_img_path(r.get('image_path')) if isinstance(r.get('image_path'), str) else ''
+                    except Exception:
+                        nk = ''
+                    if nk:
+                        _dup_counter[nk] += 1
+                        if _dup_counter[nk] > allowed_max:
+                            # Write a small diagnostic (same shape as the end-of-run report)
+                            out_diag = output_csv.replace('.csv', '_duplicate_key_report.csv')
+                            rows = [{'normalized_key': nk, 'count': int(_dup_counter[nk]), 'sample_paths': r.get('image_path','')}]
+                            try:
+                                pd.DataFrame(rows).to_csv(out_diag, index=False)
+                            except Exception:
+                                pass
+                            # Build records for the sample rows we've seen so far and write richer debug file
+                            try:
+                                compute_hash = bool(globals().get('_ANALYZE_DUP_BY_HASH', False))
+                                matching = []
+                                taken = 0
+                                for rr in results:
+                                    try:
+                                        rnk = normalize_image_key_from_img_path(rr.get('image_path')) if isinstance(rr.get('image_path'), str) else ''
+                                    except Exception:
+                                        rnk = ''
+                                    if rnk == nk and taken < SAMPLE_ROWS_PER_KEY:
+                                        matching.append(rr)
+                                        taken += 1
+                                _write_duplicate_debug(nk, matching, output_csv, sample_limit=SAMPLE_ROWS_PER_KEY, compute_hash=compute_hash)
+                            except Exception:
+                                pass
+                            print(f"Failing early due to duplicate normalized_key '{nk}' (count={_dup_counter[nk]})")
+                            raise SystemExit(2)
     elif num_workers > 1:
         with mp.Pool(num_workers, initializer=_init_worker, initargs=(vlm_data, vlm_index, eager_vlm_load, min_text_coverage)) as pool:
-            results = list(tqdm(
-                pool.imap(analyze_image_alignment, analysis_args),
-                total=len(analysis_args),
-                desc="Analyzing images"
-            ))
+            # Stream results from the pool so we can perform incremental checks
+            for r in tqdm(pool.imap(analyze_image_alignment, analysis_args), total=len(analysis_args), desc="Analyzing images"):
+                if r is None:
+                    continue
+                results.append(r)
+                # incremental duplicate check
+                if fail_on_duplicates:
+                    try:
+                        nk = normalize_image_key_from_img_path(r.get('image_path')) if isinstance(r.get('image_path'), str) else ''
+                    except Exception:
+                        nk = ''
+                    if nk:
+                        _dup_counter[nk] += 1
+                        if _dup_counter[nk] > allowed_max:
+                            # write compact diagnostic and abort
+                            out_diag = output_csv.replace('.csv', '_duplicate_key_report.csv')
+                            rows = [{'normalized_key': nk, 'count': int(_dup_counter[nk]), 'sample_paths': r.get('image_path','')}]
+                            try:
+                                pd.DataFrame(rows).to_csv(out_diag, index=False)
+                            except Exception:
+                                pass
+                            # Build matching records and write richer per-key debug if requested
+                            try:
+                                compute_hash = bool(globals().get('_ANALYZE_DUP_BY_HASH', False))
+                                matching = []
+                                taken = 0
+                                for rr in results:
+                                    try:
+                                        rnk = normalize_image_key_from_img_path(rr.get('image_path')) if isinstance(rr.get('image_path'), str) else ''
+                                    except Exception:
+                                        rnk = ''
+                                    if rnk == nk and taken < SAMPLE_ROWS_PER_KEY:
+                                        matching.append(rr)
+                                        taken += 1
+                                _write_duplicate_debug(nk, matching, output_csv, sample_limit=SAMPLE_ROWS_PER_KEY, compute_hash=compute_hash)
+                            except Exception:
+                                pass
+                            print(f"Failing early due to duplicate normalized_key '{nk}' (count={_dup_counter[nk]})")
+                            # terminate pool and exit
+                            try:
+                                pool.terminate()
+                            except Exception:
+                                pass
+                            raise SystemExit(2)
     else:
         # Single-threaded execution also needs globals set (already set above)
-        results = [analyze_image_alignment(args) for args in tqdm(analysis_args, desc="Analyzing images")]
+        for args in tqdm(analysis_args, desc="Analyzing images"):
+            r = analyze_image_alignment(args)
+            if r is None:
+                continue
+            results.append(r)
+            if fail_on_duplicates:
+                try:
+                    nk = normalize_image_key_from_img_path(r.get('image_path')) if isinstance(r.get('image_path'), str) else ''
+                except Exception:
+                    nk = ''
+                    if nk:
+                        _dup_counter[nk] += 1
+                        if _dup_counter[nk] > allowed_max:
+                            out_diag = output_csv.replace('.csv', '_duplicate_key_report.csv')
+                            rows = [{'normalized_key': nk, 'count': int(_dup_counter[nk]), 'sample_paths': r.get('image_path','')}]
+                            try:
+                                pd.DataFrame(rows).to_csv(out_diag, index=False)
+                            except Exception:
+                                pass
+                            # Build matching records and write richer per-key debug if requested
+                            try:
+                                compute_hash = bool(globals().get('_ANALYZE_DUP_BY_HASH', False))
+                                matching = []
+                                taken = 0
+                                for rr in results:
+                                    try:
+                                        rnk = normalize_image_key_from_img_path(rr.get('image_path')) if isinstance(rr.get('image_path'), str) else ''
+                                    except Exception:
+                                        rnk = ''
+                                    if rnk == nk and taken < SAMPLE_ROWS_PER_KEY:
+                                        matching.append(rr)
+                                        taken += 1
+                                _write_duplicate_debug(nk, matching, output_csv, sample_limit=SAMPLE_ROWS_PER_KEY, compute_hash=compute_hash)
+                            except Exception:
+                                pass
+                            print(f"Failing early due to duplicate normalized_key '{nk}' (count={_dup_counter[nk]})")
+                            raise SystemExit(2)
     results = [r for r in results if r is not None]
     attempted = len(analysis_args)
     matched = sum(1 for r in results if r.get('has_vlm_data'))
@@ -1821,6 +2106,300 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
         print("No valid results found!")
         return
     df = pd.DataFrame(results)
+    # Add a normalized key column to help downstream mapping and auditing
+    try:
+        df['normalized_key'] = df['image_path'].apply(lambda p: normalize_image_key_from_img_path(p) if isinstance(p, str) else '')
+    except Exception:
+        # Fallback: safe default if normalization fails for any row
+        df['normalized_key'] = ''
+
+    # Prefer VLM key when available (more specific and less prone to generic-folder collapse)
+    try:
+        def _prefer_vlm_key(row):
+            try:
+                vk = row.get('vlm_key') if isinstance(row.get('vlm_key'), str) and row.get('vlm_key') else None
+                if vk:
+                    return vk
+            except Exception:
+                pass
+            return row.get('normalized_key')
+        df['normalized_key'] = df.apply(_prefer_vlm_key, axis=1)
+    except Exception:
+        pass
+
+    # Optional canonical dedupe: drop duplicates by vlm_json_path or vlm_key
+    try:
+        dedupe_json = bool(globals().get('_ANALYZE_DEDUPE_BY_VLMJSON', False))
+        dedupe_key = bool(globals().get('_ANALYZE_DEDUPE_BY_VLMKEY', False))
+        if dedupe_json or dedupe_key:
+            # We'll keep the first occurrence and write a small CSV of dropped rows
+            drop_subset = 'vlm_json_path' if dedupe_json else 'vlm_key'
+            before = len(df)
+            # Identify duplicates based on the chosen subset
+            mask_dup = df.duplicated(subset=[drop_subset], keep='first')
+            dropped = df[mask_dup]
+            df = df[~mask_dup].reset_index(drop=True)
+            after = len(df)
+            print(f"Canonical dedupe applied ({drop_subset}): dropped {before-after} rows; remaining {after} rows")
+            # Save dropped rows for audit
+            try:
+                drop_path = output_csv.replace('.csv', f'_dropped_by_{drop_subset}.csv')
+                if not dropped.empty:
+                    dropped.to_csv(drop_path, index=False)
+                    print(f"Wrote dropped rows to: {drop_path}")
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"Warning: dedupe step failed: {e}")
+
+    # Optional content-hash based dedupe: compute a canonical hash of the VLM JSON
+    # body and drop duplicate pages that contain identical VLM json content. This
+    # helps when the same page (identical content) was imported multiple times
+    # under different file/container names. When enabled this will write a
+    # canonical per-line manifest and an alias audit JSONL mapping canonical -> aliases.
+    try:
+        dedupe_content = bool(globals().get('_ANALYZE_DEDUPE_BY_VLMJSON_CONTENT', False))
+        emit_canonical = bool(globals().get('_ANALYZE_EMIT_CANONICAL_MANIFEST', False))
+        if dedupe_content or emit_canonical:
+            import hashlib as _hashlib
+            content_map = {}  # content_hash -> representative index
+            aliases = {}  # content_hash -> list of vlm_json_path
+            content_for_row = [None] * len(df)
+            for i, row in df.iterrows():
+                vlm_path = row.get('vlm_json_path')
+                content_hash = None
+                try:
+                    if isinstance(vlm_path, str) and vlm_path.lower().endswith('.json') and os.path.exists(vlm_path):
+                        # Read file fully — VLM JSONs are typically small; fallback to streaming if needed
+                        with open(vlm_path, 'rb') as _f:
+                            data = _f.read()
+                        content_hash = _hashlib.sha1(data).hexdigest()
+                    else:
+                        # If vlm_data is embedded in the row (object), hash its canonical JSON
+                        vobj = row.get('vlm_data')
+                        if vobj is not None:
+                            try:
+                                j = json.dumps(vobj, sort_keys=True, ensure_ascii=False).encode('utf-8')
+                                content_hash = _hashlib.sha1(j).hexdigest()
+                            except Exception:
+                                # Fallback to hashing the path string if available
+                                if isinstance(vlm_path, str) and vlm_path:
+                                    content_hash = _hashlib.sha1(vlm_path.encode('utf-8', errors='ignore')).hexdigest()
+                except Exception:
+                    content_hash = None
+                content_for_row[i] = content_hash
+                if content_hash:
+                    aliases.setdefault(content_hash, []).append(vlm_path)
+                    if content_hash not in content_map:
+                        content_map[content_hash] = i
+
+            # If emitting canonical manifest, write mapping regardless of dedupe flag
+            if emit_canonical or dedupe_content:
+                canonical_list = []
+                for chash, rep_idx in content_map.items():
+                    rep_row = df.iloc[rep_idx]
+                    vlm_path = rep_row.get('vlm_json_path')
+                    if isinstance(vlm_path, str) and vlm_path:
+                        canonical_list.append(str(vlm_path))
+                out_can = output_csv.replace('.csv', '_perfect_matches_canonical_vlmjsons.txt')
+                try:
+                    with open(out_can, 'w', encoding='utf-8') as _fc:
+                        for p in canonical_list:
+                            _fc.write(p + '\n')
+                    print(f"Canonical VLM JSON list written: {out_can} ({len(canonical_list)} items)")
+                except Exception as _e:
+                    print(f"Warning: failed to write canonical vlmjson list: {_e}")
+
+                # Write alias audit mapping: one JSON object per line for downstream inspection
+                out_alias = output_csv.replace('.csv', '_canonical_aliases.jsonl')
+                try:
+                    with open(out_alias, 'w', encoding='utf-8') as _fa:
+                        for chash, paths in aliases.items():
+                            record = {'content_hash': chash, 'canonical_vlm_json': paths[0] if paths else None, 'aliases': paths}
+                            _fa.write(json.dumps(record, ensure_ascii=False) + '\n')
+                    print(f"Canonical alias audit written: {out_alias} ({len(aliases)} canonical hashes)")
+                except Exception as _e:
+                    print(f"Warning: failed to write canonical alias audit: {_e}")
+
+            # If requested, drop duplicate rows (keep first rep) and write dropped rows for audit
+            if dedupe_content:
+                mask_keep = [True] * len(df)
+                dropped_rows = []
+                for chash, idx in content_map.items():
+                    # all rows with this content hash except the representative should be dropped
+                    for i, ch in enumerate(content_for_row):
+                        if ch == chash and i != idx:
+                            mask_keep[i] = False
+                            dropped_rows.append(df.iloc[i])
+                before = len(df)
+                df = df[[k for k, v in enumerate(mask_keep) if v]]
+                df = df.reset_index(drop=True)
+                after = len(df)
+                print(f"Content-hash dedupe applied: dropped {before-after} rows; remaining {after} rows")
+                # Save dropped rows for audit
+                try:
+                    drop_path = output_csv.replace('.csv', '_dropped_by_vlmjson_content.csv')
+                    if dropped_rows:
+                        pd.DataFrame(dropped_rows).to_csv(drop_path, index=False)
+                        print(f"Wrote dropped rows to: {drop_path}")
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"Warning: content-hash dedupe failed: {e}")
+
+    # Optional: append short sha1 prefixes to offending rows when duplicates are present
+    try:
+        if globals().get('_ANALYZE_APPEND_HASH_ON_DUP', False):
+            allowed_max_local = 1 + max(0, int(globals().get('_ANALYZE_DUPLICATE_TOLERANCE', 0)))
+            dup_counts_local = df['normalized_key'].value_counts()
+            offenders_local = dup_counts_local[dup_counts_local > allowed_max_local]
+            if not offenders_local.empty:
+                prefix_len = int(globals().get('_ANALYZE_APPEND_HASH_LEN', 8))
+                readlimit = int(globals().get('_ANALYZE_APPEND_HASH_READLIMIT', 5 * 1024 * 1024))
+                print(f"Appending short SHA1 prefixes (len={prefix_len}) to {len(offenders_local)} offending normalized_key(s) to disambiguate...")
+                for nk in offenders_local.index:
+                    mask = df['normalized_key'] == nk
+                    for idx in df[mask].index:
+                        try:
+                            p = df.at[idx, 'resolved_image_path'] or df.at[idx, 'image_path'] or df.at[idx, 'vlm_json_path']
+                            sha_prefix = None
+                            if isinstance(p, str) and os.path.exists(p):
+                                sh = _compute_file_hash(p, algo='sha1', max_read=readlimit)
+                                sha_prefix = sh[:prefix_len] if sh else None
+                            elif isinstance(p, str) and p:
+                                # Fallback: hash the vlm_json_path (more discriminative than generic image_path)
+                                import hashlib as _hashlib
+                                candidate = df.at[idx, 'vlm_json_path'] or p
+                                sha_prefix = _hashlib.sha1(str(candidate).encode('utf-8', errors='ignore')).hexdigest()[:prefix_len]
+                            if sha_prefix:
+                                df.at[idx, 'normalized_key'] = f"{df.at[idx, 'normalized_key']}_{sha_prefix}"
+                        except Exception:
+                            continue
+                # Re-evaluate offenders after appending hashes
+                dup_after = df['normalized_key'].value_counts()
+                remaining = dup_after[dup_after > allowed_max_local]
+                if remaining.empty:
+                    print("Appended hashes resolved all duplicates for offending keys.")
+                else:
+                    print(f"Warning: {len(remaining)} normalized_key(s) still exceed allowed_max after appending hashes.")
+    except Exception as e:
+        print(f"Warning: append-hash-on-duplicates failed: {e}")
+
+    # Duplicate detection / enforcement
+    # Main flags are controlled via globals set by main():
+    #   _ANALYZE_FAIL_ON_DUPES (bool) and _ANALYZE_DUPLICATE_TOLERANCE (int)
+    try:
+        # Fail-on-duplicates is a safety mode to stop long runs when many distinct input rows
+        # collapse to the same normalized key. By default we will only detect true duplicates
+        # (count > 1) and produce a small, bounded diagnostic (compact CSV + limited samples).
+        fail_on_duplicates = globals().get('_ANALYZE_FAIL_ON_DUPES', False)
+        duplicate_tolerance = int(globals().get('_ANALYZE_DUPLICATE_TOLERANCE', 0))
+        dump_all_dup_rows = bool(globals().get('_ANALYZE_DUMP_ALL_DUP_ROWS', False))
+        require_confirm_dump_all = bool(globals().get('_ANALYZE_CONFIRM_DUMP_ALL', False))
+        # How many sample rows per offending key to write in the bounded sample dump
+        SAMPLE_ROWS_PER_KEY = int(globals().get('_ANALYZE_DUP_SAMPLE_ROWS', 10))
+
+        if fail_on_duplicates:
+            # Interpret duplicate_tolerance as "allowed extra duplicates per key".
+            # Allowed max count per key = 1 (unique) + duplicate_tolerance
+            allowed_max = 1 + max(0, int(duplicate_tolerance))
+            dup_counts = df['normalized_key'].value_counts()
+            offenders = dup_counts[dup_counts > allowed_max]
+            if not offenders.empty:
+                # Build a compact CSV report (safe) and a bounded JSONL sample per offending key.
+                out_diag = output_csv.replace('.csv', '_duplicate_key_report.csv')
+                rows = []
+                for nk, cnt in offenders.items():
+                    sample_paths = df.loc[df['normalized_key'] == nk, 'image_path'].head(SAMPLE_ROWS_PER_KEY).tolist()
+                    rows.append({'normalized_key': nk, 'count': int(cnt), 'sample_paths': ';'.join(sample_paths)})
+                pd.DataFrame(rows).to_csv(out_diag, index=False)
+
+                # Sample JSONL (bounded) - safe by default
+                out_sample = output_csv.replace('.csv', '_duplicate_key_samples.jsonl')
+                with open(out_sample, 'w', encoding='utf-8') as _fs:
+                    for nk in offenders.index:
+                        sample_df = df[df['normalized_key'] == nk].head(SAMPLE_ROWS_PER_KEY)
+                        for _, r in sample_df.iterrows():
+                            _fs.write(json.dumps({'normalized_key': nk, 'row': r.to_dict()}, ensure_ascii=False) + '\n')
+
+                # Write richer per-key debug files when requested (includes file size and sha1 prefix if enabled)
+                try:
+                    compute_hash = bool(globals().get('_ANALYZE_DUP_BY_HASH', False))
+                    for nk in offenders.index:
+                        sample_df_full = df[df['normalized_key'] == nk].head(SAMPLE_ROWS_PER_KEY)
+                        rows_records = [r.to_dict() for _, r in sample_df_full.iterrows()]
+                        _write_duplicate_debug(nk, rows_records, output_csv, sample_limit=SAMPLE_ROWS_PER_KEY, compute_hash=compute_hash)
+                except Exception:
+                    pass
+
+                # Optionally write a full, gzipped dump only when explicitly requested and confirmed.
+                full_dump_written = False
+                if dump_all_dup_rows and require_confirm_dump_all:
+                    try:
+                        import gzip
+                        out_jsonl_gz = output_csv.replace('.csv', '_duplicate_key_rows.jsonl.gz')
+                        total_rows = 0
+                        with gzip.open(out_jsonl_gz, 'wt', encoding='utf-8') as _fg:
+                            for nk in offenders.index:
+                                for _, r in df[df['normalized_key'] == nk].iterrows():
+                                    _fg.write(json.dumps({'normalized_key': nk, 'row': r.to_dict()}, ensure_ascii=False) + '\n')
+                                    total_rows += 1
+                        full_dump_written = True
+                    except Exception as e:
+                        print(f"Warning: failed to write full duplicate dump: {e}")
+
+                # Console summary (concise)
+                print(f"Duplicate normalized_key report written: {out_diag} ({len(rows)} offenders)")
+                print(f"Bounded sample rows written: {out_sample} (up to {SAMPLE_ROWS_PER_KEY} rows per key)")
+                if full_dump_written:
+                    print(f"Full duplicate rows gzipped: {out_jsonl_gz}")
+                else:
+                    if dump_all_dup_rows and not require_confirm_dump_all:
+                        print("Full dump requested but not confirmed (--confirm-dump-all missing); skipping full dump.")
+                    else:
+                        print("Full duplicate dump not requested; enable with --dump-all-duplicate-rows --confirm-dump-all if you really need the full data (dangerous on large runs).")
+
+                # Print top offenders for quick visibility
+                print("Top duplicate normalized_keys (sample):")
+                topn = min(5, len(rows))
+                for i, r in enumerate(rows[:topn]):
+                    sp = r['sample_paths'].split(';')[0] if r['sample_paths'] else '<no path>'
+                    print(f"  {i+1}. {r['normalized_key']} — count={r['count']} — sample: {sp}")
+
+                print(f"Failing due to duplicates (allowed_max={allowed_max}). Exiting with code 2.")
+                raise SystemExit(2)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Warning: duplicate detection failed: {e}")
+
+    # Optional: fail early if any required rows have missing images
+    try:
+        fail_on_missing_images = globals().get('_ANALYZE_FAIL_ON_MISSING_IMAGES', False)
+        if fail_on_missing_images:
+            if 'image_exists' in df.columns:
+                # Treat both boolean False and string 'False' as missing
+                missing_mask = (df['image_exists'] == False) | (df['image_exists'] == 'False')
+                missing_df = df[missing_mask]
+                if not missing_df.empty:
+                    out_missing = output_csv.replace('.csv', '_missing_images.csv')
+                    try:
+                        # Write a compact diagnostic of offending rows
+                        cols = ['image_path', 'resolved_image_path', 'vlm_json_path', 'normalized_key']
+                        cols = [c for c in cols if c in missing_df.columns]
+                        missing_df.to_csv(out_missing, columns=cols, index=False)
+                    except Exception:
+                        try:
+                            missing_df.to_csv(out_missing, index=False)
+                        except Exception:
+                            pass
+                    print(f"Missing image report written: {out_missing} ({len(missing_df)} rows). Failing due to unresolved images.")
+                    raise SystemExit(3)
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"Warning: missing-image enforcement failed: {e}")
+
     df.to_csv(output_csv, index=False)
     print(f"📊 Analysis Complete! Results saved to: {output_csv}")
     print(f"📈 Summary Statistics:")
@@ -1851,10 +2430,31 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
     print(f"  High quality (score 4-5): {len(high_quality)} images - Use for training")
     print(f"  Medium quality (score 3): {len(medium_quality)} images - Use with caution")
     print(f"  Low quality (score 0-2): {len(low_quality)} images - Exclude from training")
+    # Write human-readable image_path lists (legacy)
     perfect_matches.to_csv(output_csv.replace('.csv', '_perfect_matches.txt'), columns=['image_path'], header=False, index=False)
     near_perfect.to_csv(output_csv.replace('.csv', '_near_perfect.txt'), columns=['image_path'], header=False, index=False)
     high_quality.to_csv(output_csv.replace('.csv', '_high_quality.txt'), columns=['image_path'], header=False, index=False)
     medium_quality.to_csv(output_csv.replace('.csv', '_medium_quality.txt'), columns=['image_path'], header=False, index=False)
+    # Emit low-quality image list as well for comprehensive candidate generation
+    try:
+        low_quality.to_csv(output_csv.replace('.csv', '_low_quality.txt'), columns=['image_path'], header=False, index=False)
+    except Exception:
+        # Keep non-fatal for older runs where low_quality might not be present
+        pass
+
+    # Write VLM JSON paths (dataspec) for deterministic downstream mapping and embedding generation
+    try:
+        perfect_matches.to_csv(output_csv.replace('.csv', '_perfect_matches_vlmjsons.txt'), columns=['vlm_json_path'], header=False, index=False)
+        near_perfect.to_csv(output_csv.replace('.csv', '_near_perfect_vlmjsons.txt'), columns=['vlm_json_path'], header=False, index=False)
+        high_quality.to_csv(output_csv.replace('.csv', '_high_quality_vlmjsons.txt'), columns=['vlm_json_path'], header=False, index=False)
+        medium_quality.to_csv(output_csv.replace('.csv', '_medium_quality_vlmjsons.txt'), columns=['vlm_json_path'], header=False, index=False)
+        # Also emit low-quality VLM JSON list for full coverage
+        try:
+            low_quality.to_csv(output_csv.replace('.csv', '_low_quality_vlmjsons.txt'), columns=['vlm_json_path'], header=False, index=False)
+        except Exception:
+            pass
+    except Exception as e:
+        print(f"Warning: could not write vlm json lists: {e}")
     # Additional list: perfect matches with any VLM text present
     if 'vlm_panels_with_text' in df.columns:
         perfect_with_text = perfect_matches[perfect_matches['vlm_panels_with_text'] > 0]
@@ -1864,6 +2464,7 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
     print(f"  Near-perfect: {output_csv.replace('.csv', '_near_perfect.txt')}")
     print(f"  High quality: {output_csv.replace('.csv', '_high_quality.txt')}")
     print(f"  Medium quality: {output_csv.replace('.csv', '_medium_quality.txt')}")
+    print(f"  Low quality: {output_csv.replace('.csv', '_low_quality.txt')}")
     if 'vlm_panels_with_text' in df.columns:
         print(f"  Perfect + Text: {output_csv.replace('.csv', '_perfect_with_text.txt')}")
 
@@ -1871,8 +2472,11 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
     try:
         manifest_cols = ['image_path', 'resolved_image_path', 'image_exists', 'vlm_key', 'vlm_json_path', 'rcnn_panels', 'vlm_panels', 'vlm_panels_with_text', 'vlm_text_dialogue_panels', 'vlm_text_narration_panels', 'vlm_text_sfx_panels']
         train_manifest = perfect_matches.copy()
-        # If require_image_exists was set upstream, we may want to keep only existing images
-        if 'image_exists' in train_manifest.columns:
+        # Only filter out non-existing images from the manifest when the user
+        # explicitly requested that behavior via --require_image_exists. Otherwise
+        # keep the rows so downstream tooling can decide (and so the manifest
+        # is not accidentally emptied when no image roots were provided).
+        if 'image_exists' in train_manifest.columns and require_image_exists:
             train_manifest = train_manifest[train_manifest['image_exists'] == True]
         train_manifest[manifest_cols].to_csv(output_csv.replace('.csv', '_perfect_match_training_manifest.csv'), index=False)
         print(f"📝 Training manifest saved: {output_csv.replace('.csv', '_perfect_match_training_manifest.csv')}")
@@ -1944,57 +2548,7 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
             'near_perfect': base_filter[base_filter['panel_count_ratio'].between(0.9, 1.1) & ~base_filter['is_perfect_match']],
             'high_quality': base_filter[base_filter['quality_score'] >= 4],
             'medium_quality': base_filter[base_filter['quality_score'] == 3],
-        }
-        if 'vlm_panels_with_text' in base_filter.columns:
-            subsets['perfect_with_text'] = base_filter[(base_filter['is_perfect_match'] == True) & (base_filter['vlm_panels_with_text'] > 0)]
-
-        def _default_out(name: str) -> str:
-            return output_csv.replace('.csv', f'_{name}_jsons.txt')
-
-        # Emit per user request
-        if emit_all_json_lists:
-            for name, sdf in subsets.items():
-                paths = _collect_jsons(sdf)
-                _write_list(paths, _default_out(name))
-        elif emit_json_list:
-            # If a single category provided and a custom output specified, honor it
-            if isinstance(emit_json_list, (list, tuple)):
-                reqs = list(emit_json_list)
-            else:
-                reqs = [emit_json_list]
-            for i, name in enumerate(reqs):
-                sdf = subsets.get(name)
-                if sdf is None:
-                    print(f"Warning: unknown --emit_json_list category '{name}'. Allowed: {', '.join(subsets.keys())}")
-                    continue
-                paths = _collect_jsons(sdf)
-                out_path = json_list_out if (json_list_out and len(reqs) == 1 and i == 0) else _default_out(name)
-                _write_list(paths, out_path)
-    except Exception as e:
-        print(f"Warning: failed to emit JSON list(s): {e}")
-
-    # ----------------------------------------------------
-    # Optional: Emit DataSpec JSON files for training in one pass
-    # ----------------------------------------------------
-    try:
-        # Quick exit if not requested
-        do_emit = bool(emit_dataspec_all) or bool(emit_dataspec_everything) or (emit_dataspec_for is not None and len(emit_dataspec_for) > 0)
-        if not do_emit:
-            return
-        if not dataspec_out_dir:
-            print("Warning: --dataspec_out_dir is required to emit DataSpec JSONs; skipping.")
-            return
-        os.makedirs(dataspec_out_dir, exist_ok=True)
-
-        # Reuse the same subset logic as above
-        base_filter = df
-        if 'image_exists' in df.columns and require_image_exists:
-            base_filter = df[df['image_exists'] == True]
-        subsets = {
-            'perfect': base_filter[base_filter['is_perfect_match'] == True],
-            'near_perfect': base_filter[base_filter['panel_count_ratio'].between(0.9, 1.1) & ~base_filter['is_perfect_match']],
-            'high_quality': base_filter[base_filter['quality_score'] >= 4],
-            'medium_quality': base_filter[base_filter['quality_score'] == 3],
+            'low_quality': base_filter[base_filter['quality_score'] < 3],
         }
         if 'vlm_panels_with_text' in base_filter.columns:
             subsets['perfect_with_text'] = base_filter[(base_filter['is_perfect_match'] == True) & (base_filter['vlm_panels_with_text'] > 0)]
@@ -2045,7 +2599,7 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                 for s in sp:
                     if isinstance(s, dict):
                         txt = s.get('dialogue') or s.get('text')
-                        st = str(s.get('speech_type') or s.get('type') or '').lower()
+                        st = str(s.get('speech_type') or s.get('type') or '').strip().lower()
                         if txt:
                             if any(tok in st for tok in ('narration','caption','narrator')):
                                 _add(txt, 'narration')
@@ -2142,6 +2696,50 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                             })
                         continue
                     det_boxes = _dets_for_image_id(img_id)
+                    if not det_boxes:
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'no_dets_after_threshold'
+                            })
+                        continue
+                    panels_vlm = _extract_panels_from_vlm(vlm_obj)
+                    texts = [_aggregate_text(p) for p in panels_vlm if isinstance(p, dict)]
+                    if dataspec_require_equal_counts and texts and (len(det_boxes) != len(texts)):
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'equal_count_mismatch',
+                                'rcnn_count': len(det_boxes),
+                                'vlm_count': len(texts)
+                            })
+                        continue
+                    K = min(len(det_boxes), len(texts) if texts else len(det_boxes))
+                    if K == 0:
+                        if dataspec_debug_skips_out:
+                            skip_records.append({
+                                'image_id': img_id,
+                                'image_path': row_dict.get('image_path'),
+                                'resolved_image_path': page_image_path,
+                                'vlm_json_path': vlm_json_path,
+                                'reason': 'zero_pairs'
+                            })
+                        continue
+                    panels_out = []
+                    for i in range(K):
+                        x,y,w,h = det_boxes[i]
+                        t = texts[i] if i < len(texts) else {'dialogue': [], 'narration': [], 'sfx': []}
+                        panels_out.append({
+                            'panel_coords': [int(x), int(y), max(1,int(w)), max(1,int(h))],
+                            'text': t
+                        })
+                    
                     if not det_boxes:
                         if dataspec_debug_skips_out:
                             skip_records.append({
@@ -2294,14 +2892,28 @@ def main():
     parser.add_argument('--first_failure', action='store_true', help='Stop on first unmatched image and print detailed diagnostics')
     parser.add_argument('--image_roots', type=str, help='One or more base directories to resolve image files for training (comma or semicolon separated)')
     parser.add_argument('--require_image_exists', action='store_true', help='Mark rows with image_exists False if no file found under image_roots')
+    parser.add_argument('--fail-on-missing-images', action='store_true', help='Fail (exit non-zero) if any rows have unresolved image paths (image_exists False).')
     parser.add_argument('--min_text_coverage', type=float, default=0.8, help='Minimum fraction of panels with text to award full text point (default 0.8). Half point if >= min-0.2')
+    parser.add_argument('--fail-on-duplicates', action='store_true', help='Fail (exit non-zero) if duplicate normalized_key values are detected in the final CSV (writes diagnostics).')
+    parser.add_argument('--duplicate-tolerance', type=int, default=0, help='Allow this many duplicate rows per normalized_key before failing (default 0).')
+    parser.add_argument('--dump-all-duplicate-rows', action='store_true', help='(OPT-IN) Write a full duplicate rows dump (gzipped). Disabled by default; requires --confirm-dump-all to actually write.')
+    parser.add_argument('--confirm-dump-all', action='store_true', help='(OPT-IN CONFIRM) Must be provided together with --dump-all-duplicate-rows to allow writing the full gzipped duplicate rows dump.')
+    parser.add_argument('--duplicate-sample-rows', type=int, default=10, help='Number of sample rows per offending normalized_key to write in the bounded sample dump (default 10).')
+    parser.add_argument('--duplicate-resolve-by-hash', action='store_true', help='When failing for duplicate normalized_key, include file-size and a short sha1 prefix in the debug dump to help disambiguate identical files across imports (optional and off by default).')
+    parser.add_argument('--append-hash-on-duplicates', action='store_true', help='When duplicates are detected, append a short sha1 prefix to the normalized_key for offending rows to disambiguate (non-destructive).')
+    parser.add_argument('--append-hash-length', type=int, default=8, help='Length of SHA1 hex prefix to append when using --append-hash-on-duplicates (default 8).')
+    parser.add_argument('--append-hash-readlimit', type=int, default=5*1024*1024, help='Max bytes to read when computing SHA1 for append-hash behavior (default 5MB).')
+    parser.add_argument('--dedupe-by-vlmjson', action='store_true', help='Drop duplicate rows that share the same vlm_json_path (keep first occurrence). Useful when multiple COCO rows map to the same VLM JSON.')
+    parser.add_argument('--dedupe-by-vlmkey', action='store_true', help='Drop duplicate rows that share the same vlm_key (keep first occurrence). Use with caution; vlm_key may be intentionally duplicated across editions.')
+    parser.add_argument('--dedupe-by-vlmjson-content', action='store_true', help='Drop duplicate rows that share identical VLM JSON content (sha1 of JSON body). Keeps first occurrence.')
+    parser.add_argument('--emit-canonical-manifest', action='store_true', help='Emit canonical per-page VLM JSON manifest and alias audit (one JSONL per canonical content hash). Does not drop rows unless --dedupe-by-vlmjson-content is specified.')
     # One-pass DataSpec JSON list emission
-    parser.add_argument('--emit_json_list', action='append', choices=['perfect','perfect_with_text','near_perfect','high_quality','medium_quality'], help='Emit a DataSpec JSON list for the selected subset (can repeat).')
-    parser.add_argument('--emit_all_json_lists', action='store_true', help='Emit JSON lists for all standard subsets: perfect, perfect_with_text, near_perfect, high_quality, medium_quality.')
+    parser.add_argument('--emit_json_list', action='append', choices=['perfect','perfect_with_text','near_perfect','high_quality','medium_quality','low_quality'], help='Emit a DataSpec JSON list for the selected subset (can repeat).')
+    parser.add_argument('--emit_all_json_lists', action='store_true', help='Emit JSON lists for all standard subsets: perfect, perfect_with_text, near_perfect, high_quality, medium_quality, low_quality.')
     parser.add_argument('--json_list_out', type=str, help='When emitting a single JSON list via --emit_json_list, write to this path instead of the default.')
     parser.add_argument('--json_require_exists', action='store_true', help='Only include JSON paths that exist on disk when building the list(s).')
     # One-pass DataSpec JSON emission
-    parser.add_argument('--emit_dataspec_for', action='append', choices=['perfect','perfect_with_text','near_perfect','high_quality','medium_quality'], help='Emit DataSpec JSONs for the selected subset (can repeat).')
+    parser.add_argument('--emit_dataspec_for', action='append', choices=['perfect','perfect_with_text','near_perfect','high_quality','medium_quality','low_quality'], help='Emit DataSpec JSONs for the selected subset (can repeat).')
     parser.add_argument('--emit_dataspec_all', action='store_true', help='Emit DataSpec JSONs for all standard subsets.')
     parser.add_argument('--emit_dataspec_everything', action='store_true', help='Emit DataSpec JSONs for all pages with a VLM match (ignores quality tiers).')
     parser.add_argument('--dataspec_out_dir', type=str, help='Directory where DataSpec JSONs will be written.')
@@ -2316,44 +2928,63 @@ def main():
     if args.test_normalization:
         print("Running normalization tests...")
         test_normalization()
+        # Exit main early when running normalization tests only; do not
+        # continue into the full analysis which requires --coco and --vlm_dir.
+        return
     else:
         if not args.coco or not args.vlm_dir:
             parser.error("--coco and --vlm_dir are required unless --test-normalization is specified")
-        analyze_calibre_alignment(
-            args.coco,
-            args.vlm_dir,
-            args.output_csv,
-            args.num_workers,
-            args.limit,
-            allow_partial_match=args.allow_partial_match,
-            fast_only=args.fast_only,
-            fuzzy_max_candidates=args.fuzzy_max_candidates,
-            verbose_fuzzy=args.verbose_fuzzy,
-            eager_vlm_load=args.eager_vlm_load,
-            log_misses=args.log_misses,
-            vlm_map=args.vlm_map,
-            panel_category_ids=args.panel_category_id,
-            panel_category_names=args.panel_category_names,
-            keep_unmatched=args.keep_unmatched,
-            first_failure=args.first_failure,
-            image_roots=args.image_roots,
-            require_image_exists=args.require_image_exists,
-            min_text_coverage=args.min_text_coverage,
-            emit_json_list=args.emit_json_list,
-            emit_all_json_lists=args.emit_all_json_lists,
-            json_list_out=args.json_list_out,
-            json_require_exists=args.json_require_exists,
-            emit_dataspec_for=args.emit_dataspec_for,
-            emit_dataspec_all=args.emit_dataspec_all,
-            emit_dataspec_everything=args.emit_dataspec_everything,
-            dataspec_out_dir=args.dataspec_out_dir,
-            dataspec_require_equal_counts=args.dataspec_require_equal_counts,
-            dataspec_min_det_score=args.dataspec_min_det_score,
-            dataspec_list_out=args.dataspec_list_out,
-            dataspec_limit=args.dataspec_limit,
-            dataspec_debug_skips_out=args.dataspec_debug_skips_out,
-            dataspec_naming=args.dataspec_naming,
-        )
+        # Expose duplicate-enforcement flags to analyze function via globals to avoid API churn
+    globals()['_ANALYZE_FAIL_ON_DUPES'] = bool(args.fail_on_duplicates)
+    globals()['_ANALYZE_DUPLICATE_TOLERANCE'] = int(args.duplicate_tolerance)
+    globals()['_ANALYZE_DUMP_ALL_DUP_ROWS'] = bool(args.dump_all_duplicate_rows)
+    globals()['_ANALYZE_CONFIRM_DUMP_ALL'] = bool(args.confirm_dump_all)
+    globals()['_ANALYZE_DUP_SAMPLE_ROWS'] = int(args.duplicate_sample_rows)
+    globals()['_ANALYZE_DUP_BY_HASH'] = bool(args.duplicate_resolve_by_hash)
+    globals()['_ANALYZE_APPEND_HASH_ON_DUP'] = bool(args.append_hash_on_duplicates)
+    globals()['_ANALYZE_APPEND_HASH_LEN'] = int(args.append_hash_length)
+    globals()['_ANALYZE_APPEND_HASH_READLIMIT'] = int(args.append_hash_readlimit)
+    globals()['_ANALYZE_DEDUPE_BY_VLMJSON'] = bool(args.dedupe_by_vlmjson)
+    globals()['_ANALYZE_DEDUPE_BY_VLMKEY'] = bool(args.dedupe_by_vlmkey)
+    globals()['_ANALYZE_DEDUPE_BY_VLMJSON_CONTENT'] = bool(args.dedupe_by_vlmjson_content)
+    globals()['_ANALYZE_EMIT_CANONICAL_MANIFEST'] = bool(args.emit_canonical_manifest)
+    globals()['_ANALYZE_FAIL_ON_MISSING_IMAGES'] = bool(args.fail_on_missing_images)
+
+    analyze_calibre_alignment(
+        args.coco,
+        args.vlm_dir,
+        args.output_csv,
+        args.num_workers,
+        args.limit,
+        allow_partial_match=args.allow_partial_match,
+        fast_only=args.fast_only,
+        fuzzy_max_candidates=args.fuzzy_max_candidates,
+        verbose_fuzzy=args.verbose_fuzzy,
+        eager_vlm_load=args.eager_vlm_load,
+        log_misses=args.log_misses,
+        vlm_map=args.vlm_map,
+        panel_category_ids=args.panel_category_id,
+        panel_category_names=args.panel_category_names,
+        keep_unmatched=args.keep_unmatched,
+        first_failure=args.first_failure,
+        image_roots=args.image_roots,
+        require_image_exists=args.require_image_exists,
+        min_text_coverage=args.min_text_coverage,
+        emit_json_list=args.emit_json_list,
+        emit_all_json_lists=args.emit_all_json_lists,
+        json_list_out=args.json_list_out,
+        json_require_exists=args.json_require_exists,
+        emit_dataspec_for=args.emit_dataspec_for,
+        emit_dataspec_all=args.emit_dataspec_all,
+        emit_dataspec_everything=args.emit_dataspec_everything,
+        dataspec_out_dir=args.dataspec_out_dir,
+        dataspec_require_equal_counts=args.dataspec_require_equal_counts,
+        dataspec_min_det_score=args.dataspec_min_det_score,
+        dataspec_list_out=args.dataspec_list_out,
+        dataspec_limit=args.dataspec_limit,
+        dataspec_debug_skips_out=args.dataspec_debug_skips_out,
+        dataspec_naming=args.dataspec_naming,
+    )
 
 if __name__ == "__main__":
     main()
