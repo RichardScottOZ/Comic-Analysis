@@ -38,9 +38,18 @@ def _make_json_serializable(obj):
     except Exception:
         _np = None
 
-    # Handle numpy arrays
+    # Handle numpy arrays: convert to native Python lists and recurse so bytes
+    # and nested numpy scalars are converted properly.
     if _np is not None and isinstance(obj, _np.ndarray):
-        return obj.tolist()
+        try:
+            py = obj.tolist()
+        except Exception:
+            # Fallback: cast to list by flattening
+            try:
+                py = list(obj.flatten())
+            except Exception:
+                py = list(obj)
+        return _make_json_serializable(py)
 
     # Numpy scalar types (int64, float32, bool_ etc.)
     if _np is not None and isinstance(obj, (_np.integer, _np.floating, _np.bool_)):
@@ -57,7 +66,7 @@ def _make_json_serializable(obj):
         except Exception:
             return obj.decode('latin-1', errors='ignore')
 
-    # Dict -> convert values
+    # Dict -> convert keys and values recursively
     if isinstance(obj, dict):
         return {str(k): _make_json_serializable(v) for k, v in obj.items()}
 
