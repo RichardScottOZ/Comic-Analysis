@@ -244,32 +244,56 @@ def analyze_series(ds: xr.Dataset, series_name: str) -> Dict:
 
 def find_pages_by_text(ds: xr.Dataset, search_text: str, case_sensitive: bool = False) -> List[Dict]:
     """Find pages containing specific text"""
-    
     results = []
-    
+
+    def _text_to_str(text_v):
+        try:
+            if isinstance(text_v, np.ndarray):
+                if text_v.size == 0:
+                    return ''
+                elif text_v.size == 1:
+                    v = text_v.item()
+                    return _bytes_to_str(v) if isinstance(v, (bytes, bytearray)) else str(v)
+                else:
+                    parts = []
+                    for x in text_v.flatten():
+                        parts.append(_bytes_to_str(x) if isinstance(x, (bytes, bytearray)) else str(x))
+                    return ' '.join([p for p in parts if p])
+            else:
+                return _bytes_to_str(text_v) if isinstance(text_v, (bytes, bytearray)) else str(text_v)
+        except Exception:
+            return str(text_v)
+
+    search_text_clean = search_text if case_sensitive else search_text.lower()
+
     for page_id in ds.page_id.values:
-        # Get text content for this page
-        text_content = ds['text_content'].sel(page_id=page_id).values
-        
-        # Search in text content
-        for panel_idx, text in enumerate(text_content):
-            if text and isinstance(text, str):
-                search_text_clean = search_text if case_sensitive else search_text.lower()
-                text_clean = text if case_sensitive else text.lower()
-                
-                if search_text_clean in text_clean:
-                    page_info = {
-                        'page_id': page_id,
-                        'panel_idx': panel_idx,
-                        'text': text,
-                        'source': ds['source'].sel(page_id=page_id).values,
-                        'series': ds['series'].sel(page_id=page_id).values,
-                        'volume': ds['volume'].sel(page_id=page_id).values,
-                        'issue': ds['issue'].sel(page_id=page_id).values,
-                        'page_num': ds['page_num'].sel(page_id=page_id).values
-                    }
-                    results.append(page_info)
-    
+        # Get text content for this page (may be array-like)
+        try:
+            text_content = ds['text_content'].sel(page_id=page_id).values
+        except Exception:
+            # Missing text_content for this page
+            continue
+
+        # Iterate panels safely
+        for panel_idx, raw_text in enumerate(text_content):
+            text = _text_to_str(raw_text)
+            if not text:
+                continue
+
+            text_clean = text if case_sensitive else text.lower()
+            if search_text_clean in text_clean:
+                page_info = {
+                    'page_id': _bytes_to_str(page_id),
+                    'panel_idx': int(panel_idx),
+                    'text': text,
+                    'source': ds['source'].sel(page_id=page_id).values,
+                    'series': ds['series'].sel(page_id=page_id).values,
+                    'volume': ds['volume'].sel(page_id=page_id).values,
+                    'issue': ds['issue'].sel(page_id=page_id).values,
+                    'page_num': ds['page_num'].sel(page_id=page_id).values
+                }
+                results.append(page_info)
+
     return results
 
 
@@ -297,6 +321,70 @@ def find_page_ids_by_substr(ds: xr.Dataset, substr: str) -> List[str]:
             matches.append(pid_str)
     return matches
 
+
+def _as_scalar(v, dtype=float, default=None):
+    """Coerce a possibly-array value to a Python scalar.
+
+    - If v is numpy array: empty -> default, size==1 -> item(), size>1 -> try first non-nan or mean.
+    - If v is bytes -> decode.
+    - Otherwise try to cast to dtype.
+    """
+    try:
+        import numpy as _np
+    except Exception:
+        _np = None
+
+    if v is None:
+        return default
+
+    # Bytes
+    if isinstance(v, (bytes, bytearray)):
+        try:
+            return v.decode('utf-8')
+        except Exception:
+            return v.decode('latin-1', errors='ignore')
+
+    # Numpy arrays / array-like
+    try:
+        if _np is not None and isinstance(v, _np.ndarray):
+            if v.size == 0:
+                return default
+            if v.size == 1:
+                try:
+                    return dtype(v.item())
+                except Exception:
+                    return default
+            # multiple values: prefer first non-nan, otherwise mean
+            flat = v.flatten()
+            for x in flat:
+                try:
+                    if not (_np.isnan(x) if _np.issubdtype(type(x), _np.floating) else False):
+                        return dtype(x)
+                except Exception:
+                    try:
+                        return dtype(x)
+                    except Exception:
+                        continue
+            # fallback to mean if numeric
+            try:
+                return dtype(_np.nanmean(flat))
+            except Exception:
+                try:
+                    return dtype(flat[0])
+                except Exception:
+                    return default
+    except Exception:
+        pass
+
+    # Generic coercion
+    try:
+        return dtype(v)
+    except Exception:
+        try:
+            return v
+        except Exception:
+            return default
+
 def get_page_details(ds: xr.Dataset, page_id: str, include_embeddings: bool = False) -> Dict:
     """Get detailed information about a specific page"""
     
@@ -314,20 +402,72 @@ def get_page_details(ds: xr.Dataset, page_id: str, include_embeddings: bool = Fa
         }
         
         # Get panel information
-        panel_mask = page_data['panel_mask'].values
-        num_panels = np.sum(panel_mask)
-        
+        panel_mask = np.asarray(page_data['panel_mask'].values)
+        # Squeeze and ensure 1-D boolean mask
+        panel_mask = np.squeeze(panel_mask)
+        if panel_mask.ndim == 0:
+            panel_mask = np.array([bool(panel_mask)])
+        panel_mask = panel_mask.astype(bool)
+
+        num_panels = int(np.sum(panel_mask))
+
         panels = []
-        for i in range(12):
-            if panel_mask[i]:
-                panel_info = {
-                    'panel_idx': i,
-                    'coordinates': page_data['panel_coordinates'].sel(panel_id=i).values.tolist(),
-                    'text': str(page_data['text_content'].sel(panel_id=i).values),
-                    'attention_weight': float(page_data['attention_weights'].sel(panel_id=i).values),
-                    'reading_order': float(page_data['reading_order'].sel(panel_id=i).values)
-                }
-                panels.append(panel_info)
+        # Use the mask length as the panel count (cap to 12 if necessary)
+        max_panels = panel_mask.shape[0] if panel_mask.shape[0] > 0 else 12
+        for i in range(max_panels):
+            # Coerce the mask element to a single boolean safely
+            try:
+                mask_el = np.asarray(panel_mask[i])
+            except Exception:
+                mask_el = panel_mask[i]
+
+            if getattr(mask_el, 'size', None) is None:
+                # Not array-like, just coerce to bool
+                try:
+                    is_present = bool(mask_el)
+                except Exception:
+                    is_present = False
+            else:
+                # If array-like: empty -> False, single-element -> its truth, multi -> any()
+                if mask_el.size == 0:
+                    is_present = False
+                elif mask_el.size == 1:
+                    try:
+                        is_present = bool(mask_el.item())
+                    except Exception:
+                        is_present = bool(mask_el.flatten()[0])
+                else:
+                    is_present = bool(np.any(mask_el))
+
+            if not is_present:
+                continue
+
+            # Robustly extract text content for the panel
+            text_v = page_data['text_content'].sel(panel_id=i).values
+            try:
+                if isinstance(text_v, np.ndarray):
+                    if text_v.size == 0:
+                        text_str = ''
+                    elif text_v.size == 1:
+                        text_str = _bytes_to_str(text_v.item())
+                    else:
+                        parts = [_bytes_to_str(x) for x in text_v.flatten()]
+                        text_str = ' '.join([p for p in parts if p])
+                else:
+                    text_str = _bytes_to_str(text_v) if isinstance(text_v, (bytes, bytearray)) else str(text_v)
+            except Exception:
+                text_str = str(text_v)
+
+            att_v = page_data['attention_weights'].sel(panel_id=i).values
+            ro_v = page_data['reading_order'].sel(panel_id=i).values
+            panel_info = {
+                'panel_idx': i,
+                'coordinates': page_data['panel_coordinates'].sel(panel_id=i).values.tolist(),
+                'text': text_str,
+                'attention_weight': _as_scalar(att_v, dtype=float, default=0.0),
+                'reading_order': _as_scalar(ro_v, dtype=float, default=0.0)
+            }
+            panels.append(panel_info)
         
         info['num_panels'] = int(num_panels)
         info['panels'] = panels
