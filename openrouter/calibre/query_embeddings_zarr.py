@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Union
 import argparse
 from sklearn.metrics.pairwise import cosine_similarity
+import json
+import numbers
 
 def load_zarr_dataset(zarr_path: str) -> xr.Dataset:
     """Load Zarr dataset"""
@@ -26,6 +28,51 @@ def _bytes_to_str(v):
         except Exception:
             return v.decode('latin-1', errors='ignore')
     return v
+
+
+def _make_json_serializable(obj):
+    """Recursively convert numpy arrays/scalars and other non-JSON types to Python native types."""
+    # Lazy import to avoid hard dependency in some contexts
+    try:
+        import numpy as _np
+    except Exception:
+        _np = None
+
+    # Handle numpy arrays
+    if _np is not None and isinstance(obj, _np.ndarray):
+        return obj.tolist()
+
+    # Numpy scalar types (int64, float32, bool_ etc.)
+    if _np is not None and isinstance(obj, (_np.integer, _np.floating, _np.bool_)):
+        return obj.item()
+
+    # Python numeric types
+    if isinstance(obj, numbers.Number):
+        return obj
+
+    # Bytes -> str
+    if isinstance(obj, (bytes, bytearray)):
+        try:
+            return obj.decode('utf-8')
+        except Exception:
+            return obj.decode('latin-1', errors='ignore')
+
+    # Dict -> convert values
+    if isinstance(obj, dict):
+        return {str(k): _make_json_serializable(v) for k, v in obj.items()}
+
+    # List/tuple -> convert elements
+    if isinstance(obj, (list, tuple)):
+        return [_make_json_serializable(v) for v in obj]
+
+    # Fallback: try to convert numpy scalar via .item()
+    try:
+        if hasattr(obj, 'item') and not isinstance(obj, str):
+            return obj.item()
+    except Exception:
+        pass
+
+    return obj
 
 def cosine_similarity_search(query_embedding: np.ndarray, embeddings: np.ndarray, top_k: int = 10) -> Tuple[np.ndarray, np.ndarray]:
     """Find most similar embeddings using cosine similarity"""
@@ -225,7 +272,32 @@ def find_pages_by_text(ds: xr.Dataset, search_text: str, case_sensitive: bool = 
     
     return results
 
-def get_page_details(ds: xr.Dataset, page_id: str) -> Dict:
+
+def _normalize_page_id(s: str) -> str:
+    """Normalize page_id strings for substring matching: bytes->str, lower, unify slashes."""
+    if s is None:
+        return ''
+    s = _bytes_to_str(s)
+    try:
+        s = str(s)
+    except Exception:
+        pass
+    return s.strip().lower().replace('\\', '/')
+
+
+def find_page_ids_by_substr(ds: xr.Dataset, substr: str) -> List[str]:
+    """Return a list of page_id strings that contain the substring (case-insensitive)."""
+    if substr is None:
+        return []
+    norm_q = _normalize_page_id(substr)
+    matches = []
+    for pid in ds.page_id.values:
+        pid_str = _bytes_to_str(pid)
+        if norm_q in _normalize_page_id(pid_str):
+            matches.append(pid_str)
+    return matches
+
+def get_page_details(ds: xr.Dataset, page_id: str, include_embeddings: bool = False) -> Dict:
     """Get detailed information about a specific page"""
     
     try:
@@ -260,9 +332,10 @@ def get_page_details(ds: xr.Dataset, page_id: str) -> Dict:
         info['num_panels'] = int(num_panels)
         info['panels'] = panels
         
-        # Get embeddings
-        info['page_embedding'] = page_data['page_embeddings'].values.tolist()
-        info['panel_embeddings'] = page_data['panel_embeddings'].values.tolist()
+        # Get embeddings (optional)
+        if include_embeddings:
+            info['page_embedding'] = page_data['page_embeddings'].values.tolist()
+            info['panel_embeddings'] = page_data['panel_embeddings'].values.tolist()
         
         return info
         
@@ -277,6 +350,10 @@ def main():
                        help='Type of query to perform')
     parser.add_argument('--query_page_id', type=str, default=None,
                        help='Page ID for similarity search')
+    parser.add_argument('--query_page_substr', type=str, default=None,
+                       help='Substring to search for in page_id labels (case-insensitive). If multiple matches found, details for all matches are returned by default; use --match_index to select one).')
+    parser.add_argument('--match_index', type=int, default=None,
+                       help='If multiple substring matches are found, select the match at this 0-based index and return details for it.')
     parser.add_argument('--query_embedding', type=str, default=None,
                        help='Path to query embedding file (for cover search)')
     parser.add_argument('--search_text', type=str, default=None,
@@ -293,6 +370,8 @@ def main():
                        help='Panel index for panel-based queries')
     parser.add_argument('--output_file', type=str, default=None,
                        help='Output file for results (JSON)')
+    parser.add_argument('--include_embeddings', action='store_true',
+                       help='Include embeddings in details output (default: False). Use this for debugging; omitting reduces output size.')
     
     args = parser.parse_args()
     
@@ -300,6 +379,48 @@ def main():
     print(f"Loading dataset from: {args.zarr_path}")
     ds = load_zarr_dataset(args.zarr_path)
     print(f"Dataset loaded: {len(ds.page_id)} pages")
+
+    # If a substring lookup was requested, resolve to page_id(s)
+    if args.query_page_substr and not args.query_page_id:
+        matches = find_page_ids_by_substr(ds, args.query_page_substr)
+        if len(matches) == 0:
+            print(f"No page_id matches found for substring: {args.query_page_substr}")
+            raise SystemExit(1)
+        elif len(matches) == 1:
+            # Unambiguous: use this page id
+            args.query_page_id = matches[0]
+            print(f"Substring matched a single page_id: {args.query_page_id}")
+        else:
+            # Multiple matches
+            if args.match_index is not None:
+                if args.match_index < 0 or args.match_index >= len(matches):
+                    print(f"--match_index {args.match_index} out of range (0..{len(matches)-1})")
+                    raise SystemExit(1)
+                selected = matches[args.match_index]
+                args.query_page_id = selected
+                print(f"Selected match index {args.match_index}: {selected}")
+            else:
+                # By default return details for all matches when query_type is details
+                if args.query_type == 'details':
+                    results = [get_page_details(ds, pid, include_embeddings=args.include_embeddings) for pid in matches]
+                    # Output and return
+                    if args.output_file:
+                        with open(args.output_file, 'w') as f:
+                            json.dump(_make_json_serializable(results), f, indent=2)
+                        print(f"Results saved to: {args.output_file}")
+                    else:
+                        print(json.dumps(_make_json_serializable(results), indent=2))
+                    return
+                else:
+                    # For other query types just return the matching page_id list
+                    results = {'matches': matches}
+                    if args.output_file:
+                        with open(args.output_file, 'w') as f:
+                            json.dump(_make_json_serializable(results), f, indent=2)
+                        print(f"Results saved to: {args.output_file}")
+                    else:
+                        print(json.dumps(_make_json_serializable(results), indent=2))
+                    return
     
     # Perform query
     if args.query_type == 'similar':
@@ -327,8 +448,6 @@ def main():
         if not args.filters:
             print("Error: --filters required for filtering")
             return
-        
-        import json
         filters = json.loads(args.filters)
         filtered_ds = filter_pages(ds, filters)
         
@@ -365,12 +484,13 @@ def main():
     
     # Output results
     if args.output_file:
-        import json
+        # Ensure everything is JSON serializable (convert numpy types / arrays)
+        serializable_results = _make_json_serializable(results)
         with open(args.output_file, 'w') as f:
-            json.dump(results, f, indent=2)
+            json.dump(serializable_results, f, indent=2)
         print(f"Results saved to: {args.output_file}")
     else:
-        print(json.dumps(results, indent=2))
+        print(json.dumps(_make_json_serializable(results), indent=2))
 
 if __name__ == "__main__":
     main()
