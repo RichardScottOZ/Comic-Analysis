@@ -984,20 +984,30 @@ def analyze_image_alignment(args):
                         abs_j = os.path.abspath(mapped_jpath)
                     except Exception:
                         abs_j = mapped_jpath
-                    # Try to find the corresponding key in key_to_path quickly
+                    # Fast lookup: use a path->key map if available; build it once
+                    # lazily (O(N) cost paid a single time) instead of iterating
+                    # key_to_path for every input image which causes O(N*M).
                     key_for_j = None
                     try:
                         ktp = _VLM_INDEX.get('key_to_path', {}) if _VLM_INDEX else {}
-                        for k, p in ktp.items():
-                            try:
-                                if os.path.abspath(p) == os.path.abspath(abs_j):
-                                    key_for_j = k
-                                    break
-                            except Exception:
-                                # fallback string compare
-                                if str(p) == str(abs_j):
-                                    key_for_j = k
-                                    break
+                        ptk = _VLM_INDEX.get('path_to_key') if _VLM_INDEX else None
+                        if not ptk:
+                            ptk = {}
+                            for k, p in ktp.items():
+                                try:
+                                    ptk[os.path.abspath(p)] = k
+                                except Exception:
+                                    try:
+                                        ptk[str(p)] = k
+                                    except Exception:
+                                        continue
+                            if _VLM_INDEX is not None:
+                                _VLM_INDEX['path_to_key'] = ptk
+                        # now do O(1) lookup
+                        try:
+                            key_for_j = ptk.get(os.path.abspath(abs_j)) if isinstance(abs_j, str) else ptk.get(str(abs_j))
+                        except Exception:
+                            key_for_j = ptk.get(str(abs_j)) if ptk else None
                     except Exception:
                         key_for_j = None
 
