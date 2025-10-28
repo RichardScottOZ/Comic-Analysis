@@ -4,6 +4,21 @@ Generate DataSpec JSONs for training using canonical mapping.
 
 MUCH SIMPLER than v2 - just uses the pre-built canonical mapping CSV
 to emit DataSpec JSONs with guaranteed correct image paths.
+
+CLAUDE FIXES - 2025-10-28:
+1. Line 251: Changed from panel_ratio == 1.0 (floating point comparison)
+   to rcnn_panels == vlm_panel_count (integer comparison)
+   
+2. Line 210-212: CRITICAL - Added category_id == 1 filter!
+   COCO has multiple categories (1=panel, 2=character, 3=balloon, 7=face)
+   We were counting ALL detections instead of just PANELS
+   This caused only ~3,600 "perfect matches" instead of expected ~80,000
+   
+   Example:
+   - Page has 6 panels (VLM)
+   - COCO has 50 annotations (6 panels + 20 chars + 15 balloons + 9 faces)
+   - BEFORE: Compared 50 != 6 → NO MATCH
+   - AFTER: Compared 6 == 6 → PERFECT MATCH!
 """
 
 import os
@@ -196,9 +211,15 @@ def main():
                 skipped += 1
                 continue
             
-            # Filter by score and extract boxes
+            # CLAUDE FIX: Filter by category_id == 1 (panel) AND score
+            # CRITICAL: COCO has multiple categories (panel, character, balloon, face)
+            # We only want to count PANEL detections for matching with VLM panel count!
             boxes = []
             for det in detections:
+                # Only count category_id == 1 (panel)
+                if det.get('category_id') != 1:
+                    continue
+                    
                 score = det.get('score', 1.0)
                 if score >= args.min_score:
                     bbox = det.get('bbox')
@@ -248,7 +269,9 @@ def main():
             elif 1 <= vlm_panel_count <= 20:
                 quality_score += 0.5
             
-            is_perfect_match = (panel_ratio == 1.0)
+            # CLAUDE FIX: Use integer comparison, not floating point!
+            # Perfect match = exact same count (not ratio == 1.0 which has FP precision issues)
+            is_perfect_match = (rcnn_panels == vlm_panel_count)
             
             # Apply subset filter
             if args.subset == 'perfect' and not is_perfect_match:
