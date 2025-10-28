@@ -1,8 +1,3 @@
-"""
-Generate embeddings for comic datasets and store in Zarr format
-Supports both Amazon and CalibreComics datasets with standardized naming
-"""
-
 import os
 import re
 import json
@@ -787,18 +782,33 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                         page_num = 'p000'
 
                     # Write numeric arrays directly into zarr arrays
-                    zgroup['panel_embeddings'][page_index, :panel_embeddings.shape[0], :panel_embeddings.shape[1]] = panel_embeddings
-                    zgroup['page_embeddings'][page_index, :page_embedding.shape[0]] = page_embedding
-                    zgroup['attention_weights'][page_index, :aw_vec.shape[0]] = aw_vec
-                    zgroup['reading_order'][page_index, :ro_vec.shape[0]] = ro_vec
-                    zgroup['panel_coordinates'][page_index, :panel_coords.shape[0], :panel_coords.shape[1]] = panel_coords
+                    # CRITICAL FIX: Zero out entire row first to avoid stale data from previous writes
+                    # If we previously wrote 10 panels then write 6, slots 6-9 would be stale!
+                    max_panels = zgroup['panel_embeddings'].shape[1]
+                    embedding_dim = zgroup['panel_embeddings'].shape[2]
+                    
+                    # Zero out all panel data for this page_index
+                    zgroup['panel_embeddings'][page_index, :, :] = 0
+                    zgroup['attention_weights'][page_index, :] = 0
+                    zgroup['reading_order'][page_index, :] = 0
+                    zgroup['panel_coordinates'][page_index, :, :] = 0
+                    zgroup['text_content'][page_index, :] = ''
+                    zgroup['panel_mask'][page_index, :] = False
+                    
+                    # Now write the actual data (only valid portions)
+                    actual_panels = min(panel_embeddings.shape[0], max_panels)
+                    zgroup['panel_embeddings'][page_index, :actual_panels, :] = panel_embeddings[:actual_panels, :]
+                    zgroup['page_embeddings'][page_index, :] = page_embedding
+                    zgroup['attention_weights'][page_index, :min(aw_vec.shape[0], max_panels)] = aw_vec[:max_panels]
+                    zgroup['reading_order'][page_index, :min(ro_vec.shape[0], max_panels)] = ro_vec[:max_panels]
+                    zgroup['panel_coordinates'][page_index, :min(panel_coords.shape[0], max_panels), :] = panel_coords[:max_panels, :]
                     # text_content: ensure correct dtype/shape
                     try:
                         tc_arr = np.asarray(text_content, dtype=zgroup['text_content'].dtype)
                     except Exception:
                         tc_arr = np.asarray(text_content, dtype='U')
-                    zgroup['text_content'][page_index, :tc_arr.shape[0]] = tc_arr
-                    zgroup['panel_mask'][page_index, :len(panel_mask)] = panel_mask
+                    zgroup['text_content'][page_index, :min(tc_arr.shape[0], max_panels)] = tc_arr[:max_panels]
+                    zgroup['panel_mask'][page_index, :min(len(panel_mask), max_panels)] = panel_mask[:max_panels]
 
                     # Update coords
                     try:
@@ -1512,3 +1522,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
