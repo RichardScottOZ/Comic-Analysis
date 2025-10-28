@@ -388,6 +388,10 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
     
     # Determine if we're in incremental append mode
     incremental_mode = args and getattr(args, 'incremental', False)
+    # Whether we've successfully opened the zarr group for direct per-page writes
+    use_direct_zarr = False
+    # Track original number of pages on-disk (0 if newly created)
+    original_n = 0
     ledger_path = None
     if incremental_mode:
         # Expect an existing Zarr at output_path
@@ -424,6 +428,18 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
     else:
         # Create Zarr dataset
         ds = create_zarr_dataset(output_path, amazon_data, calibre_data)
+        # Open zarr group for direct per-page writes so we persist each batch
+        try:
+            zgroup = zarr.open_group(output_path, mode='r+')
+            use_direct_zarr = True
+            print(f"Opened zarr group for direct writes: {output_path}")
+            try:
+                original_n = int(zgroup['page_embeddings'].shape[0])
+            except Exception:
+                original_n = 0
+        except Exception:
+            zgroup = None
+            use_direct_zarr = False
 
     
     print("Generating embeddings...")
@@ -454,7 +470,7 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
         manifest_path_to_page_idxs = {}
 
     # If incremental mode, prepare helpers to resize underlying zarr arrays
-    if incremental_mode:
+    if incremental_mode or use_direct_zarr:
         # zgroup and original_n were set earlier
         current_size = original_n
         new_assigned = 0
@@ -503,6 +519,8 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
     mapping_collisions = []
     # Audit every input JSON -> resolved index or explicit reason for skip
     audit_records = []
+    # One-time write-read check guard
+    written_check_done = False
 
     for batch_idx, batch in enumerate(tqdm(dataloader, desc="Processing batches")):
         # Process batch
@@ -749,7 +767,7 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
 
             # Store in dataset (handle incremental direct zarr writes vs in-memory ds)
             jf_str = str(json_file)
-            if incremental_mode:
+            if incremental_mode or use_direct_zarr:
                 try:
                     # Infer simple source and human-readable ids
                     try:
@@ -807,7 +825,7 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                     written_index_map[page_index] = jf_str
                     # update ledger for this key if present
                     try:
-                        if ledger_path and key_norm:
+                        if ledger_path and ('key_norm' in locals()) and key_norm:
                             save_ledger_atomic(ledger_path, ledger)
                     except Exception:
                         pass
@@ -820,6 +838,51 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                         'page_index': int(page_index),
                         'page_id': str(page_id)
                     })
+                    # Per-batch verification logging (optional)
+                    try:
+                        if args and getattr(args, 'verify_batches', False):
+                            pre_norm = None
+                            post_norm = None
+                            try:
+                                pre_norm = float(np.linalg.norm(page_embedding))
+                            except Exception:
+                                pre_norm = None
+                            try:
+                                written_emb = np.array(zgroup['page_embeddings'][page_index])
+                                post_norm = float(np.linalg.norm(written_emb))
+                            except Exception:
+                                post_norm = None
+                            vrec = {
+                                'batch_idx': int(batch_idx),
+                                'json_file': jf_str,
+                                'page_index': int(page_index),
+                                'pre_write_norm': pre_norm,
+                                'post_write_norm': post_norm
+                            }
+                            try:
+                                vpath = args.verify_log
+                                with open(vpath, 'a', encoding='utf-8') as vf:
+                                    vf.write(json.dumps(vrec) + '\n')
+                            except Exception:
+                                pass
+                            # Optional immediate write-read health check (first written page only)
+                            try:
+                                if args and getattr(args, 'write_check', False) and not written_check_done:
+                                    # read back the exact page we just wrote
+                                    try:
+                                        readback = np.array(zgroup['page_embeddings'][page_index])
+                                        read_norm = float(np.linalg.norm(readback))
+                                    except Exception:
+                                        read_norm = None
+                                    print(f"[WRITE_CHECK] page_index={page_index} pre_norm={pre_norm} post_norm={post_norm} readback_norm={read_norm}")
+                                    written_check_done = True
+                                    if not read_norm or read_norm <= 1e-6:
+                                        raise RuntimeError(f"Write-check failed: readback embedding for page_index={page_index} is zero or missing (read_norm={read_norm})")
+                            except Exception:
+                                # Re-raise to fail fast for debugging
+                                raise
+                    except Exception:
+                        pass
                 except Exception as e:
                     print(f"Warning: incremental write failed for idx={page_index} json={jf_str}: {e}")
                     audit_records.append({
@@ -830,6 +893,19 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                     })
                     continue
             else:
+                # Pre-write verification (in-memory)
+                try:
+                    if args and getattr(args, 'verify_batches', False):
+                        pre_norm = None
+                        try:
+                            pre_norm = float(np.linalg.norm(page_embedding))
+                        except Exception:
+                            pre_norm = None
+                    else:
+                        pre_norm = None
+                except Exception:
+                    pre_norm = None
+
                 ds['panel_embeddings'][page_index] = panel_embeddings
                 ds['page_embeddings'][page_index] = page_embedding
                 ds['attention_weights'][page_index] = aw_vec
@@ -837,6 +913,45 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                 ds['panel_coordinates'][page_index] = panel_coords
                 ds['text_content'][page_index] = text_content
                 ds['panel_mask'][page_index] = panel_mask
+
+                # Post-write verification (in-memory assignment check)
+                try:
+                    if args and getattr(args, 'verify_batches', False):
+                        try:
+                            written_emb = np.array(ds['page_embeddings'].values[page_index])
+                            post_norm = float(np.linalg.norm(written_emb))
+                        except Exception:
+                            post_norm = None
+                        vrec = {
+                            'batch_idx': int(batch_idx),
+                            'json_file': jf_str,
+                            'page_index': int(page_index),
+                            'pre_write_norm': pre_norm,
+                            'post_write_norm': post_norm
+                        }
+                        try:
+                            vpath = args.verify_log
+                            with open(vpath, 'a', encoding='utf-8') as vf:
+                                vf.write(json.dumps(vrec) + '\n')
+                        except Exception:
+                            pass
+                        # Optional immediate write-read health check for in-memory writes
+                        try:
+                            if args and getattr(args, 'write_check', False) and not written_check_done:
+                                try:
+                                    # read back from ds in-memory
+                                    readback = np.array(ds['page_embeddings'].values[page_index])
+                                    read_norm = float(np.linalg.norm(readback))
+                                except Exception:
+                                    read_norm = None
+                                print(f"[WRITE_CHECK] (in-memory) page_index={page_index} pre_norm={pre_norm} post_norm={post_norm} readback_norm={read_norm}")
+                                written_check_done = True
+                                if not read_norm or read_norm <= 1e-6:
+                                    raise RuntimeError(f"In-memory write-check failed: readback embedding for page_index={page_index} is zero or missing (read_norm={read_norm})")
+                        except Exception:
+                            raise
+                except Exception:
+                    pass
 
             # Per-page diagnostics: compute panel_mask sum and embedding L2 norm
             try:
@@ -875,79 +990,115 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
             page_idx += 1
     
     print(f"Generated embeddings for {page_idx} pages")
-    # Persist the in-memory Dataset to the Zarr store so assignments made
-    # during batch processing are flushed to disk. create_zarr_dataset wrote
-    # an initial empty Zarr, but xarray Dataset modifications don't always
-    # update the on-disk store unless explicitly saved.
-    try:
-        ds.to_zarr(output_path, mode='w')
-        print(f"Saved to: {output_path}")
-    except Exception as e:
-        print(f"Warning: failed to persist dataset to Zarr: {e}")
-        # Attempt a best-effort recovery: coerce any object-typed data vars to
-        # fixed-width unicode and try again. This addresses cases where some
-        # variables accidentally contain mixed native types (str/int) which
-        # prevent xarray from inferring a single dtype for zarr storage.
+    # Persist the in-memory Dataset to the Zarr store unless we already
+    # performed direct per-page writes (incremental mode or direct zarr).
+    # When direct writes were used, the on-disk store should already contain
+    # the written arrays and running a final `ds.to_zarr(..., mode='w')`
+    # risks overwriting them with the in-memory Dataset (which may be stale
+    # or missing object dtypes). Skip the final persist in that case and
+    # perform a light-check of the on-disk store instead.
+    if incremental_mode or use_direct_zarr:
+        print("Skipping final ds.to_zarr() because incremental_mode or direct zarr writes were used.")
+        # Attempt a light re-open and report counts so users can confirm on-disk content
         try:
-            coerced = []
-            for var in list(ds.data_vars):
-                try:
-                    arr = ds[var].values
-                except Exception:
-                    arr = None
-                if arr is None:
-                    continue
-                if getattr(arr, 'dtype', None) == object:
-                    try:
-                        # Convert to unicode with conservative max length
-                        flat = np.asarray(arr, dtype='U')
-                        ds[var].values = flat
-                        coerced.append(var)
-                        print(f"[persist-fix] coerced variable '{var}' to unicode")
-                    except Exception as e2:
-                        print(f"[persist-fix] failed to coerce variable '{var}': {e2}")
-            # Also coerce any coords that are object-typed
-            coerced_coords = []
+            zg = zarr.open_group(output_path, mode='r')
             try:
-                for c in list(ds.coords):
-                    try:
-                        carr = ds.coords[c].values
-                    except Exception:
-                        carr = None
-                    if carr is None:
-                        continue
-                    if getattr(carr, 'dtype', None) == object:
-                        try:
-                            carr_u = np.asarray(carr, dtype='U')
-                            ds.coords[c].values = carr_u
-                            coerced_coords.append(c)
-                            print(f"[persist-fix] coerced coord '{c}' to unicode")
-                        except Exception as ecoord:
-                            print(f"[persist-fix] failed to coerce coord '{c}': {ecoord}")
+                total_pages_on_disk = int(zg['page_embeddings'].shape[0])
             except Exception:
-                pass
-
-            if coerced or coerced_coords:
-                print(f"Retrying to_zarr after coercing variables: {coerced}")
-                ds.to_zarr(output_path, mode='w')
-                print(f"Saved to: {output_path} (after coercion)")
-            else:
-                print("No object-typed variables found to coerce; final persist failed.")
-        except Exception as e3:
-            print(f"Error: final persist after coercion failed: {e3}")
-            # As a last resort, dump each variable to a compressed .npz file so
-            # the user can at least recover the arrays without relying on zarr.
+                total_pages_on_disk = None
+            # Check a small sample of page embedding norms to give a quick health check
+            sample_n = 50
             try:
-                alt_dir = Path(output_path).parent / (Path(output_path).stem + '_partial_recover')
-                os.makedirs(alt_dir, exist_ok=True)
-                for var in ds.data_vars:
+                import random
+                total = total_pages_on_disk or 0
+                sample_idx = [min(total-1, i) for i in range(min(sample_n, total))] if total and total > 0 else []
+                sample_norms = []
+                for si in sample_idx:
                     try:
-                        np.savez_compressed(str(alt_dir / f"{var}.npz"), ds[var].values)
-                    except Exception as e4:
-                        print(f"Failed to dump var {var}: {e4}")
-                print(f"Wrote partial dump to {alt_dir}")
-            except Exception as e5:
-                print(f"Critical: failed to write partial dump: {e5}")
+                        emb = np.array(zg['page_embeddings'][si])
+                        sample_norms.append(float(np.linalg.norm(emb)))
+                    except Exception:
+                        sample_norms.append(None)
+                non_zero = sum(1 for v in sample_norms if v and v > 1e-6)
+            except Exception:
+                non_zero = None
+            print(f"On-disk Zarr at: {output_path}  total_pages={total_pages_on_disk}  sample_nonzero_count={non_zero}")
+        except Exception as e:
+            print(f"Warning: failed to re-open/inspect zarr at {output_path}: {e}")
+    else:
+        # Persist the in-memory Dataset to the Zarr store so assignments made
+        # during batch processing are flushed to disk. create_zarr_dataset wrote
+        # an initial empty Zarr, but xarray Dataset modifications don't always
+        # update the on-disk store unless explicitly saved.
+        try:
+            ds.to_zarr(output_path, mode='w')
+            print(f"Saved to: {output_path}")
+        except Exception as e:
+            print(f"Warning: failed to persist dataset to Zarr: {e}")
+            # Attempt a best-effort recovery: coerce any object-typed data vars to
+            # fixed-width unicode and try again. This addresses cases where some
+            # variables accidentally contain mixed native types (str/int) which
+            # prevent xarray from inferring a single dtype for zarr storage.
+            try:
+                coerced = []
+                for var in list(ds.data_vars):
+                    try:
+                        arr = ds[var].values
+                    except Exception:
+                        arr = None
+                    if arr is None:
+                        continue
+                    if getattr(arr, 'dtype', None) == object:
+                        try:
+                            # Convert to unicode with conservative max length
+                            flat = np.asarray(arr, dtype='U')
+                            ds[var].values = flat
+                            coerced.append(var)
+                            print(f"[persist-fix] coerced variable '{var}' to unicode")
+                        except Exception as e2:
+                            print(f"[persist-fix] failed to coerce variable '{var}': {e2}")
+                # Also coerce any coords that are object-typed
+                coerced_coords = []
+                try:
+                    for c in list(ds.coords):
+                        try:
+                            carr = ds.coords[c].values
+                        except Exception:
+                            carr = None
+                        if carr is None:
+                            continue
+                        if getattr(carr, 'dtype', None) == object:
+                            try:
+                                carr_u = np.asarray(carr, dtype='U')
+                                ds.coords[c].values = carr_u
+                                coerced_coords.append(c)
+                                print(f"[persist-fix] coerced coord '{c}' to unicode")
+                            except Exception as ecoord:
+                                print(f"[persist-fix] failed to coerce coord '{c}': {ecoord}")
+                except Exception:
+                    pass
+
+                if coerced or coerced_coords:
+                    print(f"Retrying to_zarr after coercing variables: {coerced}")
+                    ds.to_zarr(output_path, mode='w')
+                    print(f"Saved to: {output_path} (after coercion)")
+                else:
+                    print("No object-typed variables found to coerce; final persist failed.")
+            except Exception as e3:
+                print(f"Error: final persist after coercion failed: {e3}")
+                # As a last resort, dump each variable to a compressed .npz file so
+                # the user can at least recover the arrays without relying on zarr.
+                try:
+                    alt_dir = Path(output_path).parent / (Path(output_path).stem + '_partial_recover')
+                    os.makedirs(alt_dir, exist_ok=True)
+                    for var in ds.data_vars:
+                        try:
+                            np.savez_compressed(str(alt_dir / f"{var}.npz"), ds[var].values)
+                        except Exception as e4:
+                            print(f"Failed to dump var {var}: {e4}")
+                    print(f"Wrote partial dump to {alt_dir}")
+                except Exception as e5:
+                    print(f"Critical: failed to write partial dump: {e5}")
     
     # After writing embeddings, optionally gather diagnostics about empty page rows
     try:
@@ -1082,10 +1233,20 @@ def main():
                        help='Number of sample empty pages to inspect when --debug_empty is set')
     parser.add_argument('--verbose', action='store_true', default=False,
                        help='Print per-page diagnostics (panel_mask_sum, embedding norm) and save CSV to output dir')
+    parser.add_argument('--verify_batches', action='store_true', default=False,
+                       help='Verify per-batch embeddings: compute per-page norms before and after write and log to a JSONL audit file')
+    parser.add_argument('--verify_log', type=str, default=None,
+                       help='Path to per-batch verification JSONL log (defaults to <output_dir>/batch_verify.jsonl)')
+    parser.add_argument('--write_check', action='store_true', default=False,
+                       help='Perform an immediate write-read check for the first written page: write to zarr, read back, and fail if readback is zero (useful for debugging direct writes)')
     parser.add_argument('--overwrite', action='store_true', default=False,
                        help='If set, allow overwriting an existing output Zarr. Otherwise the script will abort if the target exists.')
     
     args = parser.parse_args()
+
+    # Default verify log path if verify_batches requested and no path provided
+    if getattr(args, 'verify_batches', False) and not getattr(args, 'verify_log', None):
+        args.verify_log = os.path.join(args.output_dir, 'batch_verify.jsonl')
     
     # Setup device
     if args.device == 'auto':
