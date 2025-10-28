@@ -207,6 +207,7 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
     by_folder = {}
     tokens_to_keys = {}
     key_to_path = {}
+    _register_collisions = []
     
     # Helper: register a single json file path with multiple key variants
     import re
@@ -261,11 +262,16 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
         main_key = key_variations[0]
         if eager and data_for_eager is not None:
             vlm_data[main_key] = data_for_eager
-        key_to_path[main_key] = str(vlm_file_path)
+        # Use setdefault to avoid silent overwrites; record collisions for auditing
+        prev = key_to_path.setdefault(main_key, str(vlm_file_path))
+        if prev and prev != str(vlm_file_path):
+            _register_collisions.append({'key': main_key, 'existing': prev, 'new': str(vlm_file_path)})
         for key in key_variations[1:]:
             if eager and data_for_eager is not None and key not in vlm_data:
                 vlm_data[key] = data_for_eager
-            key_to_path.setdefault(key, str(vlm_file_path))
+            prev2 = key_to_path.setdefault(key, str(vlm_file_path))
+            if prev2 and prev2 != str(vlm_file_path):
+                _register_collisions.append({'key': key, 'existing': prev2, 'new': str(vlm_file_path)})
         
         # Index informative key shapes, including trailing _pNNN variants
         def _index_from_key(key_str, primary_key_ref: str):
@@ -423,7 +429,10 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
                 if json_path and img_path:
                     # Map normalized image key -> json path for direct lookup
                     key = normalize_image_key_from_img_path(img_path)
-                    key_to_path[key] = json_path
+                    # Don't overwrite existing key_to_path entries; prefer existing and log collisions
+                    prev = key_to_path.setdefault(key, json_path)
+                    if prev and prev != json_path:
+                        _register_collisions.append({'key': key, 'existing': prev, 'new': json_path})
                     count += 1
         elif isinstance(mapping_obj, list):
             # List of json paths or objects with image/json fields
@@ -437,7 +446,9 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
                     if json_path:
                         if img_path:
                             key = normalize_image_key_from_img_path(img_path)
-                            key_to_path[key] = json_path
+                            prev = key_to_path.setdefault(key, json_path)
+                            if prev and prev != json_path:
+                                _register_collisions.append({'key': key, 'existing': prev, 'new': json_path})
                         register_vlm_json(Path(json_path))
                         count += 1
         print(f"Registered {count} VLM entries from map")
@@ -523,12 +534,93 @@ def load_vlm_data(vlm_dir, eager=False, vlm_map: str = None):
     }
     # If a mapping_obj was loaded earlier (vlm_map), expose it for downstream
     # consumers so emissions can prefer the deterministic json->image mapping
-    # when producing DataSpec JSONs.
+    # when producing DataSpec JSONs. Additionally, build a json->image map by
+    # inspecting VLM JSON files themselves when possible and merge with the
+    # provided mapping (mapping_obj takes precedence). Collisions are logged.
     try:
-        if 'mapping_obj' in locals() and mapping_obj is not None:
-            vlm_index['json_to_image_map'] = mapping_obj
-    except Exception:
-        pass
+        # Start with user-provided mapping when it's a dict
+        json_to_image = {}
+        if 'mapping_obj' in locals() and isinstance(mapping_obj, dict):
+            for k, v in mapping_obj.items():
+                try:
+                    if isinstance(k, str) and k.lower().endswith('.json') and isinstance(v, str):
+                        json_to_image[os.path.abspath(k)] = v
+                    elif isinstance(v, str) and v.lower().endswith('.json') and isinstance(k, str):
+                        json_to_image[os.path.abspath(v)] = k
+                except Exception:
+                    continue
+
+        # Helper: try to extract an image path from a VLM JSON body
+        def _extract_image_from_vlm_json(pth: Path):
+            try:
+                with open(pth, 'r', encoding='utf-8') as f:
+                    obj = json.load(f)
+                # Common candidate fields
+                candidates = []
+                if isinstance(obj, dict):
+                    for kk in ('page_image_path','page_image','image_path','image','img','image_url','original_image_path'):
+                        v = obj.get(kk)
+                        if isinstance(v, str) and v:
+                            candidates.append(v)
+                    # nested containers
+                    for nk in ('result','page','data'):
+                        sub = obj.get(nk)
+                        if isinstance(sub, dict):
+                            for kk in ('page_image_path','image_path','image'):
+                                sv = sub.get(kk)
+                                if isinstance(sv, str) and sv:
+                                    candidates.append(sv)
+                        elif isinstance(sub, list) and sub and isinstance(sub[0], dict):
+                            for kk in ('page_image_path','image_path','image'):
+                                sv = sub[0].get(kk)
+                                if isinstance(sv, str) and sv:
+                                    candidates.append(sv)
+                if candidates:
+                    return candidates[0]
+            except Exception:
+                return None
+            return None
+
+        # Inspect scanned VLM files and harvest any embedded image references
+        for vf in vlm_files:
+            try:
+                imgp = _extract_image_from_vlm_json(vf)
+                if imgp:
+                    # prefer existing mapping entries (mapping_obj wins)
+                    absj = os.path.abspath(str(vf))
+                    if absj not in json_to_image:
+                        json_to_image[absj] = imgp
+            except Exception:
+                continue
+
+        if json_to_image:
+            vlm_index['json_to_image_map'] = json_to_image
+            # Build reverse map image -> json for O(1) short-circuit lookups.
+            image_to_json = {}
+            try:
+                for jpath, imgp in json_to_image.items():
+                    try:
+                        if isinstance(imgp, str):
+                            abs_img = os.path.abspath(imgp)
+                            image_to_json[abs_img] = jpath
+                            # also index by basename for quick matches when paths differ
+                            image_to_json[os.path.basename(abs_img).lower()] = jpath
+                    except Exception:
+                        continue
+            except Exception:
+                image_to_json = {}
+            if image_to_json:
+                vlm_index['image_to_json_map'] = image_to_json
+            if _register_collisions:
+                collf = 'vlm_map_collisions.json'
+                try:
+                    with open(collf, 'w', encoding='utf-8') as cf:
+                        json.dump(_register_collisions, cf, ensure_ascii=False, indent=2)
+                    print(f"Warning: detected {len(_register_collisions)} key collisions while registering VLM JSONs. See {collf}")
+                except Exception:
+                    print(f"Warning: detected {len(_register_collisions)} key collisions while registering VLM JSONs.")
+    except Exception as _e:
+        print(f"Warning: failed to build json->image map from VLM JSONs: {_e}")
     return vlm_data, vlm_index
 
 
@@ -849,6 +941,94 @@ def analyze_image_alignment(args):
             return None
 
         resolved_image_path = resolve_image_path(img_path, id_parent_folder, image_roots)
+
+        # MAP-FIRST SHORT-CIRCUIT
+        # If the user provided a json->image map we also built an image->json map
+        # (vlm_index['image_to_json_map']). Prefer that deterministic mapping
+        # and load the corresponding VLM JSON directly when available. This
+        # avoids performing the expensive fuzzy/heuristic matching below when a
+        # precomputed authoritative mapping exists for this image.
+        try:
+            image_map = _VLM_INDEX.get('image_to_json_map') if _VLM_INDEX else None
+            if image_map:
+                # Candidate lookups: resolved absolute path (if we found one),
+                # the COCO image path as absolute, and the basename (lowercased).
+                cand_paths = []
+                if resolved_image_path:
+                    try:
+                        cand_paths.append(os.path.abspath(resolved_image_path))
+                    except Exception:
+                        cand_paths.append(resolved_image_path)
+                try:
+                    cand_paths.append(os.path.abspath(img_path))
+                except Exception:
+                    cand_paths.append(img_path)
+                cand_paths.append(os.path.basename(img_path).lower())
+
+                mapped_jpath = None
+                for c in cand_paths:
+                    if not c:
+                        continue
+                    # direct match
+                    mapped = image_map.get(c)
+                    if not mapped and isinstance(c, str):
+                        mapped = image_map.get(str(c).lower())
+                    if mapped:
+                        mapped_jpath = mapped
+                        break
+
+                # If we found a mapped JSON path, try to locate its VLM key and
+                # load the JSON eagerly. Prefer canonical absolute path.
+                if mapped_jpath:
+                    try:
+                        abs_j = os.path.abspath(mapped_jpath)
+                    except Exception:
+                        abs_j = mapped_jpath
+                    # Try to find the corresponding key in key_to_path quickly
+                    key_for_j = None
+                    try:
+                        ktp = _VLM_INDEX.get('key_to_path', {}) if _VLM_INDEX else {}
+                        for k, p in ktp.items():
+                            try:
+                                if os.path.abspath(p) == os.path.abspath(abs_j):
+                                    key_for_j = k
+                                    break
+                            except Exception:
+                                # fallback string compare
+                                if str(p) == str(abs_j):
+                                    key_for_j = k
+                                    break
+                    except Exception:
+                        key_for_j = None
+
+                    # If key found, use existing resolver for consistency
+                    if key_for_j:
+                        vlm_match = resolve_vlm_by_key(key_for_j)
+                        # resolved_image_path should prefer the mapped candidate
+                        try:
+                            resolved_image_path = os.path.abspath(cand_paths[0]) if cand_paths else resolved_image_path
+                        except Exception:
+                            pass
+                        # remember chosen key for later reporting
+                        vlm_key_used = key_for_j
+                    else:
+                        # Otherwise try to load the JSON directly from the mapped path
+                        if os.path.exists(abs_j):
+                            try:
+                                with open(abs_j, 'r', encoding='utf-8') as _jf:
+                                    vlm_match = json.load(_jf)
+                                vlm_key_used = None
+                                # set vlm_index path for later reporting
+                                vlm_json_path = abs_j
+                                try:
+                                    resolved_image_path = os.path.abspath(cand_paths[0]) if cand_paths else resolved_image_path
+                                except Exception:
+                                    pass
+                            except Exception:
+                                pass
+        except Exception:
+            # be conservative: fall back to existing fuzzy logic on any error
+            pass
 
         # Helper to resolve a key into JSON data (lazy or eager) and remember the key used
         vlm_key_used = None
@@ -1514,6 +1694,35 @@ def analyze_image_alignment(args):
             quality_score += 0.5
         is_perfect_match = (panel_ratio == 1.0)
         vlm_json_path = _VLM_INDEX['key_to_path'].get(vlm_key_used) if 'key_to_path' in _VLM_INDEX else None
+        # Prefer json->image mapping (if the user provided a vlm_map) to determine
+        # the resolved image path. Previously we only attempted to resolve the
+        # COCO `image_path` against `image_roots`, which meant a correct
+        # precomputed mapping was ignored when deciding "image_exists" and
+        # produced many false missing-image reports. Use the mapping when
+        # available and the mapped file exists (or can be resolved).
+        try:
+            j2i = _VLM_INDEX.get('json_to_image_map') if _VLM_INDEX else None
+            if j2i and vlm_json_path:
+                mapped = j2i.get(os.path.abspath(vlm_json_path))
+                if mapped:
+                    # If mapped path is absolute and exists, use it directly.
+                    if isinstance(mapped, str) and os.path.isabs(mapped) and os.path.exists(mapped):
+                        resolved_image_path = mapped
+                    else:
+                        # Otherwise try resolving the mapped value using the
+                        # same resolve_image_path helper (fall back to existing
+                        # resolution heuristics). If that resolves, prefer it.
+                        try:
+                            maybe = resolve_image_path(mapped, id_parent_folder, image_roots)
+                            if maybe:
+                                resolved_image_path = maybe
+                        except Exception:
+                            pass
+        except Exception:
+            # Be conservative: if mapping lookup fails, keep the previously
+            # computed `resolved_image_path` (from COCO/image_roots heuristics).
+            pass
+
         row = {
             'image_id': image_id,
             'image_path': img_path,
@@ -1773,7 +1982,7 @@ def test_normalization(skip_vlm=True):
     print("\n[DEBUG] NORMALIZATION TESTING COMPLETE")
     print("=" * 60)
 
-def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, limit=None, allow_partial_match=False, fast_only=False, fuzzy_max_candidates=200, verbose_fuzzy=False, eager_vlm_load=False, log_misses=False, vlm_map: str = None, panel_category_ids=None, panel_category_names=None, keep_unmatched=False, first_failure=False, image_roots=None, require_image_exists=False, min_text_coverage: float = 0.8, emit_json_list=None, emit_all_json_lists: bool = False, json_list_out: str = None, json_require_exists: bool = False, emit_dataspec_for=None, emit_dataspec_all: bool = False, emit_dataspec_everything: bool = False, dataspec_out_dir: str = None, dataspec_require_equal_counts: bool = False, dataspec_min_det_score: float = 0.0, dataspec_list_out: str = None, dataspec_limit: int = None, dataspec_debug_skips_out: str = None, dataspec_naming: str = 'preserve_tree'):
+def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, limit=None, allow_partial_match=False, fast_only=False, fuzzy_max_candidates=200, verbose_fuzzy=False, eager_vlm_load=False, log_misses=False, vlm_map: str = None, panel_category_ids=None, panel_category_names=None, keep_unmatched=False, first_failure=False, image_roots=None, require_image_exists=False, min_text_coverage: float = 0.8, emit_json_list=None, emit_all_json_lists: bool = False, json_list_out: str = None, json_require_exists: bool = False, emit_dataspec_for=None, emit_dataspec_all: bool = False, emit_dataspec_everything: bool = False, dataspec_out_dir: str = None, dataspec_require_equal_counts: bool = False, dataspec_min_det_score: float = 0.0, dataspec_list_out: str = None, dataspec_limit: int = None, dataspec_debug_skips_out: str = None, dataspec_naming: str = 'preserve_tree', emit_vlm_map: str = None, dataspec_allow_missing_images: bool = False):
     """Analyze alignment between COCO detections and VLM data for Calibre comics"""
     # Create fuzzy matches log file
     with open("fuzzy_matches.log", "w", encoding="utf-8") as f:
@@ -1960,6 +2169,56 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
     if image_roots:
         parts = image_roots.replace(';', ',').split(',')
         roots_list = [p.strip().strip('"') for p in parts if p.strip()]
+    # Optionally emit a resolved json->image mapping file that the analyzer
+    # will use for deterministic downstream pipelines. This mapping attempts to
+    # resolve relative image paths using provided image roots, the VLM dir, and
+    # the dataspec JSON's parent directory.
+    if emit_vlm_map and isinstance(vlm_index, dict) and vlm_index.get('json_to_image_map'):
+        resolved = {}
+        import os as _os
+        j2i = vlm_index.get('json_to_image_map')
+        for jpath, mapped in j2i.items():
+            out_val = None
+            try:
+                if mapped is None:
+                    out_val = None
+                else:
+                    # Absolute path as-is
+                    if _os.path.isabs(mapped) and _os.path.exists(mapped):
+                        out_val = _os.path.abspath(mapped)
+                    else:
+                        # Try resolving relative to each image root
+                        if roots_list:
+                            for r in roots_list:
+                                cand = _os.path.join(r, mapped)
+                                if _os.path.exists(cand):
+                                    out_val = _os.path.abspath(cand)
+                                    break
+                        # Try relative to the VLM dir
+                        if not out_val and vlm_dir:
+                            cand2 = _os.path.join(vlm_dir, mapped)
+                            if _os.path.exists(cand2):
+                                out_val = _os.path.abspath(cand2)
+                        # Try relative to the JSON file's directory
+                        if not out_val and isinstance(jpath, str):
+                            try:
+                                cand3 = _os.path.join(_os.path.dirname(jpath), mapped)
+                                if _os.path.exists(cand3):
+                                    out_val = _os.path.abspath(cand3)
+                            except Exception:
+                                pass
+                        # As a last resort, keep original mapped value (may be relative)
+                        if not out_val:
+                            out_val = mapped
+            except Exception:
+                out_val = mapped
+            resolved[_os.path.abspath(jpath) if isinstance(jpath, str) else jpath] = out_val
+        try:
+            with open(emit_vlm_map, 'w', encoding='utf-8') as _f:
+                json.dump(resolved, _f, ensure_ascii=False, indent=2)
+            print(f"Wrote resolved VLM map to: {emit_vlm_map} ({len(resolved)} entries)")
+        except Exception as _e:
+            print(f"Warning: failed to write emit_vlm_map {emit_vlm_map}: {_e}")
     analysis_args = []
     for image_id, detections in image_detections.items():
         analysis_args.append((image_id, detections, image_info, allow_partial_match, fast_only, fuzzy_max_candidates, verbose_fuzzy, log_misses, selected_ids, keep_unmatched, first_failure, roots_list, require_image_exists))
@@ -2668,6 +2927,7 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
         total_written = 0
         written_paths = []
         skip_records = []  # collect debug info when a page is skipped
+        missing_emitted = []
         for subset_name in wanted_sets:
             sdf = subsets.get(subset_name)
             if sdf is None or sdf.empty:
@@ -2704,14 +2964,27 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                                         if os.path.exists(cand):
                                             mapped = cand
                                             break
+                                # Try relative to VLM dir
+                                if not os.path.isabs(mapped) and vlm_dir:
+                                    cand2 = os.path.join(vlm_dir, mapped)
+                                    if os.path.exists(cand2):
+                                        mapped = cand2
+                                # Try relative to the JSON's directory
+                                try:
+                                    if not os.path.isabs(mapped) and isinstance(vlm_json_path, str):
+                                        cand3 = os.path.join(os.path.dirname(vlm_json_path), mapped)
+                                        if os.path.exists(cand3):
+                                            mapped = cand3
+                                except Exception:
+                                    pass
                                 page_image_path = mapped
                     except Exception:
                         page_image_path = None
                     # Fallback to any earlier resolved path or stored image_path
                     if not page_image_path:
                         page_image_path = row_dict.get('resolved_image_path') or row_dict.get('image_path')
-                    if not page_image_path or (require_image_exists and not (isinstance(page_image_path, str) and os.path.exists(page_image_path))):
-                        # Should rarely happen due to prior base_filter; log if debugging requested
+                    # If no page_image_path at all, skip
+                    if not page_image_path:
                         if dataspec_debug_skips_out:
                             skip_records.append({
                                 'image_id': img_id,
@@ -2721,6 +2994,62 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                                 'reason': 'missing_image'
                             })
                         continue
+                    # Resolve page_image_path to an absolute canonical path when possible
+                    page_image_path_abs = None
+                    try:
+                        # If already absolute and exists, prefer it
+                        if isinstance(page_image_path, str) and os.path.isabs(page_image_path) and os.path.exists(page_image_path):
+                            page_image_path_abs = os.path.abspath(page_image_path)
+                        else:
+                            # Try roots_list
+                            if isinstance(page_image_path, str) and roots_list:
+                                for r in roots_list:
+                                    cand = os.path.join(r, page_image_path)
+                                    if os.path.exists(cand):
+                                        page_image_path_abs = os.path.abspath(cand)
+                                        break
+                            # Try VLM dir relative
+                            if not page_image_path_abs and isinstance(page_image_path, str) and vlm_dir:
+                                cand2 = os.path.join(vlm_dir, page_image_path)
+                                if os.path.exists(cand2):
+                                    page_image_path_abs = os.path.abspath(cand2)
+                            # Try relative to vlm json directory
+                            if not page_image_path_abs and isinstance(vlm_json_path, str) and isinstance(page_image_path, str):
+                                try:
+                                    cand3 = os.path.join(os.path.dirname(vlm_json_path), page_image_path)
+                                    if os.path.exists(cand3):
+                                        page_image_path_abs = os.path.abspath(cand3)
+                                except Exception:
+                                    pass
+                            # If still not found but is a relative-like path containing separators, try joining to roots as dirname+basename
+                            if not page_image_path_abs and isinstance(page_image_path, str) and roots_list and ('/' in page_image_path or '\\' in page_image_path):
+                                for r in roots_list:
+                                    cand = os.path.join(r, os.path.basename(page_image_path))
+                                    if os.path.exists(cand):
+                                        page_image_path_abs = os.path.abspath(cand)
+                                        break
+                            # As a last resort, if it's an absolute string but doesn't exist, keep it as absolute string
+                            if not page_image_path_abs and isinstance(page_image_path, str) and os.path.isabs(page_image_path):
+                                page_image_path_abs = os.path.abspath(page_image_path)
+                    except Exception:
+                        page_image_path_abs = None
+
+                    # If strict emission is requested (i.e., user asked to require images to exist
+                    # and did not allow missing images for dataspecs) then record missing emissions
+                    if not page_image_path_abs or not os.path.exists(page_image_path_abs):
+                        # record missing but still may be allowed to emit depending on dataspec_allow_missing_images
+                        missing_emitted.append({'image_id': img_id, 'image_path': row_dict.get('image_path'), 'vlm_json_path': vlm_json_path, 'resolved_candidate': page_image_path_abs})
+                        if not dataspec_allow_missing_images and require_image_exists:
+                            if dataspec_debug_skips_out:
+                                skip_records.append({
+                                    'image_id': img_id,
+                                    'image_path': row_dict.get('image_path'),
+                                    'resolved_image_path': page_image_path_abs,
+                                    'vlm_json_path': vlm_json_path,
+                                    'reason': 'missing_image'
+                                })
+                            # Skip emitting this dataspec (we'll fail after the loop if strict)
+                            continue
                     det_boxes = _dets_for_image_id(img_id)
                     if not det_boxes:
                         if dataspec_debug_skips_out:
@@ -2809,8 +3138,10 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                             'panel_coords': [int(x), int(y), max(1,int(w)), max(1,int(h))],
                             'text': t
                         })
+                    # Use the absolute canonical path in the emitted DataSpec when available
+                    use_page_image_path = page_image_path_abs if page_image_path_abs else page_image_path
                     spec_obj = {
-                        'page_image_path': page_image_path,
+                        'page_image_path': use_page_image_path,
                         'panels': panels_out
                     }
                     # Build output path according to naming strategy
@@ -2894,6 +3225,28 @@ def analyze_calibre_alignment(coco_file, vlm_dir, output_csv, num_workers=8, lim
                 print(f"Saved DataSpec skip debug log: {dataspec_debug_skips_out} ({len(skip_records)} rows)")
             except Exception as e:
                 print(f"Warning: failed to write dataspec_debug_skips_out: {e}")
+        # If strict behavior was requested, fail the process when any emitted dataspec
+        # could not be resolved to an absolute existing image path. This enforces the
+        # analyzer as the single authoritative emitter of canonical absolute paths.
+        try:
+            if missing_emitted and (globals().get('_ANALYZE_FAIL_ON_MISSING_IMAGES', False) or require_image_exists) and not dataspec_allow_missing_images:
+                out_missing_ds = (dataspec_list_out or output_csv).replace('.csv', '_dataspec_missing_images.csv')
+                try:
+                    import csv as _csv2
+                    with open(out_missing_ds, 'w', encoding='utf-8', newline='') as _fm:
+                        fieldnames = ['image_id','image_path','vlm_json_path','resolved_candidate']
+                        writer = _csv2.DictWriter(_fm, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for rec in missing_emitted:
+                            writer.writerow(rec)
+                    print(f"DataSpec missing image report written: {out_missing_ds} ({len(missing_emitted)} rows). Failing due to unresolved dataspec images.")
+                except Exception:
+                    print(f"DataSpec missing image report prepared ({len(missing_emitted)} rows) but failed to write file.")
+                raise SystemExit(4)
+        except SystemExit:
+            raise
+        except Exception as _e:
+            print(f"Warning: dataspec missing-image enforcement failed: {_e}")
     except Exception as e:
         print(f"Warning: failed to emit DataSpec JSONs: {e}")
 
@@ -2949,6 +3302,8 @@ def main():
     parser.add_argument('--dataspec_limit', type=int, help='Optional limit when emitting DataSpec for quick smoke tests.')
     parser.add_argument('--dataspec_debug_skips_out', type=str, help='Optional CSV path to log pages skipped during DataSpec emission with reasons.')
     parser.add_argument('--dataspec_naming', type=str, choices=['preserve_tree','hash'], default='preserve_tree', help="Naming strategy for DataSpec files: 'preserve_tree' mirrors source dirs (default), 'hash' appends a short hash in a flat folder.")
+    parser.add_argument('--emit_vlm_map', type=str, help='Optional path to write a resolved json->image mapping (json_path -> resolved_image_path) produced by the analyzer')
+    parser.add_argument('--dataspec_allow_missing_images', action='store_true', help='Allow emitting DataSpec JSONs even when the resolved image file does not exist (overrides --require_image_exists for DataSpec emission)')
     args = parser.parse_args()
     
     if args.test_normalization:
@@ -2974,7 +3329,10 @@ def main():
     globals()['_ANALYZE_DEDUPE_BY_VLMKEY'] = bool(args.dedupe_by_vlmkey)
     globals()['_ANALYZE_DEDUPE_BY_VLMJSON_CONTENT'] = bool(args.dedupe_by_vlmjson_content)
     globals()['_ANALYZE_EMIT_CANONICAL_MANIFEST'] = bool(args.emit_canonical_manifest)
-    globals()['_ANALYZE_FAIL_ON_MISSING_IMAGES'] = bool(args.fail_on_missing_images)
+    # If user requested that images must exist for training (--require_image_exists),
+    # treat that as a failure mode: set the fail-on-missing-images flag so the
+    # analyzer will exit non-zero and write a diagnostic when unresolved images are found.
+    globals()['_ANALYZE_FAIL_ON_MISSING_IMAGES'] = bool(args.fail_on_missing_images) or bool(args.require_image_exists)
 
     analyze_calibre_alignment(
         args.coco,
@@ -3010,6 +3368,8 @@ def main():
         dataspec_limit=args.dataspec_limit,
         dataspec_debug_skips_out=args.dataspec_debug_skips_out,
         dataspec_naming=args.dataspec_naming,
+        emit_vlm_map=args.emit_vlm_map,
+        dataspec_allow_missing_images=args.dataspec_allow_missing_images,
     )
 
 if __name__ == "__main__":
