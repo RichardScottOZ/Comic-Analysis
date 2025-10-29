@@ -113,6 +113,9 @@
             const formData = new FormData();
             formData.append('query_type', 'embedding');
             formData.append('page_id', pageId);
+            // Append the currently selected search_mode
+            const searchMode = document.querySelector('input[name="image_search_mode"]:checked').value;
+            formData.append('search_mode', searchMode);
             performSearch(formData);
         }
 
@@ -158,6 +161,9 @@
                     resultDiv.appendChild(img);
 
                     const infoDiv = document.createElement('div');
+                    const pageIdP = document.createElement('p');
+                    pageIdP.textContent = item.page_id || item.canonical_id;
+                    infoDiv.appendChild(pageIdP);
                     if (item.similarity) {
                         const score = document.createElement('p');
                         score.textContent = `Similarity: ${item.similarity.toFixed(4)}`;
