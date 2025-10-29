@@ -82,6 +82,8 @@ def get_embedding_for_image(model, image_path, device):
         P_flat = model.atom(images=batch['images'].flatten(0,1), input_ids=batch['input_ids'].flatten(0,1), attention_mask=batch['attention_mask'].flatten(0,1), comp_feats=batch['comp_feats'].flatten(0,1))
         P = P_flat.view(1, 1, -1)
         E_page, _ = model.han.panels_to_page(P, batch['panel_mask'])
+    print(f"DEBUG: Image embedding (E_page) shape: {E_page.shape}")
+    print(f"DEBUG: Image embedding (E_page) sample (first 5 elements): {E_page.cpu().numpy()[0, 0, :5]}")
     return E_page.cpu().numpy()
 
 def get_embedding_for_text(model, text_query: str, device):
@@ -99,12 +101,34 @@ def cosine_similarity_search(query_embedding: np.ndarray, embeddings: np.ndarray
     if query_embedding.ndim == 1: query_embedding = np.expand_dims(query_embedding, axis=0)
     query_norm = F.normalize(torch.from_numpy(query_embedding), p=2, dim=1)
     embeddings_norm = F.normalize(torch.from_numpy(embeddings), p=2, dim=1)
+
+    print(f"DEBUG: cosine_similarity_search - query_norm shape: {query_norm.shape}, embeddings_norm shape: {embeddings_norm.shape}")
+    print(f"DEBUG: cosine_similarity_search - query_norm sample (first 5): {query_norm[0, :5]}")
+    print(f"DEBUG: cosine_similarity_search - embeddings_norm sample (first row, first 5): {embeddings_norm[0, :5]}")
+
     similarities = torch.mm(query_norm, embeddings_norm.t()).squeeze(0)
+
+    print(f"DEBUG: cosine_similarity_search - Similarities shape: {similarities.shape}")
+    print(f"DEBUG: cosine_similarity_search - Similarities max: {similarities.max()}, min: {similarities.min()}, mean: {similarities.mean()}")
+
     top_values, top_indices = torch.topk(similarities, top_k)
     return top_indices.numpy(), top_values.numpy()
 
 def find_similar_pages(ds: xr.Dataset, query_embedding: np.ndarray, top_k: int = 12) -> List[Dict]:
+    print(f"DEBUG: Type of ds['page_embeddings']: {type(ds['page_embeddings'])}")
+    print(f"DEBUG: Shape of ds['page_embeddings']: {ds['page_embeddings'].shape}")
     all_embeddings = ds['page_embeddings'].values
+    # Ensure all_embeddings has the correct shape for page embeddings (num_pages, embedding_dim)
+    if all_embeddings.ndim == 3: # This indicates it might be (page_id, panel_id, embedding_dim)
+        # If it's 3D, we need to flatten it to (total_panels, embedding_dim) or take page-level average
+        # For now, let's assume it's a direct error and it should be 2D (num_pages, embedding_dim)
+        # This might indicate a deeper issue in Zarr dataset creation or loading if page_embeddings is 3D
+        raise ValueError("ds['page_embeddings'].values returned a 3D array. Expected 2D (num_pages, embedding_dim) for page embeddings.")
+    elif all_embeddings.ndim != 2:
+        raise ValueError(f"ds['page_embeddings'].values returned {all_embeddings.ndim}D array. Expected 2D (num_pages, embedding_dim).")
+
+    print(f"DEBUG: Shape of all_embeddings before passing to cosine_similarity_search: {all_embeddings.shape}")
+    similar_indices, similarities = cosine_similarity_search(query_embedding, all_embeddings, top_k)
     similar_indices, similarities = cosine_similarity_search(query_embedding, all_embeddings, top_k)
     results = []
     for i, idx in enumerate(similar_indices):
@@ -195,6 +219,8 @@ def get_embedding_by_page_id(ds: xr.Dataset, page_id: str) -> np.ndarray:
         
         # Retrieve the corresponding page embedding
         page_embedding = ds['page_embeddings'].values[idx]
+        print(f"DEBUG: Retrieved page_embedding shape: {page_embedding.shape}")
+        print(f"DEBUG: Retrieved page_embedding sample (first 5 elements): {page_embedding[:5]}")
         return np.expand_dims(page_embedding, axis=0)
     except Exception as e:
         print(f"Error retrieving embedding for manifest path '{target_manifest_path}': {e}")
