@@ -157,7 +157,11 @@ def search():
             page_id = request.form.get('page_id')
             if not page_id: return jsonify({"error": "No page_id provided for embedding search"}), 400
             query_embedding = get_embedding_by_page_id(DATASET, page_id)
-            results = find_similar_pages(DATASET, query_embedding, top_k=12)
+            print(f"DEBUG: search_mode for embedding query: {search_mode}")
+            if search_mode == 'page':
+                results = find_similar_pages(DATASET, query_embedding, top_k=12)
+            else: # panel
+                results = find_similar_panels(DATASET, query_embedding, top_k=12)
 
         else:
             return jsonify({"error": "Invalid query type"}), 400
