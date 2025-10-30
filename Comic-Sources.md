@@ -8,3 +8,11 @@
 ## Humble Bundle
 - Sometimes has sales of large collections
 
+## Kickstarter
+- Ad hoc
+
+
+# Dead
+## Comixology
+## Dark Horse Comics
+
