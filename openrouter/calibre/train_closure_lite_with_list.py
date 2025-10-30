@@ -104,6 +104,11 @@ def load_json_list(json_list_file: str) -> list:
     json_list_file = convert_windows_to_wsl_path(json_list_file)
     print(f"Using JSON list file: {json_list_file}")
     
+    # Get the repository root (3 levels up from this script)
+    script_dir = Path(__file__).parent.resolve()
+    repo_root = script_dir.parent.parent.parent
+    print(f"Repository root: {repo_root}")
+    
     json_paths = []
     encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
     
@@ -113,14 +118,27 @@ def load_json_list(json_list_file: str) -> list:
                 for line in f:
                     path = line.strip()
                     if path:
-                        # Convert Windows paths to WSL paths if needed
-                        wsl_path = convert_windows_to_wsl_path(path)
-                        if os.path.exists(wsl_path):
-                            json_paths.append(wsl_path)
+                        # Check if path is relative
+                        # Relative paths don't start with drive letter or /
+                        is_relative = not (path.startswith('/') or (len(path) > 1 and path[1] == ':'))
+                        
+                        if is_relative:
+                            # Resolve relative path against repo root
+                            full_path = repo_root / path.replace('\\', '/')
+                            wsl_path = convert_windows_to_wsl_path(str(full_path))
+                            if os.path.exists(wsl_path):
+                                json_paths.append(wsl_path)
+                            elif os.path.exists(str(full_path)):
+                                json_paths.append(str(full_path))
                         else:
-                            # Try original path too
-                            if os.path.exists(path):
-                                json_paths.append(path)
+                            # Absolute path - convert Windows paths to WSL paths if needed
+                            wsl_path = convert_windows_to_wsl_path(path)
+                            if os.path.exists(wsl_path):
+                                json_paths.append(wsl_path)
+                            else:
+                                # Try original path too
+                                if os.path.exists(path):
+                                    json_paths.append(path)
             print(f"Successfully loaded {len(json_paths)} JSON paths using {encoding} encoding")
             break
         except UnicodeDecodeError:
