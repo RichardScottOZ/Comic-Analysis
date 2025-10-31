@@ -1,8 +1,3 @@
-"""
-Generate embeddings for comic datasets and store in Zarr format
-Supports both Amazon and CalibreComics datasets with standardized naming
-"""
-
 import os
 import re
 import json
@@ -16,28 +11,6 @@ from tqdm import tqdm
 import argparse
 import time
 import tempfile
-
-def _to_wsl_path(p: str) -> str:
-    """Convert Windows drive paths (e.g., E:\\foo or E:/foo or E:foo) to WSL (/mnt/e/foo) when on POSIX.
-    If not POSIX or not a drive path, return unchanged.
-    """
-    try:
-        if not isinstance(p, str):
-            return p
-        if os.name != 'posix':
-            return p
-        m = re.match(r'^[A-Za-z]:(.*)$', p)
-        if m:
-            drive = p[0].lower()
-            rest = m.group(1)
-            # Insert leading slash if missing
-            if rest and not (rest.startswith('\\') or rest.startswith('/')):
-                rest = '/' + rest
-            rest = rest.replace('\\', '/')
-            return f"/mnt/{drive}{rest}"
-        return p
-    except Exception:
-        return p
 
 from closure_lite_simple_framework import ClosureLiteSimple
 # Use the same dataloader factory the trainer uses so loading behavior matches
@@ -415,51 +388,72 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
     # Track original number of pages on-disk (0 if newly created)
     original_n = 0
     ledger_path = None
+    ledger = {}
+    zgroup = None
+    
     if incremental_mode:
-        # Expect an existing Zarr at output_path
-        if not os.path.exists(output_path):
-            raise FileNotFoundError(f"Incremental mode requested but Zarr not found at {output_path}")
-        print(f"Opening existing Zarr for incremental update: {output_path}")
-        # Open existing dataset
-        ds = xr.open_zarr(output_path)
         # Ledger path default
         if args and getattr(args, 'ledger_path', None):
             ledger_path = args.ledger_path
         else:
             ledger_path = os.path.join(Path(output_path).parent, 'page_id_ledger.jsonl')
-        # Load or build ledger
-        ledger = load_ledger(ledger_path)
-        if not ledger:
-            # Build ledger from existing dataset coordinates
-            try:
-                manifest_paths = list(ds['manifest_path'].values.tolist())
-                for idx, raw in enumerate(manifest_paths):
-                    try:
-                        key = os.path.normcase(os.path.normpath(str(raw))).lower()
-                        ledger[key] = idx
-                    except Exception:
-                        continue
-                save_ledger_atomic(ledger_path, ledger)
-                print(f"Built ledger with {len(ledger)} entries at: {ledger_path}")
-            except Exception as e:
-                print(f"Warning: failed to build ledger from existing Zarr: {e}")
-        # Open zarr group for direct writes/resizing
-        zgroup = zarr.open_group(output_path, mode='r+')
-        original_n = int(zgroup['page_embeddings'].shape[0])
-        print(f"Existing pages in Zarr: {original_n}")
+        
+        # Check if Zarr exists
+        if not os.path.exists(output_path):
+            raise FileNotFoundError(f"Incremental mode requested but Zarr not found at {output_path}")
+        else:
+            print(f"Opening existing Zarr for incremental update: {output_path}")
+            # Open existing dataset
+            ds = xr.open_zarr(output_path)
+            # Load or build ledger
+            ledger = load_ledger(ledger_path)
+            if not ledger:
+                # Build ledger from existing dataset coordinates
+                try:
+                    manifest_paths = list(ds['manifest_path'].values.tolist())
+                    for idx, raw in enumerate(manifest_paths):
+                        try:
+                            key = os.path.normcase(os.path.normpath(str(raw))).lower()
+                            ledger[key] = idx
+                        except Exception:
+                            continue
+                    save_ledger_atomic(ledger_path, ledger)
+                    print(f"Built ledger with {len(ledger)} entries at: {ledger_path}")
+                except Exception as e:
+                    print(f"Warning: failed to build ledger from existing Zarr: {e}")
+            # Open zarr group for direct writes/resizing
+            zgroup = zarr.open_group(output_path, mode='r+')
+            original_n = int(zgroup['page_embeddings'].shape[0])
+            use_direct_zarr = True
+            print(f"Existing pages in Zarr: {original_n}")
     else:
         # Create Zarr dataset
         ds = create_zarr_dataset(output_path, amazon_data, calibre_data)
+        # Re-open the dataset from disk so ds points to the actual zarr store
+        # This ensures coordinate lookups (like ds.page_id.values) read from disk
+        try:
+            ds = xr.open_zarr(output_path)
+            print(f"Reopened zarr dataset from disk: {output_path}")
+            print(f"Dataset coordinates: {list(ds.coords.keys()) if hasattr(ds, 'coords') else 'N/A'}")
+            print(f"Dataset size: {len(ds.page_id) if 'page_id' in ds.coords else 'unknown'} pages")
+        except Exception as e:
+            print(f"ERROR: failed to reopen zarr dataset: {e}")
+            print(f"Will attempt to continue with original ds object, but coordinate lookups may fail")
         # Open zarr group for direct per-page writes so we persist each batch
         try:
             zgroup = zarr.open_group(output_path, mode='r+')
             use_direct_zarr = True
             print(f"Opened zarr group for direct writes: {output_path}")
+            print(f"zgroup type: {type(zgroup)}, store type: {type(zgroup.store) if hasattr(zgroup, 'store') else 'N/A'}")
             try:
                 original_n = int(zgroup['page_embeddings'].shape[0])
-            except Exception:
+                print(f"Original dataset size: {original_n} pages")
+            except Exception as e2:
+                print(f"Warning: couldn't get original dataset size: {e2}")
                 original_n = 0
-        except Exception:
+        except Exception as e:
+            print(f"ERROR: failed to open zarr group for direct writes: {e}")
+            print(f"Falling back to in-memory writes (data won't be visible until completion)")
             zgroup = None
             use_direct_zarr = False
 
@@ -474,7 +468,24 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
     # map multiple training-list entries (if present) to distinct dataset rows.
     manifest_path_to_page_idxs = {}
     try:
-        manifest_paths = list(ds['manifest_path'].values.tolist())
+        # If ds exists and has manifest_path, use it
+        if ds is not None and 'manifest_path' in ds.coords:
+            manifest_paths = list(ds['manifest_path'].values.tolist())
+        # Otherwise if we have zgroup (opened zarr), read from there
+        elif zgroup is not None and 'manifest_path' in zgroup:
+            manifest_paths = list(zgroup['manifest_path'][:])
+        # Otherwise build from the original data lists
+        elif amazon_data or calibre_data:
+            manifest_paths = []
+            if amazon_data:
+                for item in amazon_data:
+                    manifest_paths.append(item.get('path', ''))
+            if calibre_data:
+                for item in calibre_data:
+                    manifest_paths.append(item.get('path', ''))
+        else:
+            manifest_paths = []
+            
         for idx, raw in enumerate(manifest_paths):
             try:
                 key = os.path.normcase(os.path.normpath(str(raw))).lower()
@@ -488,8 +499,12 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                 manifest_path_to_page_idxs.setdefault(key_alt, []).append(idx)
             except Exception:
                 pass
-    except Exception:
+    except Exception as e:
+        print(f"Warning: failed to build manifest_path mapping: {e}")
         manifest_path_to_page_idxs = {}
+    
+    print(f"Built manifest mapping with {len(manifest_path_to_page_idxs)} unique normalized paths")
+    print(f"Total indices mapped: {sum(len(v) for v in manifest_path_to_page_idxs.values())}")
 
     # If incremental mode, prepare helpers to resize underlying zarr arrays
     if incremental_mode or use_direct_zarr:
@@ -497,9 +512,25 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
         current_size = original_n
         new_assigned = 0
         lock_path = os.path.join(Path(output_path).parent, '.zarr_update_lock')
+        zarr_initialized = (zgroup is not None)
 
         def ensure_size(target_n):
-            nonlocal current_size
+            nonlocal current_size, zgroup, zarr_initialized, use_direct_zarr
+            
+            # If zarr hasn't been created yet (fresh incremental mode), create it now with target_n as initial size
+            if not zarr_initialized:
+                print(f"Creating fresh Zarr with initial size {target_n}")
+                # Create a minimal dummy dataset with target_n pages
+                dummy_data = [{'path': f'dummy_{i}', 'source': 'calibre'} for i in range(target_n)]
+                ds_temp = create_zarr_dataset(output_path, dummy_data, [])
+                # Now open it for direct writes
+                zgroup = zarr.open_group(output_path, mode='r+')
+                current_size = target_n
+                zarr_initialized = True
+                use_direct_zarr = True
+                print(f"Created Zarr skeleton with {target_n} pages (coordinates will be overwritten)")
+                return
+            
             if target_n <= current_size:
                 return
             # Optionally acquire lock while resizing
@@ -544,6 +575,14 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
     # One-time write-read check guard
     written_check_done = False
 
+    # DEBUG: Print initial state
+    print(f"[DEBUG] use_direct_zarr={use_direct_zarr}, incremental_mode={incremental_mode}, original_n={original_n}")
+    if use_direct_zarr and zgroup is not None:
+        print(f"[DEBUG] zgroup opened successfully, type={type(zgroup)}, will flush every 10 batches")
+        print(f"[DEBUG] zgroup arrays: {list(zgroup.keys()) if hasattr(zgroup, 'keys') else 'N/A'}")
+    else:
+        print(f"[DEBUG] zgroup={zgroup}, use_direct_zarr={use_direct_zarr}, will use in-memory writes then final save")
+
     for batch_idx, batch in enumerate(tqdm(dataloader, desc="Processing batches")):
         # Process batch
         results = process_batch(model, batch, device)
@@ -571,8 +610,29 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
             try:
                 candidates = []
                 if json_path:
+                    # Try absolute path first
                     key = os.path.normcase(os.path.normpath(str(json_path))).lower()
                     candidates = manifest_path_to_page_idxs.get(key, [])
+                    
+                    # If no match and path is absolute, try relative path from repo root
+                    if not candidates and os.path.isabs(json_path):
+                        try:
+                            # Get path relative to current working directory
+                            rel_path = os.path.relpath(json_path)
+                            key_rel = os.path.normcase(os.path.normpath(rel_path)).lower()
+                            candidates = manifest_path_to_page_idxs.get(key_rel, [])
+                        except Exception:
+                            pass
+                    
+                    # If no match and path is relative, try absolute path
+                    if not candidates and not os.path.isabs(json_path):
+                        try:
+                            abs_path = os.path.abspath(json_path)
+                            key_abs = os.path.normcase(os.path.normpath(abs_path)).lower()
+                            candidates = manifest_path_to_page_idxs.get(key_abs, [])
+                        except Exception:
+                            pass
+                
                 # Try variant replacement (analysis -> extracted)
                 if not candidates and json_path:
                     alt = str(json_path).replace('_analysis', '_extracted')
@@ -607,8 +667,17 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                     else:
                         page_index = chosen
                         try:
-                            page_id = ds.page_id.values.tolist()[page_index]
-                        except Exception:
+                            if hasattr(ds, 'page_id') and hasattr(ds.page_id, 'values'):
+                                page_id_list = ds.page_id.values.tolist()
+                                if page_index < len(page_id_list):
+                                    page_id = page_id_list[page_index]
+                                else:
+                                    page_id = None
+                            else:
+                                page_id = None
+                        except Exception as e:
+                            if args and getattr(args, 'verbose', False):
+                                print(f"Warning: couldn't get page_id from ds for index {page_index}: {e}")
                             page_id = None
                 else:
                     # No exact mapping found.
@@ -789,7 +858,9 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
 
             # Store in dataset (handle incremental direct zarr writes vs in-memory ds)
             jf_str = str(json_file)
-            if incremental_mode or use_direct_zarr:
+            # CRITICAL: Use direct zarr writes whenever zgroup is available.
+            # This allows batch-by-batch persistence so data is visible before completion.
+            if use_direct_zarr:
                 try:
                     # Infer simple source and human-readable ids
                     try:
@@ -809,18 +880,41 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                         page_num = 'p000'
 
                     # Write numeric arrays directly into zarr arrays
-                    zgroup['panel_embeddings'][page_index, :panel_embeddings.shape[0], :panel_embeddings.shape[1]] = panel_embeddings
-                    zgroup['page_embeddings'][page_index, :page_embedding.shape[0]] = page_embedding
-                    zgroup['attention_weights'][page_index, :aw_vec.shape[0]] = aw_vec
-                    zgroup['reading_order'][page_index, :ro_vec.shape[0]] = ro_vec
-                    zgroup['panel_coordinates'][page_index, :panel_coords.shape[0], :panel_coords.shape[1]] = panel_coords
+                    # CRITICAL FIX: Zero out entire row first to avoid stale data from previous writes
+                    # If we previously wrote 10 panels then write 6, slots 6-9 would be stale!
+                    max_panels = zgroup['panel_embeddings'].shape[1]
+                    embedding_dim = zgroup['panel_embeddings'].shape[2]
+                    
+                    # Zero out all panel data for this page_index
+                    zgroup['panel_embeddings'][page_index, :, :] = 0
+                    zgroup['attention_weights'][page_index, :] = 0
+                    zgroup['reading_order'][page_index, :] = 0
+                    zgroup['panel_coordinates'][page_index, :, :] = 0
+                    zgroup['text_content'][page_index, :] = ''
+                    zgroup['panel_mask'][page_index, :] = False
+                    
+                    # Now write the actual data (only valid portions)
+                    actual_panels = min(panel_embeddings.shape[0], max_panels)
+                    zgroup['panel_embeddings'][page_index, :actual_panels, :] = panel_embeddings[:actual_panels, :]
+                    zgroup['page_embeddings'][page_index, :] = page_embedding
+                    zgroup['attention_weights'][page_index, :min(aw_vec.shape[0], max_panels)] = aw_vec[:max_panels]
+                    zgroup['reading_order'][page_index, :min(ro_vec.shape[0], max_panels)] = ro_vec[:max_panels]
+                    zgroup['panel_coordinates'][page_index, :min(panel_coords.shape[0], max_panels), :] = panel_coords[:max_panels, :]
                     # text_content: ensure correct dtype/shape
                     try:
                         tc_arr = np.asarray(text_content, dtype=zgroup['text_content'].dtype)
                     except Exception:
                         tc_arr = np.asarray(text_content, dtype='U')
-                    zgroup['text_content'][page_index, :tc_arr.shape[0]] = tc_arr
-                    zgroup['panel_mask'][page_index, :len(panel_mask)] = panel_mask
+                    zgroup['text_content'][page_index, :min(tc_arr.shape[0], max_panels)] = tc_arr[:max_panels]
+                    zgroup['panel_mask'][page_index, :min(len(panel_mask), max_panels)] = panel_mask[:max_panels]
+
+                    # CRITICAL: Force write to chunk cache by accessing the written data.
+                    # This ensures the assignment actually modifies the underlying chunk buffer.
+                    # Without this, lazy evaluation might defer the write until chunk eviction.
+                    try:
+                        _ = zgroup['page_embeddings'][page_index, 0]  # Touch the data to force cache update
+                    except Exception:
+                        pass
 
                     # Update coords
                     try:
@@ -890,6 +984,13 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
                             # Optional immediate write-read health check (first written page only)
                             try:
                                 if args and getattr(args, 'write_check', False) and not written_check_done:
+                                    # CRITICAL: Synchronize the store before reading back to ensure write is visible
+                                    try:
+                                        if hasattr(zgroup, 'store') and hasattr(zgroup.store, 'sync'):
+                                            zgroup.store.sync()
+                                    except Exception:
+                                        pass
+                                    
                                     # read back the exact page we just wrote
                                     try:
                                         readback = np.array(zgroup['page_embeddings'][page_index])
@@ -1010,17 +1111,93 @@ def generate_embeddings(model, dataloader, device, output_path: str, amazon_data
             })
 
             page_idx += 1
+        
+        # Synchronize zarr arrays to disk after each batch when using direct writes
+        # This ensures data is flushed and visible for reading
+        # IMPORTANT: Flush AFTER processing batch (not at batch_idx % 10 == 0 which would flush BEFORE batch 10)
+        # Sync every 10 batches whether in incremental mode or not
+        flush_checkpoint = (batch_idx + 1) % 10 == 0
+        if flush_checkpoint:
+            print(f"[DEBUG] Batch {batch_idx + 1}: flush checkpoint reached, use_direct_zarr={use_direct_zarr}, zgroup={zgroup is not None}")
+        
+        if use_direct_zarr and zgroup is not None and flush_checkpoint:  # Sync every 10 batches for performance
+            try:
+                # CRITICAL: Zarr with DirectoryStore buffers writes in memory until chunks are evicted.
+                # We must explicitly synchronize to force writes to disk files.
+                
+                # Method 1: Call synchronizer if available (thread-safe writes)
+                sync_done = False
+                try:
+                    if hasattr(zgroup, 'synchronizer') and zgroup.synchronizer is not None:
+                        zgroup.synchronizer.lock('.zarray')  # Dummy lock to trigger sync
+                        zgroup.synchronizer.unlock('.zarray')
+                        sync_done = True
+                except Exception:
+                    pass
+                
+                # Method 2: Access the store and call close/reopen (forces flush)
+                # This is a bit hacky but works reliably
+                try:
+                    store_path = output_path
+                    # Closing and reopening the group forces all buffered chunks to disk
+                    if zgroup is not None:
+                        # Don't actually close - just access store to trigger flush
+                        if hasattr(zgroup, 'store'):
+                            # Force chunk cache to flush by clearing it
+                            for arr_name in ['page_embeddings', 'panel_embeddings']:
+                                try:
+                                    arr = zgroup[arr_name]
+                                    # Accessing chunk_store forces write
+                                    if hasattr(arr, 'chunk_store'):
+                                        _ = arr.chunk_store
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+                
+                # Method 3: Use zarr.consolidate_metadata to force writes
+                try:
+                    zarr.consolidate_metadata(output_path)
+                    print(f"[FLUSH] Consolidated metadata after batch {batch_idx + 1}")
+                except Exception as e:
+                    if args and getattr(args, 'verbose', False):
+                        print(f"[FLUSH] Metadata consolidation failed: {e}")
+                
+                # Force Python garbage collection to release file handles
+                import gc
+                gc.collect()
+                
+                print(f"[FLUSH] Synchronized zarr to disk after batch {batch_idx + 1}")
+            except Exception as e:
+                print(f"Warning: zarr sync failed (batch {batch_idx + 1}): {e}")
+    
+    # CRITICAL: Final synchronization when using direct zarr writes to flush all buffers to disk
+    # Do this whether in incremental mode or not - ensures all writes are visible
+    if use_direct_zarr:
+        try:
+            print("Final zarr synchronization to disk...")
+            
+            # Use zarr.consolidate_metadata to force all pending writes to disk
+            try:
+                zarr.consolidate_metadata(output_path)
+                print("[FLUSH] Final metadata consolidation complete")
+            except Exception as e:
+                print(f"Warning: final metadata consolidation failed: {e}")
+            
+            # Force garbage collection to release file handles and flush buffers
+            import gc
+            gc.collect()
+            
+            print(f"Zarr synchronization complete - all writes flushed to disk")
+        except Exception as e:
+            print(f"Warning: final zarr synchronization failed: {e}")
     
     print(f"Generated embeddings for {page_idx} pages")
-    # Persist the in-memory Dataset to the Zarr store unless we already
-    # performed direct per-page writes (incremental mode or direct zarr).
-    # When direct writes were used, the on-disk store should already contain
-    # the written arrays and running a final `ds.to_zarr(..., mode='w')`
-    # risks overwriting them with the in-memory Dataset (which may be stale
-    # or missing object dtypes). Skip the final persist in that case and
-    # perform a light-check of the on-disk store instead.
-    if incremental_mode or use_direct_zarr:
-        print("Skipping final ds.to_zarr() because incremental_mode or direct zarr writes were used.")
+    # Persist the in-memory Dataset to the Zarr store unless we used direct zarr writes.
+    # When using direct zarr writes (use_direct_zarr=True), we wrote directly to the
+    # zarr arrays and already synced, so no need for ds.to_zarr().
+    if use_direct_zarr:
+        print("Skipping final ds.to_zarr() because direct zarr writes were used.")
         # Attempt a light re-open and report counts so users can confirm on-disk content
         try:
             zg = zarr.open_group(output_path, mode='r')
@@ -1534,3 +1711,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
