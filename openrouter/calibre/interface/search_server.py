@@ -33,7 +33,30 @@ from search_utils import (
 )
 
 # --- Configuration ---
-ZARR_PATH = "E:\\calibre3\\combined_embeddings.zarr"
+# Multiple embedding dataset configurations
+EMBEDDING_CONFIGS = {
+    'fused': {
+        'name': 'Fused (Vision + Text + Composition)',
+        'zarr_path': "E:\\calibre3\\combined_embeddings.zarr",
+        'description': 'Full multimodal embeddings with all modalities fused'
+    },
+    'vision': {
+        'name': 'Vision Only',
+        'zarr_path': "E:\\calibre3_vision\\combined_embeddings.zarr",
+        'description': 'Pure vision-based embeddings (images only)'
+    },
+    'text': {
+        'name': 'Text Only',
+        'zarr_path': "E:\\calibre3_text\\combined_embeddings.zarr",
+        'description': 'Pure text-based embeddings (text only)'
+    },
+    'comp': {
+        'name': 'Composition Only',
+        'zarr_path': "E:\\calibre3_comp\\combined_embeddings.zarr",
+        'description': 'Pure compositional embeddings (layout only)'
+    }
+}
+
 CHECKPOINT_PATH = "C:\\Users\\Richard\\OneDrive\\GIT\\CoMix\\closure_lite_output\\calibre_perfect_simple_denoise_context\\best_checkpoint.pth"
 IMAGE_ROOT = "E:\\CalibreComics_extracted"
 MANIFEST_PATH = "perfect_match_training\\calibre_dataspec_final_perfect_list.txt"
@@ -47,8 +70,26 @@ if not os.path.exists('static'):
 print("Initializing server...")
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-print(f"Loading Zarr dataset from {ZARR_PATH}...")
-DATASET = load_zarr_dataset(ZARR_PATH)
+# Load all available datasets
+DATASETS = {}
+for key, config in EMBEDDING_CONFIGS.items():
+    zarr_path = config['zarr_path']
+    if os.path.exists(zarr_path):
+        print(f"Loading {config['name']} dataset from {zarr_path}...")
+        try:
+            DATASETS[key] = load_zarr_dataset(zarr_path)
+            print(f"  ✓ Loaded {config['name']}")
+        except Exception as e:
+            print(f"  ✗ Failed to load {config['name']}: {e}")
+    else:
+        print(f"  ⚠ Skipping {config['name']} - dataset not found at {zarr_path}")
+
+if not DATASETS:
+    raise RuntimeError("No embedding datasets could be loaded!")
+
+# Default to fused if available, otherwise use first available
+DEFAULT_DATASET_KEY = 'fused' if 'fused' in DATASETS else list(DATASETS.keys())[0]
+print(f"Default dataset: {EMBEDDING_CONFIGS[DEFAULT_DATASET_KEY]['name']}")
 
 print(f"Loading model from {CHECKPOINT_PATH}...")
 MODEL = load_model(CHECKPOINT_PATH, DEVICE)
@@ -56,16 +97,16 @@ MODEL = load_model(CHECKPOINT_PATH, DEVICE)
 print(f"Loading manifest from {MANIFEST_PATH}...")
 MANIFEST_DATA = load_manifest(MANIFEST_PATH)
 
-print("Initialization complete. Server is ready.")
+print(f"Initialization complete. Loaded {len(DATASETS)} dataset(s). Server is ready.")
 
 # --- Helper Functions ---
-def add_metadata_to_results(results):
+def add_metadata_to_results(results, dataset):
     for item in results:
         if item.get('manifest_path'):
             item['manifest_basename'] = os.path.basename(item['manifest_path'])
         if 'text_snippet' not in item and item.get('page_id') and 'panel_id' in item:
             try:
-                text_val = DATASET['text_content'].sel(page_id=item['page_id'], panel_id=item['panel_id']).values
+                text_val = dataset['text_content'].sel(page_id=item['page_id'], panel_id=item['panel_id']).values
                 text_str = _bytes_to_str(text_val)
                 if hasattr(text_str, 'tolist'): text_str = text_str.tolist()
                 if isinstance(text_str, list) and len(text_str) > 0: text_str = text_str[0]
@@ -98,12 +139,33 @@ def process_results(results):
 # --- Routes ---
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Pass dataset configurations to template
+    available_datasets = {
+        key: {
+            'name': config['name'],
+            'description': config['description'],
+            'available': key in DATASETS
+        }
+        for key, config in EMBEDDING_CONFIGS.items()
+    }
+    return render_template('index.html', 
+                         datasets=available_datasets, 
+                         default_dataset=DEFAULT_DATASET_KEY)
 
 @app.route('/search', methods=['POST'])
 def search():
     query_type = request.form.get('query_type')
     search_mode = request.form.get('search_mode')
+    dataset_key = request.form.get('dataset', DEFAULT_DATASET_KEY)
+    
+    # Validate dataset selection
+    if dataset_key not in DATASETS:
+        return jsonify({"error": f"Invalid dataset selection: {dataset_key}"}), 400
+    
+    dataset = DATASETS[dataset_key]
+    dataset_name = EMBEDDING_CONFIGS[dataset_key]['name']
+    print(f"Using dataset: {dataset_name}")
+    
     results = []
     try:
         if query_type == 'image':
@@ -137,18 +199,18 @@ def search():
                 return jsonify({"error": f"Could not process image. It may be corrupt or in an unsupported format. Details: {e}"}), 400
 
             if search_mode == 'page':
-                results = find_similar_pages(DATASET, page_embedding, top_k=12)
+                results = find_similar_pages(dataset, page_embedding, top_k=12)
             else: # panel
-                results = find_similar_panels(DATASET, panel_embedding, top_k=12)
+                results = find_similar_panels(dataset, panel_embedding, top_k=12)
         
         elif query_type == 'text':
             text_query = request.form.get('text_query')
             if not text_query: return jsonify({"error": "No text query provided"}), 400
             if search_mode == 'semantic':
                 query_embedding = get_embedding_for_text(MODEL, text_query, DEVICE)
-                results = find_similar_panels(DATASET, query_embedding, top_k=12)
+                results = find_similar_panels(dataset, query_embedding, top_k=12)
             else: # keyword
-                results = keyword_search_panels(DATASET, text_query, top_k=50)
+                results = keyword_search_panels(dataset, text_query, top_k=50)
 
         elif query_type == 'page_id':
             text_query = request.form.get('text_query')
@@ -161,24 +223,36 @@ def search():
         elif query_type == 'embedding':
             page_id = request.form.get('page_id')
             if not page_id: return jsonify({"error": "No page_id provided for embedding search"}), 400
-            query_embedding = get_embedding_by_page_id(DATASET, page_id)
+            query_embedding = get_embedding_by_page_id(dataset, page_id)
             
             if search_mode == 'page':
-                results = find_similar_pages(DATASET, query_embedding, top_k=12, query_manifest_path=page_id)
+                results = find_similar_pages(dataset, query_embedding, top_k=12, query_manifest_path=page_id)
             else: # panel
-                results = find_similar_panels(DATASET, query_embedding, top_k=12)
+                results = find_similar_panels(dataset, query_embedding, top_k=12)
 
         else:
             return jsonify({"error": "Invalid query type"}), 400
 
-        results_with_metadata = add_metadata_to_results(results)
+        results_with_metadata = add_metadata_to_results(results, dataset)
         processed_results = process_results(results_with_metadata)
         serializable_results = make_json_serializable(processed_results)
+        
+        # Add dataset info to response
+        serializable_results.insert(0, {
+            'dataset_info': {
+                'key': dataset_key,
+                'name': dataset_name,
+                'description': EMBEDDING_CONFIGS[dataset_key]['description']
+            }
+        })
+        
         return jsonify(serializable_results)
 
     except Exception as e:
         print(f"An error occurred during search: {e}")
-        return jsonify({"error": "An internal error occurred. Check server logs."}, 500)
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"An internal error occurred: {str(e)}"}), 500
 
 @app.route('/images/<path:filename>')
 def serve_image(filename):
