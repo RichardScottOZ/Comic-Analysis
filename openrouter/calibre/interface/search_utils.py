@@ -158,32 +158,85 @@ def find_similar_pages(ds: xr.Dataset, query_embedding: np.ndarray, top_k: int =
 
     similar_indices, similarities = cosine_similarity_search(query_embedding, all_embeddings, top_k)
     
-    # Debug: if query_manifest_path provided, check if exact match is in results
+    # Debug: if query_manifest_path provided, find its index and ensure it's included in results
+    query_idx = None
     if query_manifest_path is not None:
         manifest_vals = ds['manifest_path'].values
-        query_idx = None
         import os as _os
-        key = _os.path.normcase(_os.path.normpath(query_manifest_path)).lower()
-        for i, mv in enumerate(manifest_vals):
-            try:
-                mv_str = str(mv) if not isinstance(mv, str) else mv
-                if isinstance(mv_str, (bytes, bytearray)):
-                    mv_str = mv_str.decode('utf-8', errors='ignore')
-                mv_key = _os.path.normcase(_os.path.normpath(mv_str)).lower()
-                if mv_key == key:
-                    query_idx = i
-                    break
-            except Exception:
-                continue
+        
+        # Try exact match first
+        try:
+            manifest_list = manifest_vals.tolist() if hasattr(manifest_vals, 'tolist') else list(manifest_vals)
+            query_idx = manifest_list.index(query_manifest_path)
+            print(f"DEBUG: Found query page by exact match at idx={query_idx}, manifest='{ds['manifest_path'].values[query_idx]}'")
+        except (ValueError, AttributeError):
+            pass
+        
+        # Try normalized path match
+        if query_idx is None:
+            key = _os.path.normcase(_os.path.normpath(query_manifest_path)).lower()
+            for i, mv in enumerate(manifest_vals):
+                try:
+                    mv_str = str(mv) if not isinstance(mv, str) else mv
+                    if isinstance(mv_str, (bytes, bytearray)):
+                        mv_str = mv_str.decode('utf-8', errors='ignore')
+                    mv_key = _os.path.normcase(_os.path.normpath(mv_str)).lower()
+                    if mv_key == key:
+                        query_idx = i
+                        print(f"DEBUG: Found query page by normalized match at idx={query_idx}, manifest='{ds['manifest_path'].values[query_idx]}'")
+                        break
+                except Exception:
+                    continue
+        
+        # Try suffix matching (last 3 path components) if normalized match failed
+        if query_idx is None:
+            target_parts = _os.path.normpath(query_manifest_path).split(_os.sep)
+            target_signature = tuple(target_parts[-3:]) if len(target_parts) >= 3 else tuple(target_parts)
+            target_signature_lower = tuple(p.lower() for p in target_signature)
+            
+            for i, mv in enumerate(manifest_vals):
+                try:
+                    mv_str = str(mv) if not isinstance(mv, str) else mv
+                    if isinstance(mv_str, (bytes, bytearray)):
+                        mv_str = mv_str.decode('utf-8', errors='ignore')
+                    mv_parts = _os.path.normpath(mv_str).split(_os.sep)
+                    mv_signature = tuple(mv_parts[-3:]) if len(mv_parts) >= 3 else tuple(mv_parts)
+                    mv_signature_lower = tuple(p.lower() for p in mv_signature)
+                    
+                    if target_signature_lower == mv_signature_lower:
+                        query_idx = i
+                        print(f"DEBUG: Found query page by suffix match at idx={query_idx}, target_sig={target_signature}, zarr_manifest='{ds['manifest_path'].values[query_idx]}'")
+                        break
+                except Exception:
+                    continue
+        
+        if query_idx is None:
+            print(f"WARNING: Could not find query_manifest_path '{query_manifest_path}' in dataset")
         
         if query_idx is not None:
             # Check if query_idx is in the top results
             if query_idx not in similar_indices:
-                print(f"WARNING: Query page (idx={query_idx}) not in top {top_k} results!")
-                print(f"Query manifest: {query_manifest_path}")
+                print(f"DEBUG: Query page (idx={query_idx}) not in top {top_k} results, adding it as rank 1")
+                # Calculate actual similarity for the query page
+                query_sim = float(cosine_similarity_search(query_embedding, all_embeddings[query_idx:query_idx+1], 1)[1][0])
+                print(f"DEBUG: Query page similarity: {query_sim:.6f}")
+                # Insert query page as first result, shift others down
+                similar_indices = np.concatenate([[query_idx], similar_indices[:-1]])
+                similarities = np.concatenate([[query_sim], similarities[:-1]])
             else:
                 result_pos = np.where(similar_indices == query_idx)[0][0]
                 print(f"DEBUG: Query page found at rank {result_pos + 1} with similarity {similarities[result_pos]:.6f}")
+                # If not already at position 0, move it there
+                if result_pos != 0:
+                    print(f"DEBUG: Moving query page from rank {result_pos + 1} to rank 1")
+                    # Save the similarity value before deleting
+                    removed_sim = similarities[result_pos]
+                    # Remove from current position
+                    similar_indices = np.delete(similar_indices, result_pos)
+                    similarities = np.delete(similarities, result_pos)
+                    # Insert at front with the correct similarity
+                    similar_indices = np.concatenate([[query_idx], similar_indices])
+                    similarities = np.concatenate([[removed_sim], similarities])
     
     results = []
     for i, idx in enumerate(similar_indices):
