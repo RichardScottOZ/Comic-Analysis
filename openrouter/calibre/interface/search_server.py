@@ -1,5 +1,9 @@
 # search_server.py
 
+print("DEBUG: Loading search_server.py from: " + __file__)
+print("DEBUG: Loading search_server.py from: " + __file__)
+print("DEBUG: Loading search_server.py from: " + __file__)
+print("DEBUG: Loading search_server.py from: " + __file__)
 import sys
 import os
 import json
@@ -24,7 +28,8 @@ from search_utils import (
     page_id_search,
     get_embedding_by_page_id,
     make_json_serializable,
-    _bytes_to_str
+    _bytes_to_str,
+    get_zarr_embedding_by_manifest_path
 )
 
 # --- Configuration ---
@@ -126,15 +131,15 @@ def search():
                 return jsonify({"error": f"Uploaded file is not a valid image or is corrupted. PIL error: {e}"}), 400
 
             try:
-                query_embedding = get_embedding_for_image(MODEL, temp_path, DEVICE)
+                panel_embedding, page_embedding = get_embedding_for_image(MODEL, temp_path, DEVICE)
             except Exception as e:
                 print(f"Failed to process image {temp_path}: {e}")
                 return jsonify({"error": f"Could not process image. It may be corrupt or in an unsupported format. Details: {e}"}), 400
 
             if search_mode == 'page':
-                results = find_similar_pages(DATASET, query_embedding, top_k=12)
+                results = find_similar_pages(DATASET, page_embedding, top_k=12)
             else: # panel
-                results = find_similar_panels(DATASET, query_embedding, top_k=12)
+                results = find_similar_panels(DATASET, panel_embedding, top_k=12)
         
         elif query_type == 'text':
             text_query = request.form.get('text_query')
@@ -157,9 +162,9 @@ def search():
             page_id = request.form.get('page_id')
             if not page_id: return jsonify({"error": "No page_id provided for embedding search"}), 400
             query_embedding = get_embedding_by_page_id(DATASET, page_id)
-            print(f"DEBUG: search_mode for embedding query: {search_mode}")
+            
             if search_mode == 'page':
-                results = find_similar_pages(DATASET, query_embedding, top_k=12)
+                results = find_similar_pages(DATASET, query_embedding, top_k=12, query_manifest_path=page_id)
             else: # panel
                 results = find_similar_panels(DATASET, query_embedding, top_k=12)
 
