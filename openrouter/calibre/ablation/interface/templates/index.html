@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoMix Embedding Search</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 2rem; }
+        header { text-align: center; margin-bottom: 2rem; }
+        h1 { color: #4CAF50; }
+        #search-container { max-width: 600px; margin: 0 auto 2rem auto; padding: 1.5rem; background-color: #1e1e1e; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        form { display: flex; flex-direction: column; gap: 1.5rem; }
+        .form-section, .radio-group { display: flex; flex-direction: column; gap: 0.75rem; }
+        .radio-group label { display: flex; align-items: center; gap: 0.5rem; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid #333; background-color: #2c2c2c; border-radius: 4px; color: #e0e0e0; box-sizing: border-box; }
+        button { padding: 0.75rem; background-color: #4CAF50; color: white; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #45a049; }
+        .small-button { padding: 0.25rem 0.5rem; font-size: 0.8rem; margin-top: 0.5rem; background-color: #333; }
+        .small-button:hover { background-color: #444; }
+        #results-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .result-item { position: relative; background-color: #1e1e1e; border: 1px solid #333; border-radius: 4px; overflow: hidden; text-align: center; display: flex; flex-direction: column; justify-content: space-between; }
+        .result-item img { max-width: 100%; height: auto; display: block; }
+        .result-item p { margin: 0.5rem 0; font-size: 0.8rem; color: #aaa; padding: 0 0.5rem; word-wrap: break-word; }
+        .result-item .debug-info { font-family: monospace; font-size: 0.65rem; color: #555; text-align: left; padding: 0.25rem 0.5rem; background-color: #222; }
+        .panel-highlight { position: absolute; box-sizing: border-box; border: 3px solid #ffeb3b; background-color: rgba(255, 235, 59, 0.3); }
+        #loader, #error-message { text-align: center; margin-top: 2rem; font-size: 1.2rem; }
+        .hidden { display: none; }
+        .page-id-list-item { background-color: #1e1e1e; padding: 0.75rem; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
+        .page-id-list-item:hover { background-color: #333; }
+    </style>
+</head>
+<body>
+    <header><h1>CoMix Visual Search</h1><p>Multi-stage search for comic book pages and panels.</p></header>
+    <div id="search-container">
+        <form id="search-form">
+            <div class="form-section">
+                <label><strong>1. Choose Query Type:</strong></label>
+                <div class="radio-group">
+                    <label><input type="radio" name="query_type" value="image" checked> Image Search</label>
+                    <label><input type="radio" name="query_type" value="text"> Text Search</label>
+                    <label><input type="radio" name="query_type" value="page_id"> Page ID Search</label>
+                </div>
+            </div>
+            <div class="form-section">
+                <label for="dataset-select"><strong>2. Choose Embedding Dataset:</strong></label>
+                <select id="dataset-select" name="dataset" style="width: 100%; padding: 0.5rem; border: 1px solid #333; background-color: #2c2c2c; border-radius: 4px; color: #e0e0e0; box-sizing: border-box;">
+                    {% for key, info in datasets.items() %}
+                        {% if info.available %}
+                            <option value="{{ key }}" {% if key == default_dataset %}selected{% endif %}>
+                                {{ info.name }}
+                            </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <small id="dataset-description" style="color: #888; font-size: 0.85rem; margin-top: 0.25rem;">
+                    {% if datasets[default_dataset] %}{{ datasets[default_dataset].description }}{% endif %}
+                </small>
+            </div>
+            <div id="image-search-section" class="form-section"><label for="image-query">Upload an image:</label><input type="file" id="image-query" name="image_query" accept="image/*"><div class="radio-group"><label><input type="radio" name="image_search_mode" value="page" checked> Find Similar Pages</label><label><input type="radio" name="image_search_mode" value="panel"> Find Similar Panels</label></div></div>
+            <div id="text-search-section" class="form-section hidden"><label for="text-query">Enter search text:</label><input type="text" id="text-query" name="text_query" placeholder="e.g., a hero fighting a monster"><div class="radio-group"><label><input type="radio" name="text_search_mode" value="semantic" checked> Semantic Search</label><label><input type="radio" name="text_search_mode" value="keyword"> Keyword Search</label></div></div>
+            <div id="page-id-search-section" class="form-section hidden"><label for="page-id-query">Enter Page ID fragment:</label><input type="text" id="page-id-query" name="page_id_query" placeholder="e.g., vampirella/001"></div>
+            <button type="submit">Search</button>
+        </form>
+    </div>
+    <div id="loader" class="hidden">Loading...</div>
+    <div id="error-message" class="hidden"></div>
+    <div id="results-container"></div>
+
+    <script>
+        // Dataset descriptions
+        const datasetDescriptions = {
+            {% for key, info in datasets.items() %}
+                '{{ key }}': '{{ info.description }}',
+            {% endfor %}
+        };
+        
+        const form = document.getElementById('search-form');
+        const loader = document.getElementById('loader');
+        const errorMessage = document.getElementById('error-message');
+        const resultsContainer = document.getElementById('results-container');
+        const queryTypeRadios = document.querySelectorAll('input[name="query_type"]');
+        const datasetSelect = document.getElementById('dataset-select');
+        const datasetDescription = document.getElementById('dataset-description');
+        const sections = {
+            image: document.getElementById('image-search-section'),
+            text: document.getElementById('text-search-section'),
+            page_id: document.getElementById('page-id-search-section')
+        };
+
+        // Update description when dataset selection changes
+        datasetSelect.addEventListener('change', (e) => {
+            const selectedKey = e.target.value;
+            datasetDescription.textContent = datasetDescriptions[selectedKey] || '';
+        });
+
+        queryTypeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                Object.values(sections).forEach(s => s.classList.add('hidden'));
+                if (sections[e.target.value]) {
+                    sections[e.target.value].classList.remove('hidden');
+                }
+            });
+        });
+
+        async function performSearch(formData) {
+            loader.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            resultsContainer.innerHTML = '';
+            try {
+                const response = await fetch('/search', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || `HTTP error! status: ${response.status}`);
+                }
+                const results = await response.json();
+                const queryType = formData.get('query_type');
+                displayResults(results, queryType);
+            } catch (error) {
+                console.error("Search failed:", error);
+                showError(`Search failed: ${error.message}`);
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const queryType = formData.get('query_type');
+            // FormData doesn't include radio button values if they are not checked, so we manually get them.
+            if (queryType === 'image') {
+                 formData.append('search_mode', document.querySelector('input[name="image_search_mode"]:checked').value);
+            } else if (queryType === 'text') {
+                 formData.append('search_mode', document.querySelector('input[name="text_search_mode"]:checked').value);
+                 formData.set('text_query', document.getElementById('text-query').value);
+            } else if (queryType === 'page_id') {
+                 formData.set('text_query', document.getElementById('page-id-query').value);
+            }
+            performSearch(formData);
+        });
+
+        function performEmbeddingSearch(pageId) {
+            const formData = new FormData();
+            formData.append('query_type', 'embedding');
+            formData.append('page_id', pageId);
+            // Append the currently selected search_mode
+            const searchMode = document.querySelector('input[name="image_search_mode"]:checked').value;
+            formData.append('search_mode', searchMode);
+            // Append the currently selected dataset
+            formData.append('dataset', datasetSelect.value);
+            performSearch(formData);
+        }
+
+        function displayResults(results, queryType) {
+            if (!results || results.length === 0) {
+                resultsContainer.innerHTML = '<p>No results found.</p>';
+                return;
+            }
+
+            // Check for dataset_info in results
+            let datasetInfo = null;
+            if (results.length > 0 && results[0].dataset_info) {
+                datasetInfo = results[0].dataset_info;
+                results = results.slice(1); // Remove dataset_info from results array
+            }
+
+            // Display dataset info banner if present
+            if (datasetInfo) {
+                const banner = document.createElement('div');
+                banner.style.cssText = 'background-color: #2c2c2c; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; text-align: center; border: 1px solid #4CAF50;';
+                banner.innerHTML = `<strong>Using: ${datasetInfo.name}</strong><br><small style="color: #888;">${datasetInfo.description}</small>`;
+                resultsContainer.appendChild(banner);
+            }
+
+            if (queryType === 'page_id') {
+                resultsContainer.style.display = 'block'; // Use block display for list
+                results.forEach(item => {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'page-id-list-item';
+                    listItem.textContent = item.canonical_id;
+                    listItem.onclick = () => performEmbeddingSearch(item.canonical_id);
+                    resultsContainer.appendChild(listItem);
+                });
+            } else {
+                resultsContainer.style.display = 'grid'; // Use grid for images
+                results.forEach(item => {
+                    if (!item.image_url) return;
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'result-item';
+                    const img = document.createElement('img');
+                    img.src = item.image_url;
+                    img.alt = item.page_id || item.canonical_id;
+                    
+                    img.onload = () => {
+                        if (item.panel_coords && item.panel_coords.length === 4) {
+                            const highlight = document.createElement('div');
+                            highlight.className = 'panel-highlight';
+                            const [x, y, w, h] = item.panel_coords;
+                            const imgWidth = img.naturalWidth;
+                            const imgHeight = img.naturalHeight;
+                            highlight.style.left = `${(x / imgWidth) * 100}%`;
+                            highlight.style.top = `${(y / imgHeight) * 100}%`;
+                            highlight.style.width = `${(w / imgWidth) * 100}%`;
+                            highlight.style.height = `${(h / imgHeight) * 100}%`;
+                            resultDiv.appendChild(highlight);
+                        }
+                    };
+                    resultDiv.appendChild(img);
+
+                    const infoDiv = document.createElement('div');
+                    const pageIdP = document.createElement('p');
+                    pageIdP.textContent = item.page_id || item.canonical_id;
+                    infoDiv.appendChild(pageIdP);
+                    if (item.similarity) {
+                        const score = document.createElement('p');
+                        score.textContent = `Similarity: ${item.similarity.toFixed(4)}`;
+                        infoDiv.appendChild(score);
+                    }
+                    const useButton = document.createElement('button');
+                    useButton.className = 'small-button';
+                    useButton.textContent = 'Use as Query';
+                    useButton.onclick = () => performEmbeddingSearch(item.page_id || item.canonical_id);
+                    infoDiv.appendChild(useButton);
+                    resultDiv.appendChild(infoDiv);
+
+                    resultsContainer.appendChild(resultDiv);
+                });
+            }
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
