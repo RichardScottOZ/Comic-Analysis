@@ -205,25 +205,38 @@ def main():
             os.makedirs(plots_dir)
         
         report_df = pd.DataFrame(output_rows)
-        page_level_df = report_df.groupby('page_id').agg(
+        
+        # Create a page-level dataframe for plotting
+        page_level_agg = report_df.groupby('page_id').agg(
             cluster_id=('cluster_id', 'first'),
             UMAP_dim1=('UMAP_dim1', 'first'),
             UMAP_dim2=('UMAP_dim2', 'first'),
+            panel_count=('panel_mask_sum', 'first'),
+            avg_panel_width_ratio=('avg_panel_width_ratio', 'first'),
+            avg_panel_height_ratio=('avg_panel_height_ratio', 'first'),
+            avg_panel_aspect_ratio=('avg_panel_aspect_ratio', 'first'),
             narration_char_count=('narration_char_count', 'sum'),
             dialogue_char_count=('dialogue_char_count', 'sum'),
-            sfx_char_count=('sfx_char_count', 'sum'),
-            panel_mask_sum=('panel_mask_sum', 'first'),
-            avg_panel_aspect_ratio=('avg_panel_aspect_ratio', 'first'),
-            avg_panel_width_ratio=('avg_panel_width_ratio', 'first'),
-            avg_panel_height_ratio=('avg_panel_height_ratio', 'first')
-        ).reset_index()
+            sfx_char_count=('sfx_char_count', 'sum')
+        )
 
+        panel_text_lengths = report_df['narration_char_count'] + report_df['dialogue_char_count'] + report_df['sfx_char_count']
+        avg_text_per_panel = report_df.assign(panel_text_length=panel_text_lengths).groupby('page_id')['panel_text_length'].mean()
+        max_text_per_panel = report_df.assign(panel_text_length=panel_text_lengths).groupby('page_id')['panel_text_length'].max()
+
+        page_level_df = page_level_agg.join(avg_text_per_panel.rename('avg_text_length_per_panel')).join(max_text_per_panel.rename('max_text_length_per_panel')).reset_index()
+
+        page_level_df['total_text_length'] = page_level_df['narration_char_count'] + page_level_df['dialogue_char_count'] + page_level_df['sfx_char_count']
         page_level_df['log_narration_char_count'] = np.log1p(page_level_df['narration_char_count'])
         page_level_df['log_dialogue_char_count'] = np.log1p(page_level_df['dialogue_char_count'])
         page_level_df['log_sfx_char_count'] = np.log1p(page_level_df['sfx_char_count'])
-        page_level_df['total_text_length'] = page_level_df['narration_char_count'] + page_level_df['dialogue_char_count'] + page_level_df['sfx_char_count']
+        page_level_df['log_avg_panel_aspect_ratio'] = np.log1p(page_level_df['avg_panel_aspect_ratio'])
+        page_level_df['log_avg_text_length_per_panel'] = np.log1p(page_level_df['avg_text_length_per_panel'])
+        page_level_df['log_max_text_length_per_panel'] = np.log1p(page_level_df['max_text_length_per_panel'])
+        page_level_df['log_avg_panel_width_ratio'] = np.log1p(page_level_df['avg_panel_width_ratio'])
+        page_level_df['log_avg_panel_height_ratio'] = np.log1p(page_level_df['avg_panel_height_ratio'])
 
-        # Scatter Plots
+        # --- Scatter Plots ---
         plt.figure(figsize=(12, 10))
         sns.scatterplot(x='UMAP_dim1', y='UMAP_dim2', hue='cluster_id', palette=sns.color_palette("hsv", args.n_clusters), alpha=0.7, data=page_level_df)
         plt.title(f'UMAP Projection of Page Embeddings (Clustered with KMeans, {args.n_clusters} clusters)')
@@ -249,7 +262,7 @@ def main():
         plt.close()
 
         plt.figure(figsize=(12, 10))
-        sns.scatterplot(x='UMAP_dim1', y='UMAP_dim2', hue='panel_mask_sum', palette='viridis', alpha=0.7, data=page_level_df)
+        sns.scatterplot(x='UMAP_dim1', y='UMAP_dim2', hue='panel_count', palette='viridis', alpha=0.7, data=page_level_df)
         plt.title('UMAP Projection with Panel Count Coloring')
         plt.savefig(os.path.join(plots_dir, 'umap_panel_count.png'))
         plt.close()
@@ -260,7 +273,13 @@ def main():
         plt.savefig(os.path.join(plots_dir, 'umap_avg_panel_aspect_ratio.png'))
         plt.close()
 
-        # Box Plots
+        plt.figure(figsize=(12, 10))
+        sns.scatterplot(x='UMAP_dim1', y='UMAP_dim2', hue='log_avg_panel_aspect_ratio', palette='viridis', alpha=0.7, data=page_level_df)
+        plt.title('UMAP Projection with Average Panel Aspect Ratio (Log Scale)')
+        plt.savefig(os.path.join(plots_dir, 'umap_avg_panel_aspect_ratio_log.png'))
+        plt.close()
+
+        # --- Box Plots ---
         plt.figure(figsize=(12, 6))
         sns.boxplot(x='cluster_id', y='total_text_length', data=page_level_df)
         plt.title('Total Text Length Distribution per Cluster')
@@ -268,7 +287,7 @@ def main():
         plt.close()
 
         plt.figure(figsize=(12, 6))
-        sns.boxplot(x='cluster_id', y='panel_mask_sum', data=page_level_df)
+        sns.boxplot(x='cluster_id', y='panel_count', data=page_level_df)
         plt.title('Panel Count Distribution per Cluster')
         plt.savefig(os.path.join(plots_dir, 'boxplot_panel_count.png'))
         plt.close()
@@ -279,7 +298,31 @@ def main():
         plt.savefig(os.path.join(plots_dir, 'boxplot_avg_panel_aspect_ratio.png'))
         plt.close()
 
-        print(f"Plots saved to {plots_dir}")
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='cluster_id', y='avg_panel_width_ratio', data=page_level_df)
+        plt.title('Average Panel Width Ratio Distribution per Cluster')
+        plt.savefig(os.path.join(plots_dir, 'boxplot_avg_panel_width_ratio.png'))
+        plt.close()
+
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='cluster_id', y='avg_panel_height_ratio', data=page_level_df)
+        plt.title('Average Panel Height Ratio Distribution per Cluster')
+        plt.savefig(os.path.join(plots_dir, 'boxplot_avg_panel_height_ratio.png'))
+        plt.close()
+
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='cluster_id', y='avg_text_length_per_panel', data=page_level_df)
+        plt.title('Average Text Length per Panel Distribution per Cluster')
+        plt.savefig(os.path.join(plots_dir, 'boxplot_avg_text_length_per_panel.png'))
+        plt.close()
+
+        plt.figure(figsize=(12, 6))
+        sns.boxplot(x='cluster_id', y='max_text_length_per_panel', data=page_level_df)
+        plt.title('Max Text Length per Panel Distribution per Cluster')
+        plt.savefig(os.path.join(plots_dir, 'boxplot_max_text_length_per_panel.png'))
+        plt.close()
+
+        print(f"All plots saved to {plots_dir}")
 
 if __name__ == '__main__':
     main()
