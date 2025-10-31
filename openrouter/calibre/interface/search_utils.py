@@ -69,22 +69,62 @@ def make_json_serializable(obj):
 # --- Embedding Generation ---
 
 def get_embedding_for_image(model, image_path, device):
-    tf = T.Compose([T.Resize((224, 224)), T.ToTensor(), T.ConvertImageDtype(torch.float32)])
+    tf = T.Compose([
+        T.Resize((224, 224)),
+        T.ToTensor(),
+    ])
     img = Image.open(image_path).convert('RGB')
+    print(f"DEBUG: Raw image loaded - Mode: {img.mode}, Size: {img.size}")
+    # Print a few pixel values from the raw image to check diversity
+    if img.mode == 'RGB':
+        pixels = list(img.getdata())
+        print(f"DEBUG: Raw image pixel sample (first 5): {pixels[:5]}")
+        print(f"DEBUG: Raw image pixel sample (last 5): {pixels[-5:]}")
+
+    # Replicate the batch structure used during Zarr embedding generation
+    # For a single image, we treat it as a batch of 1 page with 1 panel
+    B = 1 # Batch size
+    N = 1 # Number of panels per page
+
+
     batch = {
-        'images': tf(img).unsqueeze(0).unsqueeze(0).to(device),
-        'input_ids': torch.zeros((1, 1, 128), dtype=torch.long).to(device),
-        'attention_mask': torch.zeros((1, 1, 128), dtype=torch.long).to(device),
-        'comp_feats': torch.zeros((1, 1, 7), dtype=torch.float32).to(device),
-        'panel_mask': torch.ones((1, 1), dtype=torch.bool).to(device),
+        'images': tf(img).to(device).unsqueeze(0).unsqueeze(0), # (B, N, C, H, W)
+        'panel_mask': torch.ones((B, N), dtype=torch.bool).to(device),
     }
+    print(f"DEBUG: Transformed image tensor shape: {batch['images'].shape}")
+    print(f"DEBUG: Transformed image tensor mean: {batch['images'].mean():.4f}, std: {batch['images'].std():.4f}")
+    print(f"DEBUG: Transformed image tensor sample (first 5 elements): {batch['images'].flatten()[:5]}")
+    print(f"DEBUG: Transformed image tensor sample (last 5 elements): {batch['images'].flatten()[-5:]}")    
+
     with torch.no_grad():
-        P_flat = model.atom(images=batch['images'].flatten(0,1), input_ids=batch['input_ids'].flatten(0,1), attention_mask=batch['attention_mask'].flatten(0,1), comp_feats=batch['comp_feats'].flatten(0,1))
-        P = P_flat.view(1, 1, -1)
-        E_page, _ = model.han.panels_to_page(P, batch['panel_mask'])
-    print(f"DEBUG: Image embedding (E_page) shape: {E_page.shape}")
-    print(f"DEBUG: Image embedding (E_page) sample (first 5 elements): {E_page.cpu().numpy()[0, 0, :5]}")
-    return E_page.cpu().numpy()
+        # Flatten images for vision encoder (B*N, C, H, W)
+        images_flat = batch['images'].flatten(0,1)
+
+        # 1. Get pure vision embedding for the panel
+        V = model.atom.vision(images_flat) # (B*N, D)
+
+        # Manually construct P_flat to force vision dominance, bypassing GatedFusion
+        # This is a temporary measure to confirm GatedFusion is the issue.
+        P_flat = V
+        print(f"DEBUG: P_flat (forced vision) sample (first 5 elements): {P_flat.cpu().numpy().flatten()[:5]}")
+
+        # Now, create a multi-panel context for P, even for a single image query
+        max_panels = 12 # As defined in closure_lite_dataset.py
+        embedding_dim = P_flat.shape[-1] # D=384
+
+        # Initialize P with zeros for max_panels
+        P = torch.zeros((B, max_panels, embedding_dim), device=device)
+        # Place the single image's P_flat into the first panel slot
+        P[:, 0, :] = P_flat
+
+        # Create a panel mask: True for the first panel, False for the rest
+        panel_mask = torch.zeros((B, max_panels), dtype=torch.bool, device=device)
+        panel_mask[:, 0] = True
+
+        # 2. Pass through page-level understanding
+        E_page, _ = model.han.panels_to_page(P, panel_mask)
+
+    return P_flat.cpu().numpy(), E_page.cpu().numpy()
 
 def get_embedding_for_text(model, text_query: str, device):
     tokenizer = AutoTokenizer.from_pretrained('roberta-base')
@@ -101,22 +141,11 @@ def cosine_similarity_search(query_embedding: np.ndarray, embeddings: np.ndarray
     if query_embedding.ndim == 1: query_embedding = np.expand_dims(query_embedding, axis=0)
     query_norm = F.normalize(torch.from_numpy(query_embedding), p=2, dim=1)
     embeddings_norm = F.normalize(torch.from_numpy(embeddings), p=2, dim=1)
-
-    print(f"DEBUG: cosine_similarity_search - query_norm shape: {query_norm.shape}, embeddings_norm shape: {embeddings_norm.shape}")
-    print(f"DEBUG: cosine_similarity_search - query_norm sample (first 5): {query_norm[0, :5]}")
-    print(f"DEBUG: cosine_similarity_search - embeddings_norm sample (first row, first 5): {embeddings_norm[0, :5]}")
-
     similarities = torch.mm(query_norm, embeddings_norm.t()).squeeze(0)
-
-    print(f"DEBUG: cosine_similarity_search - Similarities shape: {similarities.shape}")
-    print(f"DEBUG: cosine_similarity_search - Similarities max: {similarities.max()}, min: {similarities.min()}, mean: {similarities.mean()}")
-
     top_values, top_indices = torch.topk(similarities, top_k)
     return top_indices.numpy(), top_values.numpy()
 
-def find_similar_pages(ds: xr.Dataset, query_embedding: np.ndarray, top_k: int = 12) -> List[Dict]:
-    print(f"DEBUG: Type of ds['page_embeddings']: {type(ds['page_embeddings'])}")
-    print(f"DEBUG: Shape of ds['page_embeddings']: {ds['page_embeddings'].shape}")
+def find_similar_pages(ds: xr.Dataset, query_embedding: np.ndarray, top_k: int = 12, query_manifest_path: str = None) -> List[Dict]:
     all_embeddings = ds['page_embeddings'].values
     # Ensure all_embeddings has the correct shape for page embeddings (num_pages, embedding_dim)
     if all_embeddings.ndim == 3: # This indicates it might be (page_id, panel_id, embedding_dim)
@@ -127,9 +156,35 @@ def find_similar_pages(ds: xr.Dataset, query_embedding: np.ndarray, top_k: int =
     elif all_embeddings.ndim != 2:
         raise ValueError(f"ds['page_embeddings'].values returned {all_embeddings.ndim}D array. Expected 2D (num_pages, embedding_dim).")
 
-    print(f"DEBUG: Shape of all_embeddings before passing to cosine_similarity_search: {all_embeddings.shape}")
     similar_indices, similarities = cosine_similarity_search(query_embedding, all_embeddings, top_k)
-    similar_indices, similarities = cosine_similarity_search(query_embedding, all_embeddings, top_k)
+    
+    # Debug: if query_manifest_path provided, check if exact match is in results
+    if query_manifest_path is not None:
+        manifest_vals = ds['manifest_path'].values
+        query_idx = None
+        import os as _os
+        key = _os.path.normcase(_os.path.normpath(query_manifest_path)).lower()
+        for i, mv in enumerate(manifest_vals):
+            try:
+                mv_str = str(mv) if not isinstance(mv, str) else mv
+                if isinstance(mv_str, (bytes, bytearray)):
+                    mv_str = mv_str.decode('utf-8', errors='ignore')
+                mv_key = _os.path.normcase(_os.path.normpath(mv_str)).lower()
+                if mv_key == key:
+                    query_idx = i
+                    break
+            except Exception:
+                continue
+        
+        if query_idx is not None:
+            # Check if query_idx is in the top results
+            if query_idx not in similar_indices:
+                print(f"WARNING: Query page (idx={query_idx}) not in top {top_k} results!")
+                print(f"Query manifest: {query_manifest_path}")
+            else:
+                result_pos = np.where(similar_indices == query_idx)[0][0]
+                print(f"DEBUG: Query page found at rank {result_pos + 1} with similarity {similarities[result_pos]:.6f}")
+    
     results = []
     for i, idx in enumerate(similar_indices):
         results.append({
@@ -193,35 +248,133 @@ def page_id_search(manifest_data: List[Dict], query: str, top_k: int = 50) -> Li
     return make_json_serializable(results)
 
 def get_embedding_by_page_id(ds: xr.Dataset, page_id: str) -> np.ndarray:
-    """Retrieves a pre-calculated page embedding from the Zarr dataset by its page_id."""
+    """Retrieves a pre-calculated page embedding from the Zarr dataset by its page_id (which is a manifest_path)."""
+    return get_zarr_embedding_by_manifest_path(ds, page_id)
+
+def get_zarr_embedding_by_manifest_path(ds: xr.Dataset, manifest_path: str) -> np.ndarray:
+    """Retrieves a pre-calculated page embedding from the Zarr dataset by its manifest_path.
+    This function uses the same robust lookup logic as the Zarr generation script.
+    
+    CRITICAL: The Zarr generation script stores manifest paths in a normalized, lowercased form:
+    os.path.normcase(os.path.normpath(str(json_path))).lower()
+    
+    We must apply the same normalization here for lookups to succeed.
+    """
     try:
-        # The incoming page_id is actually a manifest_path
-        target_manifest_path = page_id
+        target_manifest_path = manifest_path
 
         manifest_vals = ds['manifest_path'].values.tolist()
         idx = None
+        
+        # First try: exact match (for backwards compatibility)
         try:
             idx = manifest_vals.index(target_manifest_path)
+            print(f"DEBUG: Found exact match for '{target_manifest_path}' at idx={idx}")
         except ValueError:
-            # Try normalized path match
+            pass
+        
+        # Second try: normalized path match - CRITICAL: must lowercase like generation script does
+        if idx is None:
             import os as _os
-            key = _os.path.normcase(_os.path.normpath(target_manifest_path))
+            # CRITICAL: Apply same normalization as generate_embeddings_zarr_claude.py line 687:
+            # key_norm = os.path.normcase(os.path.normpath(str(json_path))).lower()
+            key = _os.path.normcase(_os.path.normpath(target_manifest_path)).lower()
             for i, mv in enumerate(manifest_vals):
                 try:
-                    if _os.path.normcase(_os.path.normpath(str(mv))) == key:
+                    mv_str = str(mv) if not isinstance(mv, str) else mv
+                    # Decode bytes if necessary
+                    if isinstance(mv_str, (bytes, bytearray)):
+                        mv_str = mv_str.decode('utf-8', errors='ignore')
+                    # Normalize and lowercase for comparison
+                    mv_key = _os.path.normcase(_os.path.normpath(mv_str)).lower()
+                    if mv_key == key:
                         idx = i
+                        print(f"DEBUG: Found normalized match for '{target_manifest_path}' at idx={idx}")
+                        break
+                except Exception:
+                    continue
+        
+        # Third try: case-insensitive match on original path (for when original casing is preserved)
+        if idx is None:
+            target_lower = target_manifest_path.lower()
+            for i, mv in enumerate(manifest_vals):
+                try:
+                    mv_str = str(mv) if not isinstance(mv, str) else mv
+                    if isinstance(mv_str, (bytes, bytearray)):
+                        mv_str = mv_str.decode('utf-8', errors='ignore')
+                    if mv_str.lower() == target_lower:
+                        idx = i
+                        print(f"DEBUG: Found case-insensitive match for '{target_manifest_path}' at idx={idx}")
+                        break
+                except Exception:
+                    continue
+        
+        # Fourth try: suffix matching (for when directory structure differs)
+        # This handles cases where the same JSON filename exists in different directory structures
+        # e.g., "Humble Comics Bundle.../sheena_queenofthejungle_vol2/..." vs "sheena queenofthejungle vol2 - Unknown/..."
+        # CRITICAL: Use at least 3 path components to avoid false matches on generic filenames
+        if idx is None:
+            import os as _os
+            # Extract the significant path components (last 3 parts: grandparent/parent/filename)
+            target_parts = _os.path.normpath(target_manifest_path).split(_os.sep)
+            # Get last 3 parts to be more specific and avoid false matches
+            target_signature = tuple(target_parts[-3:]) if len(target_parts) >= 3 else tuple(target_parts)
+            target_signature_lower = tuple(p.lower() for p in target_signature)
+            
+            for i, mv in enumerate(manifest_vals):
+                try:
+                    mv_str = str(mv) if not isinstance(mv, str) else mv
+                    if isinstance(mv_str, (bytes, bytearray)):
+                        mv_str = mv_str.decode('utf-8', errors='ignore')
+                    mv_parts = _os.path.normpath(mv_str).split(_os.sep)
+                    mv_signature = tuple(mv_parts[-3:]) if len(mv_parts) >= 3 else tuple(mv_parts)
+                    mv_signature_lower = tuple(p.lower() for p in mv_signature)
+                    
+                    # Compare signatures (case-insensitive exact match on last 3 components)
+                    if target_signature_lower == mv_signature_lower:
+                        idx = i
+                        print(f"DEBUG: Found match using suffix matching (3 components) - target: {target_signature}, zarr: {mv_signature}, idx={idx}")
                         break
                 except Exception:
                     continue
         
         if idx is None:
+            # Debug: print what we have vs what we're looking for
+            import os as _os
+            print(f"DEBUG: Failed to find '{target_manifest_path}'")
+            print(f"DEBUG: Normalized target: '{_os.path.normcase(_os.path.normpath(target_manifest_path)).lower()}'")
+            print(f"DEBUG: Target lowercase: '{target_manifest_path.lower()}'")
+            target_parts = _os.path.normpath(target_manifest_path).split(_os.sep)
+            target_signature = tuple(target_parts[-3:]) if len(target_parts) >= 3 else tuple(target_parts)
+            print(f"DEBUG: Target signature (last 3 parts): {target_signature}")
+            print(f"DEBUG: Sample manifest_paths in Zarr (first 5):")
+            for i in range(min(5, len(manifest_vals))):
+                mv_str = str(manifest_vals[i]) if not isinstance(manifest_vals[i], str) else manifest_vals[i]
+                if isinstance(mv_str, (bytes, bytearray)):
+                    mv_str = mv_str.decode('utf-8', errors='ignore')
+                print(f"  [{i}]: '{mv_str}'")
+            
+            # Also search for partial matches to help diagnose
+            print(f"DEBUG: Searching for any paths containing the filename '{_os.path.basename(target_manifest_path)}':")
+            found_count = 0
+            for i, mv in enumerate(manifest_vals):
+                mv_str = str(mv) if not isinstance(mv, str) else mv
+                if isinstance(mv_str, (bytes, bytearray)):
+                    mv_str = mv_str.decode('utf-8', errors='ignore')
+                if _os.path.basename(target_manifest_path).lower() in mv_str.lower():
+                    print(f"  [{i}]: '{mv_str}'")
+                    found_count += 1
+                    if found_count >= 5:
+                        break
+            
             raise ValueError(f"Manifest path '{target_manifest_path}' not found in Zarr dataset.")
         
         # Retrieve the corresponding page embedding
         page_embedding = ds['page_embeddings'].values[idx]
-        print(f"DEBUG: Retrieved page_embedding shape: {page_embedding.shape}")
-        print(f"DEBUG: Retrieved page_embedding sample (first 5 elements): {page_embedding[:5]}")
-        return np.expand_dims(page_embedding, axis=0)
+        print(f"DEBUG: Retrieved embedding for idx={idx}, shape={page_embedding.shape}, L2 norm={np.linalg.norm(page_embedding):.6f}")
+        result = np.expand_dims(page_embedding, axis=0)
+        print(f"DEBUG: Returning embedding with shape={result.shape}")
+        return result
     except Exception as e:
         print(f"Error retrieving embedding for manifest path '{target_manifest_path}': {e}")
         raise
