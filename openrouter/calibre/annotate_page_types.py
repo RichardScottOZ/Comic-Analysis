@@ -2,6 +2,7 @@ import argparse
 import os
 import re
 import json
+import zlib
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Tuple
@@ -93,11 +94,11 @@ KEYWORDS = {
 }
 
 
-def text_corpus_from_row(row, read_vlm_json: bool = False) -> str:
+def text_corpus_from_row(row, read_vlm_json: bool = False, use_inline_vlm: bool = False) -> str:
     buf = []
     # Try inline vlm_data if present as JSON-like string
     v = row.get('vlm_data')
-    if isinstance(v, str) and v:
+    if use_inline_vlm and isinstance(v, str) and v:
         try:
             obj = json.loads(v)
         except Exception:
@@ -309,7 +310,15 @@ def score_page_types(row, pos_pct: float, group_len: int, corpus: str) -> Tuple[
     return page_type, confidence, scores
 
 
-def annotate_page_types(input_csv: str, output_csv: Optional[str] = None, read_vlm_json: bool = False):
+def annotate_page_types(
+    input_csv: str,
+    output_csv: Optional[str] = None,
+    read_vlm_json: bool = False,
+    use_inline_vlm: bool = False,
+    return_vlm_json: bool = False, # New argument
+    num_splits: int = 1,
+    index: int = 0,
+):
     df = pd.read_csv(input_csv)
     if output_csv is None:
         output_csv = input_csv.replace('.csv', '_with_page_types.csv')
@@ -318,9 +327,26 @@ def annotate_page_types(input_csv: str, output_csv: Optional[str] = None, read_v
     df['book_folder'] = df['image_path'].apply(infer_book_folder)
     df['page_num'] = df['image_path'].apply(extract_page_num)
 
+    # Optional split processing by stable hash of book folder (to parallelize runs)
+    if num_splits is not None and int(num_splits) > 1:
+        num_splits = int(num_splits)
+        index = int(index)
+        if index < 0 or index >= num_splits:
+            raise ValueError(f"index must be in [0, {num_splits-1}], got {index}")
+        def _bucket(book: str) -> int:
+            if not isinstance(book, str):
+                book = str(book)
+            return zlib.adler32(book.encode('utf-8')) % num_splits
+        mask = df['book_folder'].apply(_bucket) == index
+        df = df[mask].copy()
+        if df.empty:
+            print(f"No rows selected for split {index}/{num_splits}. Nothing to do.")
+            return
+
     page_types = []
     confidences = []
     pos_pcts = []
+    vlm_json_contents = [] # New list to store VLM JSONs
 
     for book, g in df.groupby('book_folder'):
         g_sorted = g.sort_values(by=['page_num'], kind='mergesort')  # stable
@@ -335,7 +361,19 @@ def annotate_page_types(input_csv: str, output_csv: Optional[str] = None, read_v
         last_idx = g_sorted.index[-1] if n >= 1 else None
         for idx, row in g.iterrows():
             pos_pct = idx_to_pct.get(idx, 0.0)
-            corpus = text_corpus_from_row(row, read_vlm_json=read_vlm_json)
+            
+            # Load VLM JSON content if requested
+            current_vlm_json_obj = None
+            if read_vlm_json:
+                jp = row.get('vlm_json_path')
+                if isinstance(jp, str) and os.path.exists(jp):
+                    try:
+                        with open(jp, 'r', encoding='utf-8') as f:
+                            current_vlm_json_obj = json.load(f)
+                    except Exception as e:
+                        print(f"Warning: Could not load VLM JSON from {jp}: {e}")
+            
+            corpus = text_corpus_from_row(row, read_vlm_json=read_vlm_json, use_inline_vlm=use_inline_vlm)
             pg_type, conf, _scores = score_page_types(row, pos_pct, n, corpus)
             if idx != last_idx and pg_type in {'back_cover', 'back_cover_ad'}:
                 fallback = sorted(
@@ -360,16 +398,24 @@ def annotate_page_types(input_csv: str, output_csv: Optional[str] = None, read_v
             page_types.append((idx, pg_type))
             confidences.append((idx, conf))
             pos_pcts.append((idx, pos_pct))
+            vlm_json_contents.append((idx, current_vlm_json_obj)) # Store VLM JSON
 
     # Assign back to df preserving original order
     type_map = dict(page_types)
     conf_map = dict(confidences)
     pct_map = dict(pos_pcts)
+    vlm_json_map = dict(vlm_json_contents) # New map for VLM JSONs
+
     df['page_type'] = df.index.map(type_map)
     df['page_type_conf'] = df.index.map(conf_map)
     df['page_pos_pct'] = df.index.map(pct_map)
     df['is_front_cover'] = (df['page_type'] == 'cover')
     df['is_back_cover'] = (df['page_type'].isin(['back_cover', 'back_cover_ad']))
+    
+    if return_vlm_json: # Conditionally add VLM JSON column
+        df['vlm_json_content'] = df.index.map(vlm_json_map)
+        # Convert dicts to JSON strings for CSV compatibility
+        df['vlm_json_content'] = df['vlm_json_content'].apply(lambda x: json.dumps(x) if x else None)
 
     df.to_csv(output_csv, index=False)
     # Print summary
@@ -385,8 +431,20 @@ def main():
     ap.add_argument('--input_csv', required=True, help='Path to analysis CSV (e.g., calibre_rcnn_vlm_analysis_v2.csv)')
     ap.add_argument('--output_csv', help='Output CSV path; defaults to *_with_page_types.csv')
     ap.add_argument('--read_vlm_json', action='store_true', help='Also read VLM JSON files to improve keyword detection (slower)')
+    ap.add_argument('--use_inline_vlm', action='store_true', help='Parse inline VLM JSON in the CSV (much slower, better keywords). Default: off')
+    ap.add_argument('--return_vlm_json', action='store_true', help='If --read_vlm_json is true, also include the full VLM JSON content as a column in the output CSV.') # New argument
+    ap.add_argument('--num_splits', type=int, default=1, help='Split the work by book folder into N parts (for parallel runs). Default: 1')
+    ap.add_argument('--index', type=int, default=0, help='Index of the split to process (0-based). Default: 0')
     args = ap.parse_args()
-    annotate_page_types(args.input_csv, args.output_csv, read_vlm_json=args.read_vlm_json)
+    annotate_page_types(
+        args.input_csv,
+        args.output_csv,
+        read_vlm_json=args.read_vlm_json,
+        use_inline_vlm=args.use_inline_vlm,
+        return_vlm_json=args.return_vlm_json, # Pass new argument
+        num_splits=args.num_splits,
+        index=args.index,
+    )
 
 
 if __name__ == '__main__':
