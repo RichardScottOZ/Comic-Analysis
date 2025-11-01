@@ -94,3 +94,7 @@ CalibreComics perfect matches: TBD (after processing)
 Combined dataset: All high-quality samples
 3. Technical Approach:
 Option A: Batch Processing Script
+
+# Page Stream Segmentation
+- Needed for next version of the above
+- https://github.com/mserra0/CoSMo-ComicsPSS
