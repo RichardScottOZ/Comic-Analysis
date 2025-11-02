@@ -168,15 +168,15 @@ image-6.png)
 
 ## Embeddings
 ### Embedding Generation Strategy:
-1. What We Need to Generate:
+- 1. What We Need to Generate:
 Panel embeddings (P) - Raw panel representations
 Page embeddings (E_page) - Aggregated page-level representations
 Reading order embeddings - For sequence understanding
-2. Dataset Coverage:
+- 2. Dataset Coverage:
 Amazon perfect matches: 212K pages
 CalibreComics perfect matches: 80K
 Combined dataset: All high-quality samples
-3. Technical Approach:
+- 3. Technical Approach:
 Option A: Batch Processing Script
 
 # Page Stream Segmentation
