@@ -84,6 +84,7 @@ The Closure Lite Framework is a multimodal fusion model designed to analyze imag
     *   https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?
     _tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
         - https://huggingface.co/VLR- ComicsPap models
+        - https://github.com/emanuelevivoli/CoMix - CoMix repo
 
     *   https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
     *   https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
@@ -94,9 +95,9 @@ The Closure Lite Framework is a multimodal fusion model designed to analyze imag
 
 ## 8. Pipeline Details
 
-*   Refer to the main CoMix repository.
+*   Refer to the main [CoMix](https://github.com/RichardScottOZ/CoMix) repository for the Faster RCNN panel detection and processing to make coco style fiels
 *   The code in `detections_2000ad` contains adaptations for inference, distinct from evaluation.
-*   Detailed functions are in `https://github.com/emanuelevivoli/CoMix/tree/main/benchmarks/detections`.
+*   Detailed functions are in `https://github.com/RichardScottOZ/CoMix/tree/main/benchmarks/detections`.
 *   **Technical Stack:** PyTorch (CUDA 11.8 recommended), transformers, xarray and zarr.
 
 ## 9. VLM Model Experiments & Possibilities
