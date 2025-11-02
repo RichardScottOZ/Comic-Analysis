@@ -65,15 +65,15 @@ Query
 - From 80K calibre perfect match subset using the context-denoise option
 ## Panel Similarity
 - On the subset of one page, an early model trained on ragtag amazon data showed this:
-![alt text](image-1.png)
+![alt text](images/image-1.png)
 - Model cuts things off at 12 panels and this grid allowed 12 to be shown in the demo, so you can see 2 and 7 and 5 and 6 somewhat alike.
 ## Page Similarity
 - Looking at similarity between pages the model knows composition and structure - you can see the panel similarities here
-![alt text](image-2.png)
+![alt text](images/image-2.png)
 - Four small vertical panels and a bigger area.
 ## Clustering
 - if we look at a umap embedding of pages we get
-![alt text](image-3.png)
+![alt text](images/image-3.png)
 
 - The ribbon cluster down the bottom also is joined two clusters.  The reasons are this, if you color by panel aspect ratio:
 ![alt text](image-4.png)
@@ -82,13 +82,14 @@ Ergo that cluster is the 'landscape cluster' - which is not that common for full
 
 ## Ablation
 - I made a version that zeros out all the embeddings but the image part - clustering these looked like this:
-![alt text](image-5.png)
+![alt text](images/image-5.png)
 
 - The 8 cluster down the bottom is 'all single panel very dark images' - and 'heavy text one page images' with a few multi-panel in there that are similar.  Off to the right with a break is a group of 'all white images' - so a monochromatic cluster.
 
 - Again you can pick out aspect ratios that are quite different.
 
-![alt text](image-6.png)
+![alt text](images/
+image-6.png)
 
 # Relevant Research
 ## Survey
