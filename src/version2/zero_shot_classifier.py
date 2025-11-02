@@ -147,8 +147,9 @@ def main():
     
     all_predictions = []
     all_confidences = []
+    all_probabilities = [] # New list to store all class probabilities
 
-    # Let the pipeline handle batching internally for efficiency
+    # Explicitly batch sequences for tqdm progress
     # We still iterate explicitly to show progress
     num_batches = (len(sequences_to_process) + args.pipeline_batch_size - 1) // args.pipeline_batch_size
     
@@ -170,6 +171,8 @@ def main():
             
             all_predictions.append((batch_original_indices[j], predicted_label_original))
             all_confidences.append((batch_original_indices[j], result['scores'][0]))
+            # Store all labels and their scores as a dictionary
+            all_probabilities.append((batch_original_indices[j], dict(zip(result['labels'], result['scores']))))
 
     # Initialize new columns with None
     prediction_col_name = f'zero_shot_prediction_{args.text_input_strategy}'
@@ -182,6 +185,13 @@ def main():
         df.loc[idx, prediction_col_name] = pred
     for idx, conf in all_confidences:
         df.loc[idx, confidence_col_name] = conf
+
+    # Add columns for all class probabilities
+    for idx, probs_dict in all_probabilities:
+        for natural_label, score in probs_dict.items():
+            original_label = label_mapping.get(natural_label, natural_label) # Map back to original format
+            prob_col_name = f'zero_shot_prob_{original_label}_{args.text_input_strategy}'
+            df.loc[idx, prob_col_name] = round(score, 3)
 
     print(f"Saving results to {args.output_csv}...")
     try:
