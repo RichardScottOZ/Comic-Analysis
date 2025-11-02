@@ -1,4 +1,4 @@
-# CoMix: Comic Analysis Project Overview
+# Comic Analysis: Project Overview
 
 This document outlines the ongoing work in analyzing comics using data science techniques, focusing on multimodal modeling for content understanding and querying.
 
