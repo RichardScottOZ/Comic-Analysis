@@ -12,11 +12,53 @@ Scattered work in progress being reorganised as version 1 wraps up.
 
 # Closure Lite Framework
 - A multimodal fusion model to look at images, text and panel reading order.
+    - Aim - get multimodal fused embeddings that would be queryable for similarity
+        - Embeddings stored in zarr works nicely for speed at size currently
+            - 80K 'perfect match subset' test takes up around 500MB on disk.
+        - See interface - with a flask ask to do that
     - Designed to be useable on a reasonable retail GPU - so 384 dim ebeddings etc.
 
 ## Data
 - Comic pages, lots of them.
 - VLM text extraction test - basically I wanted to try this ahead of general OCR - which is definitely not aimed at comics.
+
+## Basic Process
+# Basic Process
+
+Find comics
+- amazon
+- dark horse
+- calibre [humble bundle, drive thru etc.] 
+- TODO; neon ichigan scraping? new humble bundle 
+    - deal with duplicate comics - no point having two copies in embeddings
+
+Convert to pages - from pdf/cbz etc.
+
+Use VLMS to get panel text for each page
+
+Use Fast-RCNN to get panel boxes and coords
+
+Join together into DataSpec for modelling
+- coco_to_dataspec
+
+Make perfect match subset for training properly
+
+Train model
+- users closure_lite_dataset - closure_lite_simple_framework - train_closure_lite_simple_with_list
+
+Embeddings
+- Run model to make embeddings
+
+Query
+- By Code or Interface
+
+## Perfect Match Notes
+
+- Make sure text is as close to right panels as we can - same number from rcnn and vlm
+    - Train with this dataset
+- We got 25% alignment betwen fast-rcnn and various vlm runs - so need to work out what is best and affordable there
+    - do we need to ocr fast rcnn
+
 
 
 
@@ -91,44 +133,6 @@ Scattered work in progress being reorganised as version 1 wraps up.
 
 - A Deep Learning Pipeline for the Synthesis of Graphic Novels - https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
 
-# Basic Process
-
-Find comics
-- amazon
-- dark horse
-- calibre [humble bundle, drive thru etc.] 
-- TODO; neon ichigan scraping? new humble bundle 
-    - deal with duplicate comics - no point having two copies in embeddings
-
-Convert to pages - from pdf/cbz etc.
-
-Use VLMS to get panel text for each page
-
-Use Fast-RCNN to get panel boxes and coords
-
-Join together into DataSpec for modelling
-- coco_to_dataspec
-
-Make perfect match subset for training properly
-- \train_with_perfect_matches_parallel.py 
-
-Train model
-- users closure_lite_dataset - closure_lite_simple_framework - train_closure_lite_simple
-- original version on github
-- updated version here in copilot vscode
-
-Embeddings
-- Run model to make embeddings
-
-## Perfect Match Notes
-
-- Make sure text is as close to right panels as we can - same number from rcnn and vlm
-    - Train with this dataset
-- We got 25% alignment betwen fast-rcnn and various vlm runs - so need to work out what is best and affordable there
-    - do we need to ocr fast rcnn
-- Consider cover identification by embedding
-    - will it just work
-    - do we need to cluster or supervise to detect - not all 1 panel pages will be covers - some will be ads
 
 ## Embeddings
 ### Embedding Generation Strategy:
