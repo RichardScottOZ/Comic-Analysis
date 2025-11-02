@@ -127,7 +127,7 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 
 ## 12. Future Research
 
-*   Refer to `documentation/future_work/`.
+*   Refer to [documentation/future_work/](https://github.com/RichardScottOZ/Comic-Analysis/tree/main/documentation/future_work).
 
 ## version 2
 
