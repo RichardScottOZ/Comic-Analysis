@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Page Panel Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .search-section {
+            padding: 30px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            background: white;
+            cursor: pointer;
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .radio-option input[type="radio"] {
+            cursor: pointer;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .checkbox-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .results-section {
+            padding: 30px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #fee;
+            border: 2px solid #fcc;
+            color: #c00;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .result-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
+        
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        
+        .result-image {
+            width: 100%;
+            height: 400px;
+            object-fit: contain;
+            background: #f5f5f5;
+        }
+        
+        .result-info {
+            padding: 15px;
+        }
+        
+        .result-manifest {
+            font-size: 0.85em;
+            color: #666;
+            word-break: break-all;
+            margin-bottom: 8px;
+        }
+        
+        .result-similarity {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+        
+        .visualize-btn {
+            width: 100%;
+            margin-top: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .visualize-btn:hover {
+            background: #5568d3;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            overflow: auto;
+        }
+        
+        .modal-content {
+            background-color: #fefefe;
+            margin: 2% auto;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 95%;
+            max-height: 90vh;
+            overflow: auto;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+        
+        .viz-image {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        
+        .dataset-info {
+            background: #f0f7ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .dataset-select-wrapper {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Comic Page Panel Visualization</h1>
+            <p>Search and analyze comic pages with detailed panel-level insights</p>
+        </div>
+        
+        <div class="search-section">
+            <form id="searchForm">
+                <div class="dataset-select-wrapper">
+                    <div class="form-group">
+                        <label for="dataset">Embedding Dataset:</label>
+                        <select id="dataset" name="dataset">
+                            {% for key, info in datasets.items() %}
+                            {% if info.available %}
+                            <option value="{{ key }}" {% if key == default_dataset %}selected{% endif %}>
+                                {{ info.name }}
+                            </option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                        <small id="datasetDescription" style="display: block; margin-top: 5px; color: #666;">
+                            <!-- Description will be updated by JavaScript -->
+                        </small>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Search Type:</label>
+                    <div class="radio-group">
+                        <div class="radio-option">
+                            <input type="radio" id="queryPageId" name="query_type" value="page_id" checked>
+                            <label for="queryPageId" style="margin: 0;">Page ID Search</label>
+                        </div>
+                        <div class="radio-option">
+                            <input type="radio" id="queryText" name="query_type" value="text">
+                            <label for="queryText" style="margin: 0;">Text Search</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="pageIdGroup">
+                    <label for="page_id_query">Page ID (partial match):</label>
+                    <input type="text" id="page_id_query" name="page_id_query" 
+                           placeholder="Enter page ID or partial path...">
+                </div>
+                
+                <div class="form-group" id="textGroup" style="display: none;">
+                    <label for="text_query">Text Description:</label>
+                    <input type="text" id="text_query" name="text_query" 
+                           placeholder="Describe what you're looking for...">
+                </div>
+                
+                <div class="checkbox-option">
+                    <input type="checkbox" id="compareDatasets" name="compare_datasets">
+                    <label for="compareDatasets" style="margin: 0;">
+                        Compare Fused vs Vision datasets in visualizations
+                    </label>
+                </div>
+                
+                <div class="form-group" style="margin-top: 25px;">
+                    <button type="submit" class="button">🔍 Search & Visualize</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="results-section">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Searching and preparing visualizations...</p>
+            </div>
+            
+            <div class="error" id="error"></div>
+            
+            <div id="resultsContainer"></div>
+        </div>
+    </div>
+    
+    <!-- Modal for panel visualization -->
+    <div id="vizModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="vizContent"></div>
+        </div>
+    </div>
+    
+    <script>
+        const datasetDescriptions = {{ datasets|tojson }};
+        
+        // Update dataset description
+        function updateDatasetDescription() {
+            const select = document.getElementById('dataset');
+            const desc = document.getElementById('datasetDescription');
+            const selectedKey = select.value;
+            if (datasetDescriptions[selectedKey]) {
+                desc.textContent = datasetDescriptions[selectedKey].description;
+            }
+        }
+        
+        document.getElementById('dataset').addEventListener('change', updateDatasetDescription);
+        updateDatasetDescription();
+        
+        // Toggle search input based on query type
+        document.querySelectorAll('input[name="query_type"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.getElementById('pageIdGroup').style.display = 
+                    this.value === 'page_id' ? 'block' : 'none';
+                document.getElementById('textGroup').style.display = 
+                    this.value === 'text' ? 'block' : 'none';
+            });
+        });
+        
+        // Handle form submission
+        document.getElementById('searchForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            resultsContainer.innerHTML = '';
+            
+            const formData = new FormData(this);
+            
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Search failed');
+                }
+                
+                displayResults(data.results, data.dataset_key);
+                
+            } catch (err) {
+                error.textContent = 'Error: ' + err.message;
+                error.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+        
+        function displayResults(results, datasetKey) {
+            const container = document.getElementById('resultsContainer');
+            
+            if (!results || results.length === 0) {
+                container.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No results found.</p>';
+                return;
+            }
+            
+            const datasetName = datasetDescriptions[datasetKey]?.name || datasetKey;
+            const compareDatasets = document.getElementById('compareDatasets').checked;
+            
+            container.innerHTML = `
+                <div class="dataset-info">
+                    <strong>Using:</strong> ${datasetName}<br>
+                    <em>${datasetDescriptions[datasetKey]?.description || ''}</em>
+                </div>
+                <div class="results-grid" id="resultsGrid"></div>
+            `;
+            
+            const grid = document.getElementById('resultsGrid');
+            
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                
+                const similarity = result.similarity !== undefined ? 
+                    `Similarity: ${result.similarity.toFixed(4)}` : '';
+                
+                // Store manifest path with proper escaping
+                const escapedPath = result.manifest_path ? result.manifest_path.replace(/\\/g, '\\\\') : '';
+                
+                card.innerHTML = `
+                    ${result.image_url ? 
+                        `<img src="${result.image_url}" class="result-image" alt="Page">` : 
+                        '<div class="result-image" style="display: flex; align-items: center; justify-content: center; background: #f0f0f0;">No image</div>'}
+                    <div class="result-info">
+                        <div class="result-manifest">${result.manifest_path || 'Unknown'}</div>
+                        ${similarity ? `<div class="result-similarity">${similarity}</div>` : ''}
+                        <button class="visualize-btn" onclick="visualizePanel('${escapedPath}', '${datasetKey}', ${compareDatasets})">
+                            🔬 Analyze Panels
+                        </button>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        async function visualizePanel(manifestPath, datasetKey, compareDatasets) {
+            const modal = document.getElementById('vizModal');
+            const content = document.getElementById('vizContent');
+            
+            content.innerHTML = '<div style="text-align: center; padding: 40px;"><div class="spinner"></div><p>Generating panel visualization...</p></div>';
+            modal.style.display = 'block';
+            
+            try {
+                const response = await fetch('/visualize_panel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        manifest_path: manifestPath,
+                        dataset: datasetKey,
+                        compare_datasets: compareDatasets
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Visualization failed');
+                }
+                
+                content.innerHTML = `
+                    <h2 style="margin-bottom: 20px;">Panel Analysis</h2>
+                    <p style="margin-bottom: 10px;"><strong>Dataset:</strong> ${data.page_data.dataset}</p>
+                    <p style="margin-bottom: 20px;"><strong>Panels:</strong> ${data.page_data.num_panels}</p>
+                    <img src="data:image/png;base64,${data.visualization}" class="viz-image" alt="Panel Visualization">
+                `;
+                
+            } catch (err) {
+                content.innerHTML = `<div style="color: red; padding: 20px;">Error: ${err.message}</div>`;
+            }
+        }
+        
+        // Modal close functionality
+        document.querySelector('.close').addEventListener('click', function() {
+            document.getElementById('vizModal').style.display = 'none';
+        });
+        
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('vizModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
