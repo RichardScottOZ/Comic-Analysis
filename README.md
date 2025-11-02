@@ -76,10 +76,18 @@ The Closure Lite Framework is a multimodal fusion model designed to analyze imag
 
 ### Relevant Research
 *   **Survey:** "One missing piece in Vision and Language: A Survey on Comics Understanding" (https://arxiv.org/abs/2409.09502v1)
-    - https://huggingface.co/VLR- ComicsPap models
 *   **Neural Networks & Transformers:** "Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding" (https://dl.acm.org/doi/10.1007/978-3-031-70645-5_10)
 *   **Image Indexing:** "Digital Comics Image Indexing Based on Deep Learning" (https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning)
 *   **Synthesis of Graphic Novels:** "A Deep Learning Pipeline for the Synthesis of Graphic Novels" (https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf)
+*   **Papers:**
+    *   https://arxiv.org/abs/2503.08561
+    *   https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?
+    _tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
+        - https://huggingface.co/VLR- ComicsPap models
+
+    *   https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
+    *   https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
+
 
 ### Tasks of Interest
 *   Dialogue transcription, which necessitates a robust panel detection pipeline.
@@ -125,8 +133,3 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 ## 12. Future Research
 
 *   Refer to `documentation/future_work/`.
-*   **Papers:**
-    *   https://arxiv.org/abs/2503.08561
-    *   https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
-    *   https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
-    *   https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
