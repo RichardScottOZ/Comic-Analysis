@@ -320,3 +320,48 @@ Based on statistical anomalies and potential contrasts, the following clusters a
 *   **Cluster 5: The "Extreme Aspect Ratio" Cluster:** Characterized by an `avg_panel_aspect_ratio` of 4.89 (a significant outlier) and the highest average narration count. This cluster likely contains pages with unusual layouts (e.g., extremely wide/tall panels, landscape orientation) or potentially non-comic content.
 *   **Cluster 6: The "High-Density Grid" Cluster:** Characterized by the highest average `panel_mask_sum` (6.57). This cluster should represent the most dense, grid-like pages, providing a strong contrast to the sparse pages of Cluster 8.
 
+
+
+
+✦ You're absolutely right to steer me back. My apologies for previous lapses; I'll refocus on theorizing and documenting.
+
+  Your latest observations provide crucial insights: the embeddings are significantly improved, confirming the dataset's reasonableness. However, you
+  note that similarity matches still lean heavily on "panel layout," with examples like "3-panel wide grids" matching "one-page back pages," and
+  "4-page grids" matching those with irregular fourth panels. This strongly reinforces compositional dominance. Your observation of "orangey" clusters
+   occasionally including a black and white page hints at color's influence but also its potential override by other factors.
+
+  Theorizing on Cluster DF Stats and Embedding Impact:
+
+   1. Reinforcing Compositional Dominance: Your findings solidify that compositional features—panel count, dimensions, aspect ratios, and even
+      perceived irregularities—are extremely strong drivers of similarity. The similarity between "3-panel wide grids" and "one-page back pages" might
+       occur if the one-page back page is often detected as a single, very wide panel (e.g., a landscape-oriented image or ad), yielding strong
+      compositional alignment despite content differences.
+
+   2. Hints at Visual/Color Features: The "orangey" cluster indicates the model is encoding color. The inclusion of a black and white page within this
+       cluster is fascinating:
+       * Hypothesis A (Compositional Override): The black and white page might share very strong compositional features with the orangey pages,
+         overriding the color difference.
+       * Hypothesis B (Subtle Visual Similarity): Even in grayscale, luminance patterns or textural elements might subtly align with the perceived
+         textures/luminance in the colored pages.
+       * This suggests a complex interplay where color is a factor, but not always the sole or dominant one.
+
+   3. "Are we enforcing 'compositionalness' with 'reading order' and 'panel counts' and coords etc?"
+       * Yes, definitively. The ClosureLiteSimple model is structurally designed and explicitly trained to enforce and leverage compositional
+         features:
+           * Input Features: comp_feats directly encode panel geometry (coordinates, dimensions, aspect ratios, areas).
+           * `L_rpp` (Reading Order Prediction Loss): This loss function actively forces the model to learn about the spatial and sequential
+             relationships of panels, making compositional representations highly discriminative.
+           * `L_pop` (Page Order Prediction Loss): Partially relies on compositional structure as pages are defined by their panels.
+           * `model.han.panels_to_page` (Attention Mechanism): Aggregates panel embeddings considering their mask, inherently relying on compositional
+             context.
+
+  Summary of Theorizing:
+
+  The model effectively captures compositional properties due to its explicit design and training objectives centered around comp_feats and L_rpp.
+  Your observations show that this leads to coherent structural clustering. The "oddities" (like the black and white page in a colored cluster) are
+  crucial, highlighting instances where one modality's signal (e.g., strong compositional similarity) potentially overrides another (e.g., color
+  difference), or where the model identifies subtle, non-obvious shared features across modalities.
+
+  This further emphasizes the need for the planned ablation studies to precisely quantify each modality's contribution to similarity.
+
+  I will now update the "Gemini Cluster DF Analysis" section in Model Debugging.md with these new insights, strictly avoiding any coding references.
