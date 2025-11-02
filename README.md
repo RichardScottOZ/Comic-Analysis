@@ -155,7 +155,8 @@ image-6.png)
 
 
 # Future Research
-- documentation/future_work
+[Future work](documentation/future_work/)
+
 
 ## Papers
 - https://arxiv.org/abs/2503.08561
