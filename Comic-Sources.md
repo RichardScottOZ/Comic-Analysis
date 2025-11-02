@@ -11,6 +11,10 @@
 ## Kickstarter
 - Ad hoc
 
+## One Day
+### Globalcomix
+### Neon Ichiban
+- Run by ex-Comixology guys
 
 # Dead
 ## Comixology
