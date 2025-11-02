@@ -315,10 +315,44 @@ def annotate_page_types(
     output_csv: Optional[str] = None,
     read_vlm_json: bool = False,
     use_inline_vlm: bool = False,
-    return_vlm_json: bool = False, # New argument
+    return_vlm_json: bool = False,
     num_splits: int = 1,
     index: int = 0,
+    combine_splits: bool = False,
+    only_combine: bool = False,
+    split_output_prefix: Optional[str] = None,
 ):
+    if only_combine:
+        if num_splits <= 1:
+            print("Cannot combine splits if num_splits is 1 or less.")
+            return
+        if split_output_prefix is None:
+            print("Error: split_output_prefix must be provided when combining splits.")
+            return
+        
+        print(f"Combining {num_splits} splits with prefix '{split_output_prefix}'...")
+        all_split_dfs = []
+        for i in range(num_splits):
+            split_file_path = Path(f"{split_output_prefix}{i}_with_page_types.csv")
+            if not split_file_path.exists():
+                print(f"Warning: Split file not found: {split_file_path}. Skipping.")
+                continue
+            try:
+                all_split_dfs.append(pd.read_csv(split_file_path))
+            except Exception as e:
+                print(f"Error reading split file {split_file_path}: {e}. Skipping.")
+        
+        if not all_split_dfs:
+            print("No split files found or readable to combine. Nothing to do.")
+            return
+            
+        combined_df = pd.concat(all_split_dfs, ignore_index=True)
+        combined_output_csv = output_csv if output_csv else input_csv.replace('.csv', '_combined.csv')
+        combined_df.to_csv(combined_output_csv, index=False)
+        print(f"Successfully combined {len(all_split_dfs)} splits into: {combined_output_csv}")
+        return # Exit after combining
+
+    # --- Existing annotation logic starts here (only runs if not only_combine) ---
     df = pd.read_csv(input_csv)
     if output_csv is None:
         output_csv = input_csv.replace('.csv', '_with_page_types.csv')
@@ -425,6 +459,37 @@ def annotate_page_types(
         print(f'  {k}: {v}')
     print(f"Saved: {output_csv}")
 
+    # If combine_splits is true, combine them after processing
+    if combine_splits:
+        if num_splits <= 1:
+            print("Cannot combine splits if num_splits is 1 or less.")
+            return
+        if split_output_prefix is None:
+            print("Error: split_output_prefix must be provided when combining splits.")
+            return
+        
+        print(f"Combining {num_splits} splits with prefix '{split_output_prefix}'...")
+        all_split_dfs = []
+        for i in range(num_splits):
+            split_file_path = Path(f"{split_output_prefix}{i}_with_page_types.csv")
+            if not split_file_path.exists():
+                print(f"Warning: Split file not found: {split_file_path}. Skipping.")
+                continue
+            try:
+                all_split_dfs.append(pd.read_csv(split_file_path))
+            except Exception as e:
+                print(f"Error reading split file {split_file_path}: {e}. Skipping.")
+        
+        if not all_split_dfs:
+            print("No split files found or readable to combine. Nothing to do.")
+            return
+            
+        combined_df = pd.concat(all_split_dfs, ignore_index=True)
+        combined_output_csv = output_csv if output_csv else input_csv.replace('.csv', '_combined.csv')
+        combined_df.to_csv(combined_output_csv, index=False)
+        print(f"Successfully combined {len(all_split_dfs)} splits into: {combined_output_csv}")
+        return # Exit after combining
+
 
 def main():
     ap = argparse.ArgumentParser(description='Annotate page types (cover/interior/ads/etc.) from analysis CSV')
@@ -435,15 +500,25 @@ def main():
     ap.add_argument('--return_vlm_json', action='store_true', help='If --read_vlm_json is true, also include the full VLM JSON content as a column in the output CSV.') # New argument
     ap.add_argument('--num_splits', type=int, default=1, help='Split the work by book folder into N parts (for parallel runs). Default: 1')
     ap.add_argument('--index', type=int, default=0, help='Index of the split to process (0-based). Default: 0')
+    ap.add_argument('--combine_splits', action='store_true', help='After processing, combine all split output CSVs into a single file.') # New argument
+    ap.add_argument('--only_combine', action='store_true', help='Only combine previously generated split CSVs, skipping the annotation process.') # New argument
+    ap.add_argument('--split_output_prefix', help='Prefix for split output CSVs when combining (e.g., path/to/my_output_split). Required if --combine_splits or --only_combine is used.') # New argument
     args = ap.parse_args()
+    
+    if args.only_combine and not args.split_output_prefix:
+        ap.error("--split_output_prefix is required when --only_combine is used.")
+
     annotate_page_types(
         args.input_csv,
         args.output_csv,
         read_vlm_json=args.read_vlm_json,
         use_inline_vlm=args.use_inline_vlm,
-        return_vlm_json=args.return_vlm_json, # Pass new argument
+        return_vlm_json=args.return_vlm_json,
         num_splits=args.num_splits,
         index=args.index,
+        combine_splits=args.combine_splits,
+        only_combine=args.only_combine,
+        split_output_prefix=args.split_output_prefix,
     )
 
 
