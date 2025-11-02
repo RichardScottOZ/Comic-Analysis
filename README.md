@@ -114,47 +114,50 @@ image-6.png)
 - Some newer VLMs can basically zero shot this problem to some degree, including some cheap models
 
 # NOTES
-# Gemini 4B - can do basics
+## Gemini 4B - can do basics
 - fails on some perpeptually?
 - yet to be understood why
 - perhaps look at fourier analysis?
 
-# Gemma 12B - can handle some failures of 4B
+## Gemma 12B - can handle some failures of 4B
 
-# Mistral 3.1
+## Mistral 3.1
 - character A and character B only generally but can handle gemini failures
 
-# Qwen 2.5 VL Instruct failed on same that gemini 4B did
+## Qwen 2.5 VL Instruct failed on same that gemini 4B did
 
-# Phi4 not very good
+## Phi4 not very good
 
-# Lllama 11B failed to process
+## Lllama 11B failed to process
 
-# Mistral 3.1
+## Mistral 3.1
 - character A and character B only generally but can handle gemini failures
 
-# Qwen 2.5 VL Instruct 
+## Qwen 2.5 VL Instruct 
 - failed on same that gemini 4B did
 
-# Gemini Flash 1.5 
+## Gemini Flash 1.5 
 - can do missing - some null captions and characters
 
-# Gemini Flash 2.5 flash lite
+## Gemini Flash 2.5 flash lite
 - can do missing 
 - good, but output is 8 times more expensive than gemma 4B - which could run locally
 - quite a few connection errors with google as the provider
 - on the last hardest 660 had  1/3 errors and 1/5 json errors
 
-# GPT Nano 4.1 says unsupported image type?
+## GPT Nano 4.1 says unsupported image type?
 - so not as good as google which can handle
 
-# Meta Llama 4 Scout
+## Meta Llama 4 Scout
 - much better, success on 300 out of 500 images left at the end 
 - also 0.08/0.3 compared to 0.10/0.40 for Gemini Flash Lite 2.5 - so way better
 - GMI Cloud provider big problems
 
 
 # Future Research
+- documentation/future_work
+
+## Papers
 - https://arxiv.org/abs/2503.08561
 - https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
 
