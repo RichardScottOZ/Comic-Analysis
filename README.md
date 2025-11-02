@@ -1,5 +1,24 @@
 # Comic-Analysis
 Work on looking at analysis of comics with data science
+## Repo
+Scattered work in progress being reorganised as version 1 wraps up.
+### src
+- comix
+    - The CoMix repo original code and some additions I used for testing of capability and datasets
+    - the 2000ad directory there is my versions with testing on some comics from the aforementioned due to handy quick downloads
+- calibre
+    - Updated work looking at modelling based on a 'Calibre' subset of comics - things from multiple not Amazon sources and the name references the great Digital library storage tool Calibre - also a smaller subset so good for testing
+    - Amazon = Comixology but shorter to type and less likely to make me annoyed evoking the old name and how good it was.
+
+# Closure Lite Framework
+- A multimodal fusion model to look at images, text and panel reading order.
+    - Designed to be useable on a reasonable retail GPU - so 384 dim ebeddings etc.
+
+## Data
+- Comic pages, lots of them.
+- VLM text extraction test - basically I wanted to try this ahead of general OCR - which is definitely not aimed at comics.
+
+
 
 # Relevant Research
 ## Survey
