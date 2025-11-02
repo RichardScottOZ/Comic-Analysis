@@ -97,7 +97,7 @@ The Closure Lite Framework is a multimodal fusion model designed to analyze imag
 *   Refer to the main CoMix repository.
 *   The code in `detections_2000ad` contains adaptations for inference, distinct from evaluation.
 *   Detailed functions are in `https://github.com/emanuelevivoli/CoMix/tree/main/benchmarks/detections`.
-*   **Technical Stack:** PyTorch (CUDA 11.8 recommended).
+*   **Technical Stack:** PyTorch (CUDA 11.8 recommended), transformers, xarray and zarr.
 
 ## 9. VLM Model Experiments & Possibilities
 
