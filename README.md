@@ -1,15 +1,14 @@
 # Comic-Analysis
 Work on looking at analysis of comics with data science
 
-# Survey
+# Relevant Research
+## Survey
 - One missing piece in Vision and Language: A Survey on Comics Understanding https://arxiv.org/abs/2409.09502v1
-
-Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding - https://dl.acm.org/doi/10.1007/978-3-031-70645-5_10
+- Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding - https://dl.acm.org/doi/10.1007/978-3-031-70645-5_10
 
 # Tasks of Interest
 - Dialogue transcription
 - Therefore, needs a pipeline above that can detect panels
-
 
 # Pipeline
 - See Comix repo
@@ -20,7 +19,8 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 - install pytorch as per pytorch site instructions
 - using CUDA 11.8 so far
 
-# VLMS - current generation
+# Model Possibilities
+## VLMS - current generation
 - Some newer VLMs can basically zero shot this problem to some degree, including some cheap models
 
 # NOTES
@@ -39,7 +39,6 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 # Phi4 not very good
 
 # Lllama 11B failed to process
-
 
 # Mistral 3.1
 - character A and character B only generally but can handle gemini failures
@@ -73,9 +72,39 @@ Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding
 
 - A Deep Learning Pipeline for the Synthesis of Graphic Novels - https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
 
-# TODO
+# Basic Process
+
+Find comics
+- amazon
+- dark horse
+- calibre [humble bundle, drive thru etc.] 
+- TODO; neon ichigan scraping? new humble bundle 
+    - deal with duplicate comics - no point having two copies in embeddings
+
+Convert to pages - from pdf/cbz etc.
+
+Use VLMS to get panel text for each page
+
+Use Fast-RCNN to get panel boxes and coords
+
+Join together into DataSpec for modelling
+- coco_to_dataspec
+
+Make perfect match subset for training properly
+- \train_with_perfect_matches_parallel.py 
+
+Train model
+- users closure_lite_dataset - closure_lite_simple_framework - train_closure_lite_simple
+- original version on github
+- updated version here in copilot vscode
+
+Embeddings
 - Run model to make embeddings
-- Make sure text is as close to right panels as we can
+
+## Perfect Match Notes
+
+- Make sure text is as close to right panels as we can - same number from rcnn and vlm
+    - Train with this dataset
 - We got 25% alignment betwen fast-rcnn and various vlm runs - so need to work out what is best and affordable there
     - do we need to ocr fast rcnn
 - Consider cover identification by embedding
