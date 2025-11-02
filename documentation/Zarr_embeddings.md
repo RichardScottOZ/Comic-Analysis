@@ -152,3 +152,106 @@ This fix resolves:
 - Data loss risk from incomplete writes on crashes
 - Inability to verify embedding quality during generation
 - Problems with incremental mode not finding "existing" pages that were written but not flushed
+
+
+# Generate Embeddings Zarr - Technical Notes
+
+## Critical Discovery: DirectoryStore Write Visibility
+
+**IMPORTANT**: When using Zarr's DirectoryStore (which we use), writes from an open zarr group may NOT be immediately visible to other processes or even other dataset instances opened in the same process until the writing group is closed.
+
+### What This Means
+
+1. **During generation**: While `generate_embeddings_zarr_claude.py` is running with an open zarr group, running `print_page_summaries.py` in another terminal may show:
+   - Zero/empty data
+   - Only partial data
+   - Stale data from before the current run started
+
+2. **After generation completes**: Once `generate_embeddings_zarr_claude.py` finishes and closes the zarr group (script exits), the data becomes fully visible to new readers.
+
+3. **DirectoryStore has no flush**: Unlike some other zarr storage backends, DirectoryStore doesn't have a `sync()` or `flush()` method. Writes go to individual chunk files, but filesystem caching and zarr's internal buffering mean they may not be readable by other processes immediately.
+
+### The "[FLUSH]" Messages
+
+The script prints messages like:
+```
+[FLUSH] Synchronized zarr to disk after batch 10
+```
+
+However, for DirectoryStore, this message is misleading - there's no actual flush operation happening. The code attempts to call `zgroup.store.sync()` but DirectoryStore doesn't have this method, so the call is silently skipped in the exception handler.
+
+### What's Actually Happening
+
+The data IS being written to the zarr arrays in memory within the script's zarr group instance. When the script completes and the zarr group is closed (garbage collected or explicitly closed), all writes are finalized to disk and become visible.
+
+## How to Verify Progress
+
+### DON'T Do This During Generation
+```bash
+# This will show stale/zero data while generation is running!
+python tools\print_page_summaries.py --zarr "E:\calibre3\combined_embeddings.zarr"
+```
+
+### DO This Instead
+
+1. **Check the generator's own output**: The script prints per-page stats like:
+   ```
+   [PAGE] json=image-069.json page_id=... idx=15752 mask_sum=8 emb_l2=1.3445
+   ```
+   If you see non-zero `mask_sum` and `emb_l2` values, the data is being generated correctly.
+
+2. **Wait for completion**: Let the script finish completely. After it exits, THEN run print_page_summaries.
+
+3. **Check the verify log**: If running with `--verify_batches`, check the verification log for pre/post write norms.
+
+## Resuming After Crashes
+
+If generation crashes partway through (e.g., at batch 202 out of 9938), you can resume:
+
+```bash
+python benchmarks/detections/openrouter/generate_embeddings_zarr_claude.py \
+    --checkpoint "path\to\best_checkpoint.pth" \
+    --amazon_json_list .\perfect_match_training\calibre3_dataspec_list.txt \
+    --amazon_image_root "E:\CalibreComics_extracted" \
+    --output_dir "E:\calibre3" \
+    --batch_size 8 \
+    --device auto \
+    --incremental \
+    --ledger_path "E:\calibre3\page_id_ledger.jsonl"
+```
+
+The `--incremental` flag tells the script to:
+1. Open the existing zarr dataset
+2. Load the ledger (or build it from existing data)
+3. Skip pages that were already written
+4. Continue with unprocessed pages
+
+**Important**: Due to the batch-level writing (10 batches at a time), if you crash during batch 205, batches 200-204 may have been written to the in-memory zarr group but not yet visible on disk. The incremental logic will start checking from batch 0, skip all completed work up through the last fully flushed batch (~batch 200), and then may re-process batches 200-205. This is wasteful but safe - it won't corrupt data, just redo a bit of work.
+
+## Why This Design?
+
+The batch-level flushing (every 10 batches) is a performance optimization. Writing to zarr on every single page would be extremely slow. By buffering 10 batches worth of writes and then attempting a flush, we balance:
+- Performance: Fewer disk operations
+- Crash safety: At most 10 batches worth of work is lost
+- Data integrity: Writes are atomic at the batch level
+
+## Zero Out Strategy
+
+The script includes a critical fix: before writing new panel data to a page index, it zeros out all 12 panel slots:
+
+```python
+# Zero out all panel data for this page_index
+zgroup['panel_embeddings'][page_index, :, :] = 0
+zgroup['attention_weights'][page_index, :] = 0
+# ... etc
+```
+
+This prevents a subtle bug: if you previously wrote a page with 10 panels, then later write the same page with only 6 panels, without zeroing first the old panels 6-9 would remain as stale data.
+
+## Expected Behavior Summary
+
+✅ **Correct**: Script shows non-zero l2 norms and mask sums in its own output  
+✅ **Correct**: After script completes, print_page_summaries shows the data  
+❌ **Wrong/Confusing**: Trying to read the zarr with another script WHILE generation is running  
+
+The key insight is that zarr DirectoryStore doesn't provide cross-process read-while-write consistency. This is a known limitation of the DirectoryStore backend.
