@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filtered Similarity Search</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        .step-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .step-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #34495e;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .results-container {
+            margin-top: 30px;
+        }
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .result-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        .result-card img {
+            width: 100%;
+            height: 350px;
+            object-fit: contain;
+            background: #f8f9fa;
+        }
+        .result-card .info {
+            padding: 15px;
+        }
+        .result-card .title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .result-card .similarity {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .stats {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        .query-options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .query-option {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .query-option:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+        .query-option.selected {
+            border-color: #667eea;
+            background: #e8f4f8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Filtered Similarity Search</h1>
+        <p class="subtitle">First filter pages, then find similar pages within that subset</p>
+
+        <!-- Step 1: Filter Pages -->
+        <div class="step-container" id="step1">
+            <div class="step-title">Step 1: Filter Pages</div>
+            
+            <div class="form-group">
+                <label for="dataset">Select Dataset:</label>
+                <select id="dataset" name="dataset">
+                    {% for key, info in datasets.items() %}
+                        {% if info.available %}
+                        <option value="{{ key }}" {% if key == default_dataset %}selected{% endif %}>
+                            {{ info.name }}
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="filter_type">Filter By:</label>
+                <select id="filter_type" name="filter_type">
+                    <option value="page_id">Page ID (partial match)</option>
+                    <option value="text">Text Content (keyword search)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="filter_query">Search Query:</label>
+                <input type="text" id="filter_query" name="filter_query" 
+                       placeholder="e.g., 'vampirella' or 'motorbike'" required>
+            </div>
+
+            <div class="info-box">
+                <strong>💡 Tip:</strong> This will search across all pages and return matches. 
+                You can then perform similarity search within these filtered results.
+            </div>
+
+            <button onclick="filterPages()">🔎 Filter Pages</button>
+        </div>
+
+        <!-- Loading indicator for Step 1 -->
+        <div id="loading1" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Filtering pages...</p>
+        </div>
+
+        <!-- Filtered Results Display -->
+        <div id="filtered-results" class="hidden">
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="match-count">0</div>
+                    <div class="stat-label">Pages Found</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="dataset-display">-</div>
+                    <div class="stat-label">Dataset</div>
+                </div>
+            </div>
+
+            <div class="results-container">
+                <h3>Filtered Pages (click to view):</h3>
+                <div class="results-grid" id="filtered-grid"></div>
+            </div>
+        </div>
+
+        <!-- Step 2: Similarity Search within Filtered Set -->
+        <div class="step-container hidden" id="step2">
+            <div class="step-title">Step 2: Find Similar Pages (within filtered set)</div>
+            
+            <div class="form-group">
+                <label>Choose Query Method:</label>
+                <div class="query-options">
+                    <div class="query-option selected" onclick="selectQueryMethod('page')" id="query-page">
+                        📄 Select a Page<br>
+                        <small>Click a page above</small>
+                    </div>
+                    <div class="query-option" onclick="selectQueryMethod('text')" id="query-text">
+                        ✍️ Text Query<br>
+                        <small>Semantic search</small>
+                    </div>
+                </div>
+            </div>
+
+            <div id="text-query-input" class="form-group hidden">
+                <label for="similarity_query">Text Query:</label>
+                <input type="text" id="similarity_query" name="similarity_query" 
+                       placeholder="e.g., 'superhero flying through space'">
+            </div>
+
+            <div class="info-box" id="query-info">
+                <strong>Selected:</strong> <span id="selected-page-display">None - click a page above to use as query</span>
+            </div>
+
+            <div class="warning-box" id="small-set-warning" class="hidden">
+                <strong>⚠️ Note:</strong> Filtered set has fewer than 12 pages. 
+                Similarity search will return all available matches.
+            </div>
+
+            <button onclick="performSimilaritySearch()" id="similarity-btn" disabled>
+                🔍 Find Similar Pages
+            </button>
+        </div>
+
+        <!-- Loading indicator for Step 2 -->
+        <div id="loading2" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Finding similar pages...</p>
+        </div>
+
+        <!-- Similarity Results Display -->
+        <div id="similarity-results" class="hidden">
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="similar-count">0</div>
+                    <div class="stat-label">Similar Pages</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="filtered-from">0</div>
+                    <div class="stat-label">From Filtered Set</div>
+                </div>
+            </div>
+
+            <div class="results-container">
+                <h3>Most Similar Pages:</h3>
+                <div class="results-grid" id="similarity-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let filteredIndices = [];
+        let selectedPagePath = null;
+        let currentQueryMethod = 'page';
+        let currentDataset = '{{ default_dataset }}';
+
+        function selectQueryMethod(method) {
+            currentQueryMethod = method;
+            
+            // Update UI
+            document.querySelectorAll('.query-option').forEach(opt => {
+                opt.classList.remove('selected');
+            });
+            document.getElementById(`query-${method}`).classList.add('selected');
+            
+            // Show/hide text input
+            if (method === 'text') {
+                document.getElementById('text-query-input').classList.remove('hidden');
+                document.getElementById('query-info').classList.add('hidden');
+            } else {
+                document.getElementById('text-query-input').classList.add('hidden');
+                document.getElementById('query-info').classList.remove('hidden');
+            }
+            
+            // Enable button if appropriate
+            updateSimilarityButton();
+        }
+
+        function updateSimilarityButton() {
+            const btn = document.getElementById('similarity-btn');
+            if (currentQueryMethod === 'page' && selectedPagePath) {
+                btn.disabled = false;
+            } else if (currentQueryMethod === 'text' && document.getElementById('similarity_query').value) {
+                btn.disabled = false;
+            } else {
+                btn.disabled = true;
+            }
+        }
+
+        // Enable button when text is typed
+        document.getElementById('similarity_query').addEventListener('input', updateSimilarityButton);
+
+        async function filterPages() {
+            const filterType = document.getElementById('filter_type').value;
+            const filterQuery = document.getElementById('filter_query').value;
+            currentDataset = document.getElementById('dataset').value;
+
+            if (!filterQuery.trim()) {
+                alert('Please enter a search query');
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loading1').classList.remove('hidden');
+            document.getElementById('filtered-results').classList.add('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('similarity-results').classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('filter_type', filterType);
+            formData.append('filter_query', filterQuery);
+            formData.append('dataset', currentDataset);
+
+            try {
+                const response = await fetch('/filter', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                // Store filtered indices
+                filteredIndices = data.results.map(r => r.index);
+
+                // Update display
+                document.getElementById('match-count').textContent = data.total_matches;
+                document.getElementById('dataset-display').textContent = data.dataset_name.split(' ')[0];
+
+                // Display filtered results
+                displayFilteredResults(data.results);
+
+                // Show step 2
+                document.getElementById('step2').classList.remove('hidden');
+
+                // Show warning if small set
+                if (data.total_matches < 12) {
+                    document.getElementById('small-set-warning').classList.remove('hidden');
+                } else {
+                    document.getElementById('small-set-warning').classList.add('hidden');
+                }
+
+            } catch (error) {
+                alert('Error filtering pages: ' + error);
+                console.error(error);
+            } finally {
+                document.getElementById('loading1').classList.add('hidden');
+                document.getElementById('filtered-results').classList.remove('hidden');
+            }
+        }
+
+        function displayFilteredResults(results) {
+            const grid = document.getElementById('filtered-grid');
+            grid.innerHTML = '';
+
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                card.onclick = () => selectPageForQuery(result.manifest_path);
+
+                const img = result.image_url ? 
+                    `<img src="${result.image_url}" alt="Page" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'200\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'200\\' height=\\'200\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'%23999\\'%3ENo Image%3C/text%3E%3C/svg%3E'">` :
+                    `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999'%3ENo Image%3C/text%3E%3C/svg%3E" alt="No image">`;
+
+                const basename = result.manifest_basename || result.page_id || 'Unknown';
+
+                card.innerHTML = `
+                    ${img}
+                    <div class="info">
+                        <div class="title" title="${basename}">${basename}</div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        function selectPageForQuery(manifestPath) {
+            if (currentQueryMethod !== 'page') return;
+            
+            selectedPagePath = manifestPath;
+            document.getElementById('selected-page-display').textContent = 
+                manifestPath.split('\\').pop() || manifestPath.split('/').pop();
+            
+            // Highlight selected card
+            document.querySelectorAll('.result-card').forEach(card => {
+                card.style.border = '2px solid #e0e0e0';
+            });
+            event.currentTarget.style.border = '3px solid #667eea';
+            
+            updateSimilarityButton();
+        }
+
+        async function performSimilaritySearch() {
+            if (filteredIndices.length === 0) {
+                alert('No filtered pages to search within');
+                return;
+            }
+
+            let queryData = null;
+            let querySource = null;
+
+            if (currentQueryMethod === 'page') {
+                if (!selectedPagePath) {
+                    alert('Please select a page to use as query');
+                    return;
+                }
+                queryData = selectedPagePath;
+                querySource = 'page_id';
+            } else if (currentQueryMethod === 'text') {
+                queryData = document.getElementById('similarity_query').value;
+                if (!queryData.trim()) {
+                    alert('Please enter a text query');
+                    return;
+                }
+                querySource = 'text';
+            }
+
+            // Show loading
+            document.getElementById('loading2').classList.remove('hidden');
+            document.getElementById('similarity-results').classList.add('hidden');
+
+            try {
+                const response = await fetch('/similarity_search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filtered_indices: filteredIndices,
+                        query_source: querySource,
+                        query_data: queryData,
+                        dataset: currentDataset,
+                        top_k: 12
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                // Update display
+                document.getElementById('similar-count').textContent = data.total_results;
+                document.getElementById('filtered-from').textContent = data.total_filtered;
+
+                // Display similarity results
+                displaySimilarityResults(data.results);
+
+            } catch (error) {
+                alert('Error performing similarity search: ' + error);
+                console.error(error);
+            } finally {
+                document.getElementById('loading2').classList.add('hidden');
+                document.getElementById('similarity-results').classList.remove('hidden');
+            }
+        }
+
+        function displaySimilarityResults(results) {
+            const grid = document.getElementById('similarity-grid');
+            grid.innerHTML = '';
+
+            results.forEach(result => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+
+                const img = result.image_url ? 
+                    `<img src="${result.image_url}" alt="Page" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'200\\'%3E%3Crect fill=\\'%23ddd\\' width=\\'200\\' height=\\'200\\'/%3E%3Ctext x=\\'50%25\\' y=\\'50%25\\' text-anchor=\\'middle\\' dy=\\'.3em\\' fill=\\'%23999\\'%3ENo Image%3C/text%3E%3C/svg%3E'">` :
+                    `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Crect fill='%23ddd' width='200' height='200'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23999'%3ENo Image%3C/text%3E%3C/svg%3E" alt="No image">`;
+
+                const basename = result.manifest_basename || result.page_id || 'Unknown';
+                const similarity = (result.similarity * 100).toFixed(1);
+
+                card.innerHTML = `
+                    ${img}
+                    <div class="info">
+                        <div class="title" title="${basename}">${basename}</div>
+                        <div class="similarity">Similarity: ${similarity}%</div>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
