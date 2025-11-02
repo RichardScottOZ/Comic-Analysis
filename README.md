@@ -63,6 +63,10 @@ Query
 
 # Results
 - From 80K calibre perfect match subset using the context-denoise option
+## Panel Similarity
+- On the subset of one page, an early model trained on ragtag amazon data showed this:
+![alt text](image-1.png)
+- Model cuts things off at 12 panels and this grid allowed 12 to be shown in the demo, so you can see 2 and 7 and 5 and 6 somewhat alike.
 
 # Relevant Research
 ## Survey
