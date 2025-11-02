@@ -27,7 +27,7 @@ scikit-learn
 pyarrow
 
 # Image I/O & processing
-Pillow
+pillow
 opencv-python
 zarr
 xarray
@@ -36,9 +36,9 @@ xarray
 timm
 
 # Server / web UI
-Flask
-Werkzeug
-Jinja2
+flask
+werkzeug
+jinja2
 requests
 
 # Utilities / tooling
