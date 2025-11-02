@@ -130,6 +130,7 @@ Option A: Batch Processing Script
 
 ## CoSMo
 - https://github.com/mserra0/CoSMo-ComicsPS
+    - arXiv paper link there
 - Model designed to do this
     - Uses Qwen 2.5 VL 32B for OCR 
     - Which reddit seems to like a lot
