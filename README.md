@@ -76,6 +76,7 @@ The Closure Lite Framework is a multimodal fusion model designed to analyze imag
 
 ### Relevant Research
 *   **Survey:** "One missing piece in Vision and Language: A Survey on Comics Understanding" (https://arxiv.org/abs/2409.09502v1)
+    - https://huggingface.co/VLR- ComicsPap models
 *   **Neural Networks & Transformers:** "Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding" (https://dl.acm.org/doi/10.1007/978-3-031-70645-5_10)
 *   **Image Indexing:** "Digital Comics Image Indexing Based on Deep Learning" (https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning)
 *   **Synthesis of Graphic Novels:** "A Deep Learning Pipeline for the Synthesis of Graphic Novels" (https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf)
