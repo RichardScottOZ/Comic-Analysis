@@ -1,7 +1,11 @@
 # Comic-Analysis
 Work on looking at analysis of comics with data science
-## Repo
+
+## Repository overview
 - version1 - the Closure Lite Framework
+    - Aim: Ty and combine page image and vlm text to make comics for querying with panel and reading order recognition
+    - Choices: 384 dimensional 'lite' embeddings - so that a retail gpu could be used for testing 
+
 - version2 - start of work towards a new modelling framework
 
 - model file [RichardScottOZ/comics-analysis-closure-lite-simple](https://huggingface.co/RichardScottOZ/comics-analysis-closure-lite-simple)
@@ -10,9 +14,9 @@ Work on looking at analysis of comics with data science
 ### src
 - comix
     - The CoMix repo original code and some additions I used for testing of capability and datasets
-    - the 2000ad directory there is my versions with testing on some comics from the aforementioned due to handy quick downloads
+    - the 2000ad directory contains my versions with testing on some comics from the aforementioned comic due to handy quick downloads
 - version 1
-    - Updated work looking at modelling based on a 'Calibre' subset of comics - things from multiple not Amazon sources and the name references the great Digital library storage tool Calibre - also a smaller subset so good for testing
+    - Updated work looking at modelling based on a 'Calibre' subset of comics - things from multiple not Amazon sources and the name references the great Digital library storage tool [Calibre](https://calibre-ebook.com/)  - also a smaller subset so good for testing [330K vs 805K pages]
     - Amazon = Comixology but shorter to type and less likely to make me annoyed evoking the old name and how good it was.
 
 # Closure Lite Framework
