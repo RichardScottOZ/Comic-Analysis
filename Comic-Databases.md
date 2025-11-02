@@ -27,6 +27,7 @@ Research identified two premier databases suitable for this task: **Comic Vine**
     2.  **Database Dumps:** The entire database is available as bi-monthly dumps under a Creative Commons license.
 *   **Key Feature:** The availability of full database dumps is a significant advantage. For a project of this scale, loading the data into a local database (e.g., SQLite or PostgreSQL) would allow for extremely fast queries without any API rate limits.
 *   **Limitation:** The volunteer-driven nature might mean coverage is less consistent for very new or obscure indie comics compared to a commercial entity.
+* Downloadable database https://www.comics.org/download/
 
 ## 3. Comparative Analysis: Heuristic vs. VLM
 
