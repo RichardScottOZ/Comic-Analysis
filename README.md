@@ -112,18 +112,28 @@ Embeddings
     - do we need to cluster or supervise to detect - not all 1 panel pages will be covers - some will be ads
 
 ## Embeddings
- Embedding Generation Strategy:
+### Embedding Generation Strategy:
 1. What We Need to Generate:
 Panel embeddings (P) - Raw panel representations
 Page embeddings (E_page) - Aggregated page-level representations
 Reading order embeddings - For sequence understanding
 2. Dataset Coverage:
 Amazon perfect matches: 212K pages
-CalibreComics perfect matches: TBD (after processing)
+CalibreComics perfect matches: 80K
 Combined dataset: All high-quality samples
 3. Technical Approach:
 Option A: Batch Processing Script
 
 # Page Stream Segmentation
 - Needed for next version of the above
-- https://github.com/mserra0/CoSMo-ComicsPSS
+- Feed page type markers into multimodal fusion
+
+## CoSMo
+- https://github.com/mserra0/CoSMo-ComicsPS
+- Model designed to do this
+    - Uses Qwen 2.5 VL 32B for OCR 
+    - Which reddit seems to like a lot
+    - Is Gemma as good?  e.g. costs
+
+- No actual model to test
+- Need to train one
