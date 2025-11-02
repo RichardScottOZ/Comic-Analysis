@@ -1,205 +1,131 @@
-# Comic-Analysis
-Work on looking at analysis of comics with data science
+# CoMix: Comic Analysis Project Overview
 
-## Repository overview
-- version1 - the Closure Lite Framework
-    - Aim: Ty and combine page image and vlm text to make comics for querying with panel and reading order recognition
-    - Choices: 384 dimensional 'lite' embeddings - so that a retail gpu could be used for testing 
+This document outlines the ongoing work in analyzing comics using data science techniques, focusing on multimodal modeling for content understanding and querying.
 
-- version2 - start of work towards a new modelling framework
+## 1. Project Goals & Evolution
 
-- model file [RichardScottOZ/comics-analysis-closure-lite-simple](https://huggingface.co/RichardScottOZ/comics-analysis-closure-lite-simple)
-    - this is trained with train_closure_lite_with_list as a context-denoise model variant
+*   **Version 1 (Closure Lite Framework):**
+    *   **Aim:** To combine page image and VLM text for querying, with panel and reading order recognition.
+    *   **Key Choice:** Utilized 384-dimensional "lite" embeddings to allow for testing on retail GPUs.
+    *   **Model:** Based on the [RichardScottOZ/comics-analysis-closure-lite-simple](https://huggingface.co/RichardScottOZ/comics-analysis-closure-lite-simple) model, trained as a context-denoise variant.
+*   **Version 2 (Current Focus):** Initiating work towards a new, more robust modeling framework, particularly for Page Stream Segmentation.
 
-### src
-- comix
-    - The CoMix repo original code and some additions I used for testing of capability and datasets
-    - the 2000ad directory contains my versions with testing on some comics from the aforementioned comic due to handy quick downloads
-- version 1
-    - Updated work looking at modelling based on a 'Calibre' subset of comics - things from multiple not Amazon sources and the name references the great Digital library storage tool [Calibre](https://calibre-ebook.com/)  - also a smaller subset so good for testing [330K vs 805K pages]
-    - Amazon = Comixology but shorter to type and less likely to make me annoyed evoking the old name and how good it was.
+## 2. Core Framework: Closure Lite
 
-# Closure Lite Framework
-- A multimodal fusion model to look at images, text and panel reading order.
-    - Aim - get multimodal fused embeddings that would be queryable for similarity
-        - Embeddings stored in zarr works nicely for speed at size currently
-            - 80K 'perfect match subset' test takes up around 500MB on disk.
-        - See interface - with a flask ask to do that
-    - Designed to be useable on a reasonable retail GPU - so 384 dim ebeddings etc.
-    - Options
-        base, denoise, context, context-denoise
+The Closure Lite Framework is a multimodal fusion model designed to analyze images, text, and panel reading order.
 
-## Data
-- Comic pages, lots of them.
-- VLM text extraction test - basically I wanted to try this ahead of general OCR - which is definitely not aimed at comics.
+*   **Objective:** Generate multimodal fused embeddings that are queryable for similarity.
+    *   Embeddings are efficiently stored in Zarr format (e.g., 80K "perfect match subset" takes ~500MB).
+    *   An interface (Flask-based) exists for querying.
+*   **Design Principle:** Usable on a reasonable retail GPU (hence 384-dim embeddings).
+*   **Model Variants:** `base`, `denoise`, `context`, `context-denoise`.
 
-## Basic Process
-# Basic Process
+## 3. Data Sources & Preparation
 
-Find comics
-- amazon
-- dark horse
-- calibre [humble bundle, drive thru etc.] 
-- TODO; neon ichigan scraping? new humble bundle 
-    - deal with duplicate comics - no point having two copies in embeddings
+*   **Primary Data:** Comic pages from various sources (Amazon/Comixology, Dark Horse, Calibre-managed collections like Humble Bundle and DriveThruComics).
+*   **Future Data:** Exploring new Humble Bundles and potential scraping (e.g., Neon Ichigan).
+*   **Initial Processing:**
+    *   **Conversion:** Comic files (PDF, CBZ, etc.) are converted into individual page images.
+    *   **VLM Text Extraction:** Vision-Language Models (VLMs) are used to extract text from each page, preceding general OCR due to its comic-specific challenges.
+    *   **Panel Detection:** Fast-RCNN is used to detect panel bounding boxes and coordinates.
+    *   **DataSpec Integration:** All extracted data is joined into a `DataSpec` format for modeling.
+*   **Dataset Size:** Currently working with a "Calibre" subset of ~330K pages (compared to ~805K Amazon pages).
 
-Convert to pages - from pdf/cbz etc.
+## 4. Basic Workflow
 
-Use VLMS to get panel text for each page
+1.  **Find Comics:** Gather digital comic files.
+2.  **Convert to Pages:** Extract images from containers (PDF, CBZ, etc.).
+3.  **VLM Analysis:** Use VLMs to get panel text for each page.
+4.  **R-CNN Panel Detection:** Get panel bounding boxes and coordinates.
+5.  **Data Integration:** Join data into `DataSpec` (e.g., using `coco_to_dataspec`).
+6.  **Perfect Match Subset:** Create high-quality subsets for training.
+7.  **Model Training:** Train the Closure Lite model (using `closure_lite_dataset`, `closure_lite_simple_framework`, `train_closure_lite_simple_with_list`).
+8.  **Embedding Generation:** Run the trained model to generate queryable embeddings.
+9.  **Querying:** Access embeddings via code or a dedicated interface.
 
-Use Fast-RCNN to get panel boxes and coords
+## 5. Perfect Match Dataset Notes
 
-Join together into DataSpec for modelling
-- coco_to_dataspec
+*   **Goal:** Ensure text alignment with the correct panels (same number of panels from R-CNN and VLM).
+*   **Challenge:** Initial alignment between Fast-RCNN and various VLM runs was only ~25%, indicating a need to improve this step or consider alternative approaches (e.g., OCR for Fast-RCNN).
 
-Make perfect match subset for training properly
+## 6. Key Results from Closure Lite (80K Calibre Subset, Context-Denoise)
 
-Train model
-- users closure_lite_dataset - closure_lite_simple_framework - train_closure_lite_simple_with_list
-
-Embeddings
-- Run model to make embeddings
-
-Query
-- By Code or Interface
-
-## Perfect Match Notes
-
-- Make sure text is as close to right panels as we can - same number from rcnn and vlm
-    - Train with this dataset
-- We got 25% alignment betwen fast-rcnn and various vlm runs - so need to work out what is best and affordable there
-    - do we need to ocr fast rcnn
-
-# Results
-- From 80K calibre perfect match subset using the context-denoise option
-## Panel Similarity
-- On the subset of one page, an early model trained on ragtag amazon data showed this:
+### Panel Similarity
+*   An early model showed panel similarities, with the model cutting things off at 12 panels.
 ![alt text](images/image-1.png)
-- Model cuts things off at 12 panels and this grid allowed 12 to be shown in the demo, so you can see 2 and 7 and 5 and 6 somewhat alike.
-## Page Similarity
-- Looking at similarity between pages the model knows composition and structure - you can see the panel similarities here
+
+### Page Similarity
+*   The model demonstrated understanding of page composition and structure.
 ![alt text](images/image-2.png)
-- Four small vertical panels and a bigger area.
-## Clustering
-- if we look at a umap embedding of pages we get
+
+### Clustering (UMAP Embeddings)
+*   UMAP embeddings revealed distinct clusters.
 ![alt text](images/image-3.png)
+*   **Landscape Cluster:** A "ribbon cluster" was identified as a "landscape cluster" (pages with landscape orientation), which is less common in comics.
+![alt text](images/image-4.png)
+*   **Data Noise:** An adjoining part of this cluster was found to be an error, containing extracted pages from non-comic content (e.g., computing books), highlighting the need for better data filtering.
 
-- The ribbon cluster down the bottom also is joined two clusters.  The reasons are this, if you color by panel aspect ratio:
-![alt text](image-4.png)
-
-Ergo that cluster is the 'landscape cluster' - which is not that common for full comics but some pages other.  The adjoining part is an error - downloading everything from humble bundle included some computing books I have - so the page images were extracted from them and landed there too, being definitely not general portrait orientation comic-like.  So that was funny.  I did filter out a few rpg things at least.  Although this would be an interesting rpg art experiment too - but wouldn't be much text on those to need a multimodal model for.
-
-## Ablation
-- I made a version that zeros out all the embeddings but the image part - clustering these looked like this:
+### Ablation Study (Vision-Only Embeddings)
+*   Clustering of vision-only embeddings showed distinct patterns.
 ![alt text](images/image-5.png)
+*   **Cluster 8:** Identified as "all single panel very dark images" and "heavy text one page images," with a few multi-panel pages. A disconnected group of "all white images" formed a monochromatic sub-cluster.
+*   **Aspect Ratios:** Vision-only clustering also picked out significant differences in panel aspect ratios.
+![alt text](images/image-6.png)
 
-- The 8 cluster down the bottom is 'all single panel very dark images' - and 'heavy text one page images' with a few multi-panel in there that are similar.  Off to the right with a break is a group of 'all white images' - so a monochromatic cluster.
+## 7. Relevant Research & Future Tasks
 
-- Again you can pick out aspect ratios that are quite different.
+### Relevant Research
+*   **Survey:** "One missing piece in Vision and Language: A Survey on Comics Understanding" (https://arxiv.org/abs/2409.09502v1)
+*   **Neural Networks & Transformers:** "Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding" (https://dl.acm.org/doi/10.1007/978-3-031-70645-5_10)
+*   **Image Indexing:** "Digital Comics Image Indexing Based on Deep Learning" (https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning)
+*   **Synthesis of Graphic Novels:** "A Deep Learning Pipeline for the Synthesis of Graphic Novels" (https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf)
 
-![alt text](images/
-image-6.png)
+### Tasks of Interest
+*   Dialogue transcription, which necessitates a robust panel detection pipeline.
 
-# Relevant Research
-## Survey
-- One missing piece in Vision and Language: A Survey on Comics Understanding https://arxiv.org/abs/2409.09502v1
-- Investigating Neural Networks and Transformer Models for Enhanced Comic Decoding - https://dl.acm.org/doi/10.1007/978-3-031-70645-5_10
+## 8. Pipeline Details
 
-# Tasks of Interest
-- Dialogue transcription
-- Therefore, needs a pipeline above that can detect panels
+*   Refer to the main CoMix repository.
+*   The code in `detections_2000ad` contains adaptations for inference, distinct from evaluation.
+*   Detailed functions are in `https://github.com/emanuelevivoli/CoMix/tree/main/benchmarks/detections`.
+*   **Technical Stack:** PyTorch (CUDA 11.8 recommended).
 
-# Pipeline
-- See Comix repo
-- the code in detections_2000ad are adaptations of the similarly named functions in CoMix/detections to just be inference and not worry about evaluations of models
-- https://github.com/emanuelevivoli/CoMix/tree/main/benchmarks/detections
-- refer there for details, but basically
+## 9. VLM Model Experiments & Possibilities
 
-- install pytorch as per pytorch site instructions
-- using CUDA 11.8 so far
+Extensive testing has been conducted with various Vision-Language Models for text extraction and analysis:
 
-# Model Possibilities
-## VLMS - current generation
-- Some newer VLMs can basically zero shot this problem to some degree, including some cheap models
+*   **Gemini 4B:** Handles basics, but fails on some perpetually (reason yet to be understood; Fourier analysis suggested).
+*   **Gemma 12B:** Can handle some failures of Gemini 4B.
+*   **Mistral 3.1:** Generally identifies "character A and character B," can handle Gemini failures.
+*   **Qwen 2.5 VL Instruct:** Failed on the same cases as Gemini 4B.
+*   **Phi4:** Not very good.
+*   **Llama 11B:** Failed to process.
+*   **Gemini Flash 1.5:** Capable of handling missing/null captions and characters.
+*   **Gemini Flash 2.5 Lite:** Good performance, but 8x more expensive than Gemma 4B (which can run locally). Experienced quite a few connection errors with Google. On the hardest 660 samples, had 1/3 errors and 1/5 JSON errors.
+*   **GPT Nano 4.1:** Reported "unsupported image type," indicating lower capability than Google's models.
+*   **Meta Llama 4 Scout:** Much better, with 300/500 success on remaining images, and better cost efficiency (0.08/0.3 vs 0.10/0.40 for Gemini Flash Lite 2.5). However, encountered significant problems with the GMI Cloud provider.
 
-# NOTES
-## Gemini 4B - can do basics
-- fails on some perpeptually?
-- yet to be understood why
-- perhaps look at fourier analysis?
+## 10. Embeddings Generation Strategy
 
-## Gemma 12B - can handle some failures of 4B
+*   **To Generate:** Panel embeddings (P), Page embeddings (E_page), Reading order embeddings.
+*   **Dataset Coverage:** Amazon perfect matches (212K pages), CalibreComics perfect matches (80K), and a combined dataset of all high-quality samples.
+*   **Technical Approach:** Batch Processing Script.
 
-## Mistral 3.1
-- character A and character B only generally but can handle gemini failures
+## 11. Page Stream Segmentation (PSS) & CoSMo
 
-## Qwen 2.5 VL Instruct failed on same that gemini 4B did
+*   **Importance:** PSS is crucial for the next version of the project, feeding page type markers into multimodal fusion.
+*   **CoSMo Model:**
+    *   [GitHub Repository](https://github.com/mserra0/CoSMo-ComicsPSS) (includes arXiv paper link).
+    *   Specifically designed for PSS.
+    *   Uses Qwen 2.5 VL 32B for OCR.
+    *   **Consideration:** Is Gemma as good/cost-effective for OCR?
+    *   **Current Status:** No pre-trained model available for direct testing; requires training a new one.
 
-## Phi4 not very good
+## 12. Future Research
 
-## Lllama 11B failed to process
-
-## Mistral 3.1
-- character A and character B only generally but can handle gemini failures
-
-## Qwen 2.5 VL Instruct 
-- failed on same that gemini 4B did
-
-## Gemini Flash 1.5 
-- can do missing - some null captions and characters
-
-## Gemini Flash 2.5 flash lite
-- can do missing 
-- good, but output is 8 times more expensive than gemma 4B - which could run locally
-- quite a few connection errors with google as the provider
-- on the last hardest 660 had  1/3 errors and 1/5 json errors
-
-## GPT Nano 4.1 says unsupported image type?
-- so not as good as google which can handle
-
-## Meta Llama 4 Scout
-- much better, success on 300 out of 500 images left at the end 
-- also 0.08/0.3 compared to 0.10/0.40 for Gemini Flash Lite 2.5 - so way better
-- GMI Cloud provider big problems
-
-
-# Future Research
-[Future work](documentation/future_work/)
-
-
-## Papers
-- https://arxiv.org/abs/2503.08561
-- https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
-
-- https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
-
-- A Deep Learning Pipeline for the Synthesis of Graphic Novels - https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
-
-
-## Embeddings
-### Embedding Generation Strategy:
-- 1. What We Need to Generate:
-Panel embeddings (P) - Raw panel representations
-Page embeddings (E_page) - Aggregated page-level representations
-Reading order embeddings - For sequence understanding
-- 2. Dataset Coverage:
-Amazon perfect matches: 212K pages
-CalibreComics perfect matches: 80K
-Combined dataset: All high-quality samples
-- 3. Technical Approach:
-Option A: Batch Processing Script
-
-# Page Stream Segmentation
-- Needed for next version of the above
-- Feed page type markers into multimodal fusion
-
-## CoSMo
-- https://github.com/mserra0/CoSMo-ComicsPS
-    - arXiv paper link there
-- Model designed to do this
-    - Uses Qwen 2.5 VL 32B for OCR 
-    - Which reddit seems to like a lot
-    - Is Gemma as good?  e.g. costs
-
-- No actual model to test
-- Need to train one
+*   Refer to `documentation/future_work/`.
+*   **Papers:**
+    *   https://arxiv.org/abs/2503.08561
+    *   https://www.researchgate.net/publication/389748978_ComicsPAP_understanding_comic_strips_by_picking_the_correct_panel?_tp=eyJjb250ZXh0Ijp7ImZpcnN0UGFnZSI6InB1YmxpY2F0aW9uIiwicGFnZSI6InB1YmxpY2F0aW9uIn19
+    *   https://www.researchgate.net/publication/326137469_Digital_Comics_Image_Indexing_Based_on_Deep_Learning
+    *   https://computationalcreativity.net/iccc21/wp-content/uploads/2021/09/ICCC_2021_paper_52.pdf
