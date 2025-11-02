@@ -1,0 +1,63 @@
+# Distilled minimal requirements for CoMix (hand-curated from piplist.txt)
+# Purpose: small, pragmatic set that covers model inference, embedding/search, web UI and data handling.
+# Install torque/torch separately if you need a specific CUDA build (see notes below).
+
+# Core ML / embeddings
+torch
+torchvision
+torchaudio
+transformers
+huggingface-hub
+accelerate
+safetensors
+tokenizers
+peft
+
+# Datasets / indexing / similarity
+datasets
+faiss-cpu  # optional: replace with faiss-gpu if you have CUDA and want faster nearest-neighbor
+pynndescent
+umap-learn
+
+# Numeric / data
+numpy
+pandas
+scipy
+scikit-learn
+pyarrow
+
+# Image I/O & processing
+Pillow
+opencv-python
+zarr
+xarray
+
+# Vision / model helpers
+timm
+
+# Server / web UI
+Flask
+Werkzeug
+Jinja2
+requests
+
+# Utilities / tooling
+tqdm
+matplotlib
+seaborn
+wandb  # optional
+
+# Other useful packages
+pycocotools
+beautifulsoup4
+lxml
+sentencepiece
+
+# Notes:
+# - On Windows, install the correct torch+cuda wheel first using the PyTorch install selector
+#   (https://pytorch.org/get-started/locally/) then run: python -m pip install -r distillist.txt
+# - If you don't need GPU, use the cpu-only torch wheel or omit torchaudio/torchvision as needed.
+# - "faiss-cpu" is suggested for CPU-based nearest-neighbor search; replace with "faiss-gpu" if
+#   you plan to run on GPU and have the matching CUDA runtime.
+# - This is a compact starter list; if you want I can produce a trimmed "runtime-only" list or add
+#   pinned versions for reproducibility.
