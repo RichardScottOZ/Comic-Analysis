@@ -240,6 +240,7 @@ Query
  ]
  }
 }
+```
 
 # Relevant Research
 ## Survey
