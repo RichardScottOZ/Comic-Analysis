@@ -71,6 +71,24 @@ Query
 - Looking at similarity between pages the model knows composition and structure - you can see the panel similarities here
 ![alt text](image-2.png)
 - Four small vertical panels and a bigger area.
+## Clustering
+- if we look at a umap embedding of pages we get
+![alt text](image-3.png)
+
+- The ribbon cluster down the bottom also is joined two clusters.  The reasons are this, if you color by panel aspect ratio:
+![alt text](image-4.png)
+
+Ergo that cluster is the 'landscape cluster' - which is not that common for full comics but some pages other.  The adjoining part is an error - downloading everything from humble bundle included some computing books I have - so the page images were extracted from them and landed there too, being definitely not general portrait orientation comic-like.  So that was funny.  I did filter out a few rpg things at least.  Although this would be an interesting rpg art experiment too - but wouldn't be much text on those to need a multimodal model for.
+
+## Ablation
+- I made a version that zeros out all the embeddings but the image part - clustering these looked like this:
+![alt text](image-5.png)
+
+- The 8 cluster down the bottom is 'all single panel very dark images' - and 'heavy text one page images' with a few multi-panel in there that are similar.  Off to the right with a break is a group of 'all white images' - so a monochromatic cluster.
+
+- Again you can pick out aspect ratios that are quite different.
+
+![alt text](image-6.png)
 
 # Relevant Research
 ## Survey
