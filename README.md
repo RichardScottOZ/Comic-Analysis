@@ -121,6 +121,9 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 *   **Dataset Coverage:** Amazon perfect matches (212K pages), CalibreComics perfect matches (80K), and a combined dataset of all high-quality samples.
 *   **Technical Approach:** Batch Processing Script.
 
+## 11. Domain capability
+* **Humble Bundle:** If you download everything you will get your book and rpg collections too - which can happily go through pdf and epub extractions and end up with images.
+- Framework handled this, the 'deep learning / linux / programming' book images clusters as their own small part connected to a ribbon, so not ideal to include but a useful result.  So what if you put rpg art in?  Lots of single page 'panels' obtained most likely - and would cluster in the 'no/low test text' UMAP sections
 
 ## 12. Future Research
 
