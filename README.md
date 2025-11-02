@@ -4,6 +4,9 @@ Work on looking at analysis of comics with data science
 - version1 - the Closure Lite Framework
 - version2 - start of work towards a new modelling framework
 
+- model file [RichardScottOZ/comics-analysis-closure-lite-simple](https://huggingface.co/RichardScottOZ/comics-analysis-closure-lite-simple)
+    - this is trained with train_closure_lite_with_list as a context-denoise model variant
+
 ### src
 - comix
     - The CoMix repo original code and some additions I used for testing of capability and datasets
