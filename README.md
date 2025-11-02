@@ -1,12 +1,14 @@
 # Comic-Analysis
 Work on looking at analysis of comics with data science
 ## Repo
-Scattered work in progress being reorganised as version 1 wraps up.
+- version1 - the Closure Lite Framework
+- version2 - start of work towards a new modelling framework
+
 ### src
 - comix
     - The CoMix repo original code and some additions I used for testing of capability and datasets
     - the 2000ad directory there is my versions with testing on some comics from the aforementioned due to handy quick downloads
-- calibre
+- version 1
     - Updated work looking at modelling based on a 'Calibre' subset of comics - things from multiple not Amazon sources and the name references the great Digital library storage tool Calibre - also a smaller subset so good for testing
     - Amazon = Comixology but shorter to type and less likely to make me annoyed evoking the old name and how good it was.
 
