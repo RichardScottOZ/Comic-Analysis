@@ -136,7 +136,7 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 - Cover, credits and indicia, splash, cover interior for trades, back matter text, back matter art, previews etc.
 
 #### a. Zero shot classification
-- Trying bart for the above
+- Trying bart for the above as have many VLM json files with some signal of what pages might include in 'overall summary' for example.
 
 #### b. Page Stream Segmentation (PSS) & CoSMo
 
