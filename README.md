@@ -121,7 +121,21 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 *   **Dataset Coverage:** Amazon perfect matches (212K pages), CalibreComics perfect matches (80K), and a combined dataset of all high-quality samples.
 *   **Technical Approach:** Batch Processing Script.
 
-## 11. Page Stream Segmentation (PSS) & CoSMo
+
+## 12. Future Research
+
+*   Refer to `documentation/future_work/`.
+
+## version 2
+
+### 1. Paratext
+- Need to work out comic classes inside a comic that will work for 'modern comics' as opposed to old public domain comics
+- Cover, credits and indicia, splash, cover interior for trades, back matter text, back matter art, previews etc.
+
+#### a. Zero shot classification
+- Trying bart for the above
+
+#### b. Page Stream Segmentation (PSS) & CoSMo
 
 *   **Importance:** PSS is crucial for the next version of the project, feeding page type markers into multimodal fusion.
 *   **CoSMo Model:**
@@ -131,6 +145,3 @@ Extensive testing has been conducted with various Vision-Language Models for tex
     *   **Consideration:** Is Gemma as good/cost-effective for OCR?
     *   **Current Status:** No pre-trained model available for direct testing; requires training a new one.
 
-## 12. Future Research
-
-*   Refer to `documentation/future_work/`.
