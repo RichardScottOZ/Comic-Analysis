@@ -129,7 +129,7 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 
 *   Refer to [documentation/future_work/](https://github.com/RichardScottOZ/Comic-Analysis/tree/main/documentation/future_work).
 
-## version 2
+## Version 2
 
 ### 1. Paratext
 - Need to work out comic classes inside a comic that will work for 'modern comics' as opposed to old public domain comics
