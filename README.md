@@ -17,6 +17,8 @@ Scattered work in progress being reorganised as version 1 wraps up.
             - 80K 'perfect match subset' test takes up around 500MB on disk.
         - See interface - with a flask ask to do that
     - Designed to be useable on a reasonable retail GPU - so 384 dim ebeddings etc.
+    - Options
+        base, denoise, context, context-denoise
 
 ## Data
 - Comic pages, lots of them.
@@ -59,6 +61,8 @@ Query
 - We got 25% alignment betwen fast-rcnn and various vlm runs - so need to work out what is best and affordable there
     - do we need to ocr fast rcnn
 
+# Results
+- From 80K calibre perfect match subset using the context-denoise option
 
 
 
