@@ -1,6 +1,6 @@
 
 - vlm extraction example
-![alt text](image.png)
+![alt text](images/image.png)
 ```json
 {
  "overall_summary": "The comic page depicts a character's escape from a dystopian setting, symbolized by a futuristic cityscape and a nuclear warning sign. The character experiences a mix of freedom and uncertainty as they leave behind their past and contemplate their future.",
@@ -176,3 +176,4 @@
  }
 }
 ```
+
