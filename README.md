@@ -151,3 +151,8 @@ Extensive testing has been conducted with various Vision-Language Models for tex
     *   **Consideration:** Is Gemma as good/cost-effective for OCR?
     *   **Current Status:** No pre-trained model available for direct testing; requires training a new one.
 
+#### 2. OCR
+- Needed for everything - page / panel / characters
+- Discussion on Deepseek OCR references Qwen here too: https://news.ycombinator.com/item?id=43549072
+
+
