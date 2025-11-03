@@ -154,5 +154,7 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 #### 2. OCR
 - Needed for everything - page / panel / characters
 - Discussion on Deepseek OCR references Qwen here too: https://news.ycombinator.com/item?id=43549072
+    - note bounding box commentary
+    - also https://pyimagesearch.com/2025/06/09/object-detection-and-visual-grounding-with-qwen-2-5/
 
 
