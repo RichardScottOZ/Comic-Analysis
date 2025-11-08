@@ -137,6 +137,13 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 ### 1. Paratext
 - Need to work out comic classes inside a comic that will work for 'modern comics' as opposed to old public domain comics
 - Cover, credits and indicia, splash, cover interior for trades, back matter text, back matter art, previews etc.
+#### Problems
+- single issues
+- trade paperbacks
+- omnibuses, collections that are larger
+- anthologies  - art/narrative changes 'inside' a comic - e.g. 2000AD
+    - anthologies inside omnibuses
+
 
 #### a. Zero shot classification
 - Trying bart for the above as have many VLM json files with some signal of what pages might include in 'overall summary' for example.
