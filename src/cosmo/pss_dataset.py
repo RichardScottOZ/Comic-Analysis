@@ -1,13 +1,15 @@
 import torch
 from torch.utils.data import Dataset
 import json
-from PIL import Image
+from PIL import Image, ImageFile
 import os
 import tqdm
 import random 
 import copy  
 import numpy as np
 import cv2
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class PSSDataset(Dataset):
     
@@ -210,36 +212,21 @@ class PSSDataset(Dataset):
         
     def _get_page_labels(self, book_data, num_pages, image_files=None):
         """Generate page labels with proper alignment to the image files"""
-        
-        # DEBUG PRINTS START
-        print(f"\n--- DEBUG: _get_page_labels for book_id: {book_data.get('hash_code', 'N/A')} ---")
-        print(f"  num_pages (from image_files): {num_pages}")
-        print(f"  image_files (first 5): {image_files[:5]} ... (last 5): {image_files[-5:]}")
-        # DEBUG PRINTS END
-
         if not book_data:
-            # DEBUG PRINTS START
-            print(f"  DEBUG: No book_data found for {book_data.get('hash_code', 'N/A')}, returning all -1 labels.")
-            # DEBUG PRINTS END
             return [-1] * num_pages
-        
+
         page_labels = [-1] * num_pages
-        first_page_idx = self.class_to_idx["first-page"]
         
         page_map = {}
         if image_files:
             for i, img_file in enumerate(image_files):
                 page_num = self._get_page_number(img_file)
-                page_map[page_num] = i
+                if page_num is not None:
+                    page_map[page_num] = i
         
-        # DEBUG PRINTS START
-        print(f"  DEBUG: page_map (page_num -> image_files_index): {page_map}")
-        print(f"  DEBUG: book_data (JSON entry): {json.dumps(book_data, indent=2)}")
-        # DEBUG PRINTS END
-
         category_mapping = {
             "stories": self.class_to_idx["story"],
-            "first-pages": self.class_to_idx["first-page"],  
+            "first-pages": self.class_to_idx["first-page"],
             "textstories": self.class_to_idx["textstory"],
             "advertisements": self.class_to_idx["advertisement"],
             "covers": self.class_to_idx["cover"],
@@ -248,60 +235,32 @@ class PSSDataset(Dataset):
             "text": self.class_to_idx["text"],
             "back_covers": self.class_to_idx["back_cover"]
         }
-        
+
         for category, label_idx in category_mapping.items():
             if category not in book_data:
                 continue
-                
+
             for item in book_data[category]:
-                start_page = item.get("page_start", 0)
-                end_page = item.get("page_end", start_page)
-                
-                # DEBUG PRINTS START
-                print(f"  DEBUG: Processing category '{category}', segment: {start_page}-{end_page}")
-                # DEBUG PRINTS END
+                start_page = item.get("page_start")
+                end_page = item.get("page_end")
 
-                if category == "stories":
-                    title = item['title']
-                    first_page_marked = False
-                    
-                    for i in range(num_pages):
-                        page_num = None
-                        for p_num, idx in page_map.items():
-                            if idx == i:
-                                page_num = p_num
-                                break
+                if start_page is None or end_page is None:
+                    continue
 
-                        if page_num is not None and start_page <= page_num <= end_page:
-                            # Altough not ideal we will skip storys containing the word 'continue' in the title asstand alone stories
-                            if page_num == start_page and 'continue' not in title: 
-                                page_labels[i] = first_page_idx
-                                first_page_marked = True
+                for page_num in range(start_page, end_page + 1):
+                    if page_num in page_map:
+                        image_index = page_map[page_num]
+                        
+                        # Special handling for the first page of a story
+                        if category == "stories":
+                            title = item.get('title', '')
+                            if page_num == start_page and 'continue' not in title:
+                                page_labels[image_index] = self.class_to_idx["first-page"]
                             else:
-                                page_labels[i] = label_idx
-                            # DEBUG PRINTS START
-                            print(f"    DEBUG: Assigned label {page_labels[i]} to image_files_index {i} (page {page_num}) for category '{category}'")
-                            # DEBUG PRINTS END
-                else:
-                    
-                    for i in range(num_pages):
-                        page_num = None
-                        for p_num, idx in page_map.items():
-                            if idx == i:
-                                page_num = p_num
-                                break
-
-                        if page_num is not None and start_page <= page_num <= end_page:
-                            page_labels[i] = label_idx
-                            # DEBUG PRINTS START
-                            print(f"    DEBUG: Assigned label {page_labels[i]} to image_files_index {i} (page {page_num}) for category '{category}'")
-                            # DEBUG PRINTS END
+                                page_labels[image_index] = label_idx
+                        else:
+                            page_labels[image_index] = label_idx
         
-        # DEBUG PRINTS START
-        print(f"  DEBUG: Final page_labels array: {page_labels}")
-        print(f"--- END DEBUG: _get_page_labels for book_id: {book_data.get('hash_code', 'N/A')} ---")
-        # DEBUG PRINTS END
-
         return page_labels
     
     def _get_page_number(self, filename: str) -> int:
