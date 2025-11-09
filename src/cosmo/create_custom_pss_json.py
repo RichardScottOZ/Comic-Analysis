@@ -7,13 +7,13 @@ import random
 def get_category_from_rpage(rpage):
     """Maps Rpage value to a category key for the JSON output."""
     mapping = {
-        'cover': 'cover',
+        'cover': 'covers',
         'credits': 'credits',
-        'story': 'story',
-        'advertisement': 'advertisement',
+        'story': 'stories',
+        'advertisement': 'advertisements',
         'art': 'art',
         'text': 'text',
-        'back_cover': 'back_cover'
+        'back_cover': 'back_covers'
     }
     return mapping.get(rpage, None)
 
@@ -63,12 +63,18 @@ def create_json_structure(books_data):
                     end_page = cat_pages[i]['page_num']
                 else:
                     item = {'page_start': start_page, 'page_end': end_page}
+                    if category == 'stories':
+                        # Use the book's folder name as the title, per user suggestion
+                        item['title'] = book_folder
                     book_dict[category].append(item)
                     start_page = cat_pages[i]['page_num']
                     end_page = cat_pages[i]['page_num']
             
             # Add the last block
             item = {'page_start': start_page, 'page_end': end_page}
+            if category == 'stories':
+                # Use the book's folder name as the title, per user suggestion
+                item['title'] = book_folder
             book_dict[category].append(item)
 
         output_data.append(book_dict)
