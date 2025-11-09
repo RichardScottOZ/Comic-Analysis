@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 import json
 from PIL import Image, ImageFile
 import os
+import warnings
 import tqdm
 import random 
 import copy  
@@ -202,12 +203,22 @@ class PSSDataset(Dataset):
     def _is_valid_image(self, image_path):
 
         try:
-            with Image.open(image_path) as img:
-                img.verify()
-                
+            # Temporarily catch warnings to check for truncation issues
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")  # Capture all warnings
+
+                with Image.open(image_path) as img:
+                    img.verify() # This triggers the warning for truncated files
+
+                # Check if a truncation warning was issued
+                for warning_message in w:
+                    if issubclass(warning_message.category, UserWarning) and 'truncated' in str(warning_message.message).lower():
+                        print(f"[Data Quality Warning] Truncated JPEG loaded, may have issues: {image_path}")
+                        break # Print only once per image
             return True
         except Exception as e:
-            print(f"Skipping corrupted image: {image_path} - {str(e)}")
+            # This will now catch more severe errors (e.g., file not found, not an image)
+            print(f"[Data Quality Error] Skipping corrupted image: {image_path} - {str(e)}")
             return False
         
     def _get_page_labels(self, book_data, num_pages, image_files=None):
@@ -295,7 +306,19 @@ class PSSDataset(Dataset):
                 # Load and preprocess all images at once (vectorized)
                 batch_images = []
                 for path in valid_paths:
-                    image = cv2.imread(path)
+                    # Use a robust method to read images with non-ASCII paths
+                    try:
+                        with open(path, "rb") as f:
+                            chunk = f.read()
+                        img_array = np.frombuffer(chunk, dtype=np.uint8)
+                        image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+                        if image is None:
+                            raise IOError(f"cv2.imdecode failed for {path}")
+                    except Exception as e:
+                        print(f"Warning: Could not read image at {path} due to error: {e}. Skipping.")
+                        # Append a placeholder black image to maintain batch size and prevent crashes
+                        image = np.zeros((100, 100, 3), dtype=np.uint8)
+
                     if self.augment_data:
                         image, description = self.transform(image)
                     batch_images.append(image)
