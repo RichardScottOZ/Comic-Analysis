@@ -1,0 +1,3766 @@
+[
+    {
+        "hash_code": "Spread 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 23
+            },
+            {
+                "page_start": 26,
+                "page_end": 28
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "art": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Beasts of Burden Occupied Territory._2",
+        "credits": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 20
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 21,
+                "page_end": 21
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ]
+    },
+    {
+        "hash_code": "Skullkickers 019",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 28
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 29,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Pathfinder 008",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 30
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 31,
+                "page_end": 32
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 33,
+                "page_end": 33
+            }
+        ]
+    },
+    {
+        "hash_code": "The Magic Order 004",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "Sacred Creatures 006",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 13
+            },
+            {
+                "page_start": 15,
+                "page_end": 58
+            }
+        ],
+        "art": [
+            {
+                "page_start": 14,
+                "page_end": 14
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 59,
+                "page_end": 60
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 61,
+                "page_end": 61
+            }
+        ]
+    },
+    {
+        "hash_code": "L.E.G.I.O.N. (1989-1994) Annual 005",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 27
+            },
+            {
+                "page_start": 29,
+                "page_end": 49
+            },
+            {
+                "page_start": 51,
+                "page_end": 56
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "art": [
+            {
+                "page_start": 50,
+                "page_end": 50
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 57,
+                "page_end": 57
+            }
+        ]
+    },
+    {
+        "hash_code": "RCS2053D - Unknown",
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 2
+            },
+            {
+                "page_start": 52,
+                "page_end": 52
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            },
+            {
+                "page_start": 5,
+                "page_end": 28
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            },
+            {
+                "page_start": 33,
+                "page_end": 39
+            },
+            {
+                "page_start": 41,
+                "page_end": 41
+            },
+            {
+                "page_start": 43,
+                "page_end": 43
+            },
+            {
+                "page_start": 45,
+                "page_end": 51
+            },
+            {
+                "page_start": 53,
+                "page_end": 62
+            },
+            {
+                "page_start": 64,
+                "page_end": 66
+            }
+        ],
+        "art": [
+            {
+                "page_start": 4,
+                "page_end": 4
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            },
+            {
+                "page_start": 32,
+                "page_end": 32
+            },
+            {
+                "page_start": 42,
+                "page_end": 42
+            },
+            {
+                "page_start": 44,
+                "page_end": 44
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            },
+            {
+                "page_start": 40,
+                "page_end": 40
+            },
+            {
+                "page_start": 63,
+                "page_end": 63
+            },
+            {
+                "page_start": 67,
+                "page_end": 67
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 68,
+                "page_end": 68
+            }
+        ]
+    },
+    {
+        "hash_code": "The Forever War 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 12
+            },
+            {
+                "page_start": 14,
+                "page_end": 23
+            },
+            {
+                "page_start": 27,
+                "page_end": 28
+            }
+        ],
+        "art": [
+            {
+                "page_start": 13,
+                "page_end": 13
+            },
+            {
+                "page_start": 24,
+                "page_end": 25
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "Survival 1 - Unknown",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 13
+            },
+            {
+                "page_start": 15,
+                "page_end": 20
+            },
+            {
+                "page_start": 22,
+                "page_end": 28
+            }
+        ],
+        "art": [
+            {
+                "page_start": 14,
+                "page_end": 14
+            },
+            {
+                "page_start": 21,
+                "page_end": 21
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "Point of Impact 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 20
+            },
+            {
+                "page_start": 22,
+                "page_end": 23
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "art": [
+            {
+                "page_start": 21,
+                "page_end": 21
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            },
+            {
+                "page_start": 26,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Red Sonja 100",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 48
+            },
+            {
+                "page_start": 50,
+                "page_end": 51
+            }
+        ],
+        "art": [
+            {
+                "page_start": 49,
+                "page_end": 49
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 52,
+                "page_end": 52
+            }
+        ]
+    },
+    {
+        "hash_code": "Uncanny X-Men (1963-2011) Annual 017",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 44
+            },
+            {
+                "page_start": 46,
+                "page_end": 53
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 45,
+                "page_end": 45
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 54,
+                "page_end": 54
+            }
+        ]
+    },
+    {
+        "hash_code": "Barb Wire 6 - Unknown",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 6,
+                "page_end": 6
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 4
+            },
+            {
+                "page_start": 7,
+                "page_end": 23
+            }
+        ],
+        "art": [
+            {
+                "page_start": 5,
+                "page_end": 5
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ]
+    },
+    {
+        "hash_code": "spawn issue316 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "art": [
+            {
+                "page_start": 3,
+                "page_end": 4
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            },
+            {
+                "page_start": 33,
+                "page_end": 33
+            }
+        ],
+        "story": [
+            {
+                "page_start": 5,
+                "page_end": 25
+            },
+            {
+                "page_start": 32,
+                "page_end": 32
+            },
+            {
+                "page_start": 34,
+                "page_end": 34
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 28
+            },
+            {
+                "page_start": 30,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 35,
+                "page_end": 35
+            }
+        ]
+    },
+    {
+        "hash_code": "Breakneck 001",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 19,
+                "page_end": 19
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 18
+            },
+            {
+                "page_start": 20,
+                "page_end": 45
+            },
+            {
+                "page_start": 47,
+                "page_end": 49
+            }
+        ],
+        "art": [
+            {
+                "page_start": 46,
+                "page_end": 46
+            },
+            {
+                "page_start": 51,
+                "page_end": 52
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 50,
+                "page_end": 50
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 53,
+                "page_end": 53
+            }
+        ]
+    },
+    {
+        "hash_code": "Something is Killing the Children 033",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 8
+            },
+            {
+                "page_start": 10,
+                "page_end": 21
+            }
+        ],
+        "art": [
+            {
+                "page_start": 9,
+                "page_end": 9
+            },
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 23,
+                "page_end": 23
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ]
+    },
+    {
+        "hash_code": "Red Sonja Black, White, Red 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 29
+            }
+        ],
+        "art": [
+            {
+                "page_start": 30,
+                "page_end": 33
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 34,
+                "page_end": 34
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 35,
+                "page_end": 35
+            }
+        ]
+    },
+    {
+        "hash_code": "Flintlock Book Four",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 56
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 57,
+                "page_end": 57
+            }
+        ]
+    },
+    {
+        "hash_code": "League of Extraordinary Gentlemen Century 1910 (The League of Extraordinary Gentlemen)",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "art": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            },
+            {
+                "page_start": 65,
+                "page_end": 65
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 64
+            },
+            {
+                "page_start": 66,
+                "page_end": 81
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 82,
+                "page_end": 82
+            }
+        ]
+    },
+    {
+        "hash_code": "Rat Queens Special Swamp Romp 001",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 26
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            },
+            {
+                "page_start": 27,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "Ghosted 006",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 22
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 23,
+                "page_end": 24
+            },
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "art": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "Star Wars The Clone Wars Avatar - Unknown",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 11,
+                "page_end": 11
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 9
+            },
+            {
+                "page_start": 12,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 24
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 10,
+                "page_end": 10
+            }
+        ],
+        "art": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ]
+    },
+    {
+        "hash_code": "The Warning 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 12
+            },
+            {
+                "page_start": 14,
+                "page_end": 18
+            },
+            {
+                "page_start": 20,
+                "page_end": 24
+            },
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 13,
+                "page_end": 13
+            },
+            {
+                "page_start": 19,
+                "page_end": 19
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "savagedragon issue174 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 23
+            },
+            {
+                "page_start": 26,
+                "page_end": 29
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Blue Estate 006",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 12
+            },
+            {
+                "page_start": 14,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 13,
+                "page_end": 13
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 25,
+                "page_end": 26
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ]
+    },
+    {
+        "hash_code": "Vampirella (2019-) 021",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 6
+            },
+            {
+                "page_start": 8,
+                "page_end": 21
+            }
+        ],
+        "art": [
+            {
+                "page_start": 7,
+                "page_end": 7
+            },
+            {
+                "page_start": 24,
+                "page_end": 27
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 22,
+                "page_end": 23
+            },
+            {
+                "page_start": 28,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "witchblade issue173 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 17
+            },
+            {
+                "page_start": 19,
+                "page_end": 21
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "art": [
+            {
+                "page_start": 18,
+                "page_end": 18
+            },
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 26,
+                "page_end": 27
+            },
+            {
+                "page_start": 29,
+                "page_end": 31
+            }
+        ],
+        "text": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Dissonance 001",
+        "credits": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            },
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 25
+            }
+        ],
+        "art": [
+            {
+                "page_start": 26,
+                "page_end": 27
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "Analog 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 16,
+                "page_end": 16
+            }
+        ],
+        "art": [
+            {
+                "page_start": 2,
+                "page_end": 3
+            },
+            {
+                "page_start": 13,
+                "page_end": 13
+            },
+            {
+                "page_start": 18,
+                "page_end": 19
+            },
+            {
+                "page_start": 26,
+                "page_end": 26
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 12
+            },
+            {
+                "page_start": 14,
+                "page_end": 15
+            },
+            {
+                "page_start": 17,
+                "page_end": 17
+            },
+            {
+                "page_start": 20,
+                "page_end": 25
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ]
+    },
+    {
+        "hash_code": "Kill or Be Killed 008",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 25
+            },
+            {
+                "page_start": 27,
+                "page_end": 31
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 32,
+                "page_end": 36
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 37,
+                "page_end": 37
+            }
+        ]
+    },
+    {
+        "hash_code": "Rat Queens 009",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 29
+            }
+        ],
+        "art": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "PRG2115D - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 8
+            },
+            {
+                "page_start": 10,
+                "page_end": 28
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 9,
+                "page_end": 9
+            }
+        ],
+        "art": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Uncanny X-Men (1963-2011) 470",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 20
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 21,
+                "page_end": 21
+            }
+        ]
+    },
+    {
+        "hash_code": "Baltimore The Play one shot - Unknown",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 13
+            },
+            {
+                "page_start": 15,
+                "page_end": 23
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 14,
+                "page_end": 14
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ]
+    },
+    {
+        "hash_code": "Warlord of Mars 029",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "art": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 24
+            },
+            {
+                "page_start": 28,
+                "page_end": 31
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 25,
+                "page_end": 27
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Green Arrow (2016-2019) 011",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "art": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 16
+            },
+            {
+                "page_start": 18,
+                "page_end": 18
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 17,
+                "page_end": 17
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 19,
+                "page_end": 19
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 20,
+                "page_end": 20
+            }
+        ]
+    },
+    {
+        "hash_code": "Morning Glories 035",
+        "credits": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 8
+            },
+            {
+                "page_start": 10,
+                "page_end": 23
+            }
+        ],
+        "art": [
+            {
+                "page_start": 9,
+                "page_end": 9
+            },
+            {
+                "page_start": 24,
+                "page_end": 25
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "witchblade issue116 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "art": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            },
+            {
+                "page_start": 10,
+                "page_end": 10
+            },
+            {
+                "page_start": 12,
+                "page_end": 12
+            },
+            {
+                "page_start": 16,
+                "page_end": 16
+            },
+            {
+                "page_start": 24,
+                "page_end": 24
+            },
+            {
+                "page_start": 26,
+                "page_end": 27
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 4,
+                "page_end": 4
+            }
+        ],
+        "story": [
+            {
+                "page_start": 5,
+                "page_end": 9
+            },
+            {
+                "page_start": 11,
+                "page_end": 11
+            },
+            {
+                "page_start": 13,
+                "page_end": 15
+            },
+            {
+                "page_start": 17,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "Rat Queens (2017-) 006",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 23,
+                "page_end": 26
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ]
+    },
+    {
+        "hash_code": "Interpol - Volume 3 - Rome The Purple Cats",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 19
+            },
+            {
+                "page_start": 21,
+                "page_end": 41
+            },
+            {
+                "page_start": 43,
+                "page_end": 55
+            }
+        ],
+        "art": [
+            {
+                "page_start": 20,
+                "page_end": 20
+            },
+            {
+                "page_start": 42,
+                "page_end": 42
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 56,
+                "page_end": 56
+            }
+        ]
+    },
+    {
+        "hash_code": "Uncanny Avengers (2012-2014) 005",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 20
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 21,
+                "page_end": 21
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ]
+    },
+    {
+        "hash_code": "Marauders (2019-) 008",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 5
+            },
+            {
+                "page_start": 7,
+                "page_end": 23
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 6,
+                "page_end": 6
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            }
+        ]
+    },
+    {
+        "hash_code": "witchblade issue79 - Unknown",
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 6
+            },
+            {
+                "page_start": 8,
+                "page_end": 9
+            },
+            {
+                "page_start": 11,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 7,
+                "page_end": 7
+            },
+            {
+                "page_start": 10,
+                "page_end": 10
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ]
+    },
+    {
+        "hash_code": "IXth Generation #3",
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 2
+            },
+            {
+                "page_start": 6,
+                "page_end": 6
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            },
+            {
+                "page_start": 5,
+                "page_end": 5
+            },
+            {
+                "page_start": 7,
+                "page_end": 16
+            },
+            {
+                "page_start": 18,
+                "page_end": 22
+            },
+            {
+                "page_start": 24,
+                "page_end": 27
+            },
+            {
+                "page_start": 29,
+                "page_end": 30
+            }
+        ],
+        "art": [
+            {
+                "page_start": 4,
+                "page_end": 4
+            },
+            {
+                "page_start": 17,
+                "page_end": 17
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Justice League of America (2017-2018) 022",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "art": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 21
+            },
+            {
+                "page_start": 24,
+                "page_end": 28
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "The Walking Dead 107",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 24
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 25,
+                "page_end": 26
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ]
+    },
+    {
+        "hash_code": "The Hunt 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 21
+            },
+            {
+                "page_start": 24,
+                "page_end": 27
+            }
+        ],
+        "art": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "Pathfinder Spiral Of Bones 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 33
+            }
+        ],
+        "art": [
+            {
+                "page_start": 34,
+                "page_end": 34
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 35,
+                "page_end": 35
+            }
+        ]
+    },
+    {
+        "hash_code": "Lazarus 008",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 29
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Vinyl 004",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ]
+    },
+    {
+        "hash_code": "Nailbiter 013",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            },
+            {
+                "page_start": 27,
+                "page_end": 28
+            }
+        ],
+        "text": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 29,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Something is Killing the Children 025",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "story": [
+            {
+                "page_start": 1,
+                "page_end": 31
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 33,
+                "page_end": 34
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 35,
+                "page_end": 35
+            }
+        ]
+    },
+    {
+        "hash_code": "Empty Zone 004",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 6
+            },
+            {
+                "page_start": 8,
+                "page_end": 26
+            }
+        ],
+        "art": [
+            {
+                "page_start": 7,
+                "page_end": 7
+            },
+            {
+                "page_start": 28,
+                "page_end": 29
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 27,
+                "page_end": 27
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Mara 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 13
+            },
+            {
+                "page_start": 15,
+                "page_end": 21
+            },
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 14,
+                "page_end": 14
+            },
+            {
+                "page_start": 26,
+                "page_end": 26
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 22,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 27,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "witchblade issue181 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "art": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            },
+            {
+                "page_start": 9,
+                "page_end": 9
+            },
+            {
+                "page_start": 19,
+                "page_end": 19
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 28,
+                "page_end": 29
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 8
+            },
+            {
+                "page_start": 10,
+                "page_end": 18
+            },
+            {
+                "page_start": 20,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 27
+            },
+            {
+                "page_start": 30,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Ageless 001",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            },
+            {
+                "page_start": 4,
+                "page_end": 8
+            },
+            {
+                "page_start": 11,
+                "page_end": 13
+            },
+            {
+                "page_start": 15,
+                "page_end": 17
+            },
+            {
+                "page_start": 19,
+                "page_end": 20
+            }
+        ],
+        "art": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            },
+            {
+                "page_start": 9,
+                "page_end": 10
+            },
+            {
+                "page_start": 14,
+                "page_end": 14
+            },
+            {
+                "page_start": 18,
+                "page_end": 18
+            },
+            {
+                "page_start": 21,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ]
+    },
+    {
+        "hash_code": "Rat Queens 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 11
+            },
+            {
+                "page_start": 13,
+                "page_end": 26
+            },
+            {
+                "page_start": 28,
+                "page_end": 30
+            }
+        ],
+        "art": [
+            {
+                "page_start": 12,
+                "page_end": 12
+            },
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Seven Soldiers Klarion the Witch Boy (2005-) 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 22
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 23,
+                "page_end": 23
+            }
+        ]
+    },
+    {
+        "hash_code": "Once & Future 009",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 27,
+                "page_end": 27
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 28,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "Ghost 10 - Unknown",
+        "credits": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 11
+            },
+            {
+                "page_start": 13,
+                "page_end": 18
+            },
+            {
+                "page_start": 20,
+                "page_end": 23
+            }
+        ],
+        "art": [
+            {
+                "page_start": 12,
+                "page_end": 12
+            },
+            {
+                "page_start": 19,
+                "page_end": 19
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ]
+    },
+    {
+        "hash_code": "Ghost In The Smoke and Din 1 - Unknown",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 23
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ]
+    },
+    {
+        "hash_code": "Pearl III 4 - Unknown",
+        "credits": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 15
+            },
+            {
+                "page_start": 17,
+                "page_end": 18
+            },
+            {
+                "page_start": 21,
+                "page_end": 21
+            }
+        ],
+        "art": [
+            {
+                "page_start": 16,
+                "page_end": 16
+            },
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 19,
+                "page_end": 19
+            }
+        ],
+        "text": [
+            {
+                "page_start": 20,
+                "page_end": 20
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 23,
+                "page_end": 23
+            }
+        ]
+    },
+    {
+        "hash_code": "Moonshine 002",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 28
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "art": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ]
+    },
+    {
+        "hash_code": "Throwaways 012",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 3
+            },
+            {
+                "page_start": 5,
+                "page_end": 21
+            },
+            {
+                "page_start": 24,
+                "page_end": 27
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "art": [
+            {
+                "page_start": 4,
+                "page_end": 4
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "savagedragon issue190 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            }
+        ],
+        "art": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            },
+            {
+                "page_start": 5,
+                "page_end": 5
+            },
+            {
+                "page_start": 7,
+                "page_end": 7
+            },
+            {
+                "page_start": 11,
+                "page_end": 11
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 4
+            },
+            {
+                "page_start": 6,
+                "page_end": 6
+            },
+            {
+                "page_start": 8,
+                "page_end": 10
+            },
+            {
+                "page_start": 12,
+                "page_end": 22
+            },
+            {
+                "page_start": 24,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "DIE!namite 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 9
+            },
+            {
+                "page_start": 11,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 26,
+                "page_end": 26
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "art": [
+            {
+                "page_start": 10,
+                "page_end": 10
+            },
+            {
+                "page_start": 24,
+                "page_end": 25
+            },
+            {
+                "page_start": 27,
+                "page_end": 29
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Anne Steelyard - The Garden of Emptiness 003",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 4
+            },
+            {
+                "page_start": 51,
+                "page_end": 51
+            },
+            {
+                "page_start": 75,
+                "page_end": 75
+            }
+        ],
+        "story": [
+            {
+                "page_start": 5,
+                "page_end": 10
+            },
+            {
+                "page_start": 12,
+                "page_end": 19
+            },
+            {
+                "page_start": 21,
+                "page_end": 30
+            },
+            {
+                "page_start": 32,
+                "page_end": 38
+            },
+            {
+                "page_start": 40,
+                "page_end": 50
+            },
+            {
+                "page_start": 52,
+                "page_end": 59
+            },
+            {
+                "page_start": 61,
+                "page_end": 64
+            },
+            {
+                "page_start": 66,
+                "page_end": 69
+            },
+            {
+                "page_start": 71,
+                "page_end": 74
+            },
+            {
+                "page_start": 77,
+                "page_end": 77
+            },
+            {
+                "page_start": 80,
+                "page_end": 84
+            }
+        ],
+        "art": [
+            {
+                "page_start": 11,
+                "page_end": 11
+            },
+            {
+                "page_start": 20,
+                "page_end": 20
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            },
+            {
+                "page_start": 39,
+                "page_end": 39
+            },
+            {
+                "page_start": 60,
+                "page_end": 60
+            },
+            {
+                "page_start": 65,
+                "page_end": 65
+            },
+            {
+                "page_start": 70,
+                "page_end": 70
+            },
+            {
+                "page_start": 76,
+                "page_end": 76
+            },
+            {
+                "page_start": 78,
+                "page_end": 79
+            },
+            {
+                "page_start": 86,
+                "page_end": 86
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 85,
+                "page_end": 85
+            },
+            {
+                "page_start": 87,
+                "page_end": 88
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 89,
+                "page_end": 89
+            }
+        ]
+    },
+    {
+        "hash_code": "Robert E Howard s Savage Sword 2",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            },
+            {
+                "page_start": 67,
+                "page_end": 67
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 12
+            },
+            {
+                "page_start": 14,
+                "page_end": 66
+            }
+        ],
+        "art": [
+            {
+                "page_start": 13,
+                "page_end": 13
+            },
+            {
+                "page_start": 68,
+                "page_end": 68
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 69,
+                "page_end": 69
+            }
+        ]
+    },
+    {
+        "hash_code": "2000_ad_prog_2283.PRG2283D",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 8
+            },
+            {
+                "page_start": 10,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 29
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 9,
+                "page_end": 9
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "art": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            },
+            {
+                "page_start": 24,
+                "page_end": 24
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "Rat Queens (2017-) 016",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 21
+            },
+            {
+                "page_start": 23,
+                "page_end": 27
+            }
+        ],
+        "art": [
+            {
+                "page_start": 22,
+                "page_end": 22
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ]
+    },
+    {
+        "hash_code": "Warlord of Mars Dejah Thoris 034",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 1
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            }
+        ],
+        "story": [
+            {
+                "page_start": 3,
+                "page_end": 23
+            }
+        ],
+        "art": [
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ]
+    },
+    {
+        "hash_code": "Jook Joint 001",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 24
+            }
+        ],
+        "art": [
+            {
+                "page_start": 25,
+                "page_end": 25
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 26,
+                "page_end": 27
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ]
+    },
+    {
+        "hash_code": "witchblade issue154 - Unknown",
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            },
+            {
+                "page_start": 28,
+                "page_end": 28
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 2,
+                "page_end": 2
+            },
+            {
+                "page_start": 15,
+                "page_end": 15
+            },
+            {
+                "page_start": 31,
+                "page_end": 31
+            }
+        ],
+        "text": [
+            {
+                "page_start": 3,
+                "page_end": 3
+            }
+        ],
+        "story": [
+            {
+                "page_start": 4,
+                "page_end": 4
+            },
+            {
+                "page_start": 6,
+                "page_end": 14
+            },
+            {
+                "page_start": 16,
+                "page_end": 17
+            },
+            {
+                "page_start": 20,
+                "page_end": 22
+            },
+            {
+                "page_start": 24,
+                "page_end": 27
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            }
+        ],
+        "art": [
+            {
+                "page_start": 5,
+                "page_end": 5
+            },
+            {
+                "page_start": 18,
+                "page_end": 19
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 30,
+                "page_end": 30
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 32,
+                "page_end": 32
+            }
+        ]
+    },
+    {
+        "hash_code": "witchblade issue150 - Unknown",
+        "cover": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 6
+            },
+            {
+                "page_start": 8,
+                "page_end": 18
+            },
+            {
+                "page_start": 20,
+                "page_end": 20
+            },
+            {
+                "page_start": 22,
+                "page_end": 22
+            },
+            {
+                "page_start": 25,
+                "page_end": 28
+            },
+            {
+                "page_start": 30,
+                "page_end": 31
+            },
+            {
+                "page_start": 33,
+                "page_end": 44
+            },
+            {
+                "page_start": 49,
+                "page_end": 49
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 7,
+                "page_end": 7
+            },
+            {
+                "page_start": 19,
+                "page_end": 19
+            },
+            {
+                "page_start": 23,
+                "page_end": 23
+            },
+            {
+                "page_start": 50,
+                "page_end": 50
+            }
+        ],
+        "art": [
+            {
+                "page_start": 21,
+                "page_end": 21
+            },
+            {
+                "page_start": 24,
+                "page_end": 24
+            },
+            {
+                "page_start": 29,
+                "page_end": 29
+            },
+            {
+                "page_start": 32,
+                "page_end": 32
+            },
+            {
+                "page_start": 45,
+                "page_end": 45
+            },
+            {
+                "page_start": 48,
+                "page_end": 48
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 46,
+                "page_end": 47
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 51,
+                "page_end": 51
+            }
+        ]
+    },
+    {
+        "hash_code": "Rat Queens (2017-) 014",
+        "cover": [
+            {
+                "page_start": 0,
+                "page_end": 0
+            }
+        ],
+        "credits": [
+            {
+                "page_start": 1,
+                "page_end": 1
+            }
+        ],
+        "story": [
+            {
+                "page_start": 2,
+                "page_end": 20
+            }
+        ],
+        "art": [
+            {
+                "page_start": 21,
+                "page_end": 21
+            },
+            {
+                "page_start": 24,
+                "page_end": 24
+            }
+        ],
+        "advertisement": [
+            {
+                "page_start": 22,
+                "page_end": 23
+            },
+            {
+                "page_start": 25,
+                "page_end": 25
+            }
+        ],
+        "back_cover": [
+            {
+                "page_start": 26,
+                "page_end": 26
+            }
+        ]
+    }
+]
