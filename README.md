@@ -158,6 +158,10 @@ Extensive testing has been conducted with various Vision-Language Models for tex
     *   **Consideration:** Is Gemma as good/cost-effective for OCR?
     *   **Current Status:** No pre-trained model available for direct testing; requires training a new one.
 
+- notebook in Data Analysis - comic training
+    - try first pass classes
+    - cover, credits, advertisements, art (previews, internal covers etc. hopefully eventually)), text, back_cover - which could be ads or previews often so might not be a useful classification
+
 #### 2. OCR
 - Needed for everything - page / panel / characters
 - Discussion on Deepseek OCR references Qwen here too: https://news.ycombinator.com/item?id=43549072
