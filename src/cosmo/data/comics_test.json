@@ -1,7 +1,7 @@
 [
     {
         "hash_code": "Spread 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -17,18 +17,21 @@
                 "page_end": 25
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Spread 002"
             },
             {
                 "page_start": 26,
-                "page_end": 28
+                "page_end": 28,
+                "title": "Spread 002"
             },
             {
                 "page_start": 30,
-                "page_end": 30
+                "page_end": 30,
+                "title": "Spread 002"
             }
         ],
         "art": [
@@ -37,13 +40,13 @@
                 "page_end": 24
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 29,
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -58,19 +61,20 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Beasts of Burden Occupied Territory._2"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 21,
                 "page_end": 21
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 22,
                 "page_end": 22
@@ -79,23 +83,25 @@
     },
     {
         "hash_code": "Skullkickers 019",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Skullkickers 019"
             },
             {
                 "page_start": 25,
-                "page_end": 28
+                "page_end": 28,
+                "title": "Skullkickers 019"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -107,7 +113,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -116,7 +122,7 @@
     },
     {
         "hash_code": "Pathfinder 008",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -128,19 +134,20 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 30
+                "page_end": 30,
+                "title": "Pathfinder 008"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 31,
                 "page_end": 32
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 33,
                 "page_end": 33
@@ -149,7 +156,7 @@
     },
     {
         "hash_code": "The Magic Order 004",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -161,10 +168,11 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 24
+                "page_end": 24,
+                "title": "The Magic Order 004"
             }
         ],
         "art": [
@@ -177,7 +185,7 @@
                 "page_end": 27
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 26
@@ -187,7 +195,7 @@
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -196,20 +204,22 @@
     },
     {
         "hash_code": "Sacred Creatures 006",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 13
+                "page_end": 13,
+                "title": "Sacred Creatures 006"
             },
             {
                 "page_start": 15,
-                "page_end": 58
+                "page_end": 58,
+                "title": "Sacred Creatures 006"
             }
         ],
         "art": [
@@ -218,13 +228,13 @@
                 "page_end": 14
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 59,
                 "page_end": 60
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 61,
                 "page_end": 61
@@ -233,24 +243,27 @@
     },
     {
         "hash_code": "L.E.G.I.O.N. (1989-1994) Annual 005",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 27
+                "page_end": 27,
+                "title": "L.E.G.I.O.N. (1989-1994) Annual 005"
             },
             {
                 "page_start": 29,
-                "page_end": 49
+                "page_end": 49,
+                "title": "L.E.G.I.O.N. (1989-1994) Annual 005"
             },
             {
                 "page_start": 51,
-                "page_end": 56
+                "page_end": 56,
+                "title": "L.E.G.I.O.N. (1989-1994) Annual 005"
             }
         ],
         "credits": [
@@ -265,7 +278,7 @@
                 "page_end": 50
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 57,
                 "page_end": 57
@@ -284,42 +297,51 @@
                 "page_end": 52
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 3
+                "page_end": 3,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 5,
-                "page_end": 28
+                "page_end": 28,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 31,
-                "page_end": 31
+                "page_end": 31,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 33,
-                "page_end": 39
+                "page_end": 39,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 41,
-                "page_end": 41
+                "page_end": 41,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 43,
-                "page_end": 43
+                "page_end": 43,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 45,
-                "page_end": 51
+                "page_end": 51,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 53,
-                "page_end": 62
+                "page_end": 62,
+                "title": "RCS2053D - Unknown"
             },
             {
                 "page_start": 64,
-                "page_end": 66
+                "page_end": 66,
+                "title": "RCS2053D - Unknown"
             }
         ],
         "art": [
@@ -344,7 +366,7 @@
                 "page_end": 44
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -362,7 +384,7 @@
                 "page_end": 67
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 68,
                 "page_end": 68
@@ -371,24 +393,27 @@
     },
     {
         "hash_code": "The Forever War 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 12
+                "page_end": 12,
+                "title": "The Forever War 002"
             },
             {
                 "page_start": 14,
-                "page_end": 23
+                "page_end": 23,
+                "title": "The Forever War 002"
             },
             {
                 "page_start": 27,
-                "page_end": 28
+                "page_end": 28,
+                "title": "The Forever War 002"
             }
         ],
         "art": [
@@ -407,7 +432,7 @@
                 "page_end": 26
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -416,7 +441,7 @@
     },
     {
         "hash_code": "Survival 1 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -428,18 +453,21 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 13
+                "page_end": 13,
+                "title": "Survival 1 - Unknown"
             },
             {
                 "page_start": 15,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Survival 1 - Unknown"
             },
             {
                 "page_start": 22,
-                "page_end": 28
+                "page_end": 28,
+                "title": "Survival 1 - Unknown"
             }
         ],
         "art": [
@@ -452,13 +480,13 @@
                 "page_end": 21
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 29,
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -467,7 +495,7 @@
     },
     {
         "hash_code": "Point of Impact 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -479,18 +507,21 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Point of Impact 003"
             },
             {
                 "page_start": 22,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Point of Impact 003"
             },
             {
                 "page_start": 30,
-                "page_end": 30
+                "page_end": 30,
+                "title": "Point of Impact 003"
             }
         ],
         "art": [
@@ -507,7 +538,7 @@
                 "page_end": 29
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -517,7 +548,7 @@
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -526,7 +557,7 @@
     },
     {
         "hash_code": "Red Sonja 100",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -538,14 +569,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 48
+                "page_end": 48,
+                "title": "Red Sonja 100"
             },
             {
                 "page_start": 50,
-                "page_end": 51
+                "page_end": 51,
+                "title": "Red Sonja 100"
             }
         ],
         "art": [
@@ -554,7 +587,7 @@
                 "page_end": 49
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 52,
                 "page_end": 52
@@ -563,7 +596,7 @@
     },
     {
         "hash_code": "Uncanny X-Men (1963-2011) Annual 017",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -575,23 +608,25 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 44
+                "page_end": 44,
+                "title": "Uncanny X-Men (1963-2011) Annual 017"
             },
             {
                 "page_start": 46,
-                "page_end": 53
+                "page_end": 53,
+                "title": "Uncanny X-Men (1963-2011) Annual 017"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 45,
                 "page_end": 45
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 54,
                 "page_end": 54
@@ -600,7 +635,7 @@
     },
     {
         "hash_code": "Barb Wire 6 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -616,14 +651,16 @@
                 "page_end": 6
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 4
+                "page_end": 4,
+                "title": "Barb Wire 6 - Unknown"
             },
             {
                 "page_start": 7,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Barb Wire 6 - Unknown"
             }
         ],
         "art": [
@@ -632,13 +669,13 @@
                 "page_end": 5
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 25,
                 "page_end": 25
@@ -647,7 +684,7 @@
     },
     {
         "hash_code": "spawn issue316 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -673,21 +710,24 @@
                 "page_end": 33
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 5,
-                "page_end": 25
+                "page_end": 25,
+                "title": "spawn issue316 - Unknown"
             },
             {
                 "page_start": 32,
-                "page_end": 32
+                "page_end": 32,
+                "title": "spawn issue316 - Unknown"
             },
             {
                 "page_start": 34,
-                "page_end": 34
+                "page_end": 34,
+                "title": "spawn issue316 - Unknown"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 28
@@ -697,7 +737,7 @@
                 "page_end": 31
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 35,
                 "page_end": 35
@@ -706,7 +746,7 @@
     },
     {
         "hash_code": "Breakneck 001",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -722,18 +762,21 @@
                 "page_end": 19
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 18
+                "page_end": 18,
+                "title": "Breakneck 001"
             },
             {
                 "page_start": 20,
-                "page_end": 45
+                "page_end": 45,
+                "title": "Breakneck 001"
             },
             {
                 "page_start": 47,
-                "page_end": 49
+                "page_end": 49,
+                "title": "Breakneck 001"
             }
         ],
         "art": [
@@ -746,13 +789,13 @@
                 "page_end": 52
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 50,
                 "page_end": 50
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 53,
                 "page_end": 53
@@ -761,20 +804,22 @@
     },
     {
         "hash_code": "Something is Killing the Children 033",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 8
+                "page_end": 8,
+                "title": "Something is Killing the Children 033"
             },
             {
                 "page_start": 10,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Something is Killing the Children 033"
             }
         ],
         "art": [
@@ -793,13 +838,13 @@
                 "page_end": 23
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 25,
                 "page_end": 25
@@ -808,7 +853,7 @@
     },
     {
         "hash_code": "Red Sonja Black, White, Red 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -820,10 +865,11 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 29
+                "page_end": 29,
+                "title": "Red Sonja Black, White, Red 002"
             }
         ],
         "art": [
@@ -832,13 +878,13 @@
                 "page_end": 33
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 34,
                 "page_end": 34
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 35,
                 "page_end": 35
@@ -847,7 +893,7 @@
     },
     {
         "hash_code": "Flintlock Book Four",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -859,13 +905,14 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 56
+                "page_end": 56,
+                "title": "Flintlock Book Four"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 57,
                 "page_end": 57
@@ -874,7 +921,7 @@
     },
     {
         "hash_code": "League of Extraordinary Gentlemen Century 1910 (The League of Extraordinary Gentlemen)",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -896,17 +943,19 @@
                 "page_end": 3
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 64
+                "page_end": 64,
+                "title": "League of Extraordinary Gentlemen Century 1910 (The League of Extraordinary Gentlemen)"
             },
             {
                 "page_start": 66,
-                "page_end": 81
+                "page_end": 81,
+                "title": "League of Extraordinary Gentlemen Century 1910 (The League of Extraordinary Gentlemen)"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 82,
                 "page_end": 82
@@ -915,7 +964,7 @@
     },
     {
         "hash_code": "Rat Queens Special Swamp Romp 001",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -927,17 +976,19 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Rat Queens Special Swamp Romp 001"
             },
             {
                 "page_start": 23,
-                "page_end": 26
+                "page_end": 26,
+                "title": "Rat Queens Special Swamp Romp 001"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 22,
                 "page_end": 22
@@ -947,7 +998,7 @@
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -956,7 +1007,7 @@
     },
     {
         "hash_code": "Ghosted 006",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -968,17 +1019,19 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 22
+                "page_end": 22,
+                "title": "Ghosted 006"
             },
             {
                 "page_start": 25,
-                "page_end": 25
+                "page_end": 25,
+                "title": "Ghosted 006"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 23,
                 "page_end": 24
@@ -998,7 +1051,7 @@
                 "page_end": 27
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -1007,7 +1060,7 @@
     },
     {
         "hash_code": "Star Wars The Clone Wars Avatar - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1023,21 +1076,24 @@
                 "page_end": 11
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 9
+                "page_end": 9,
+                "title": "Star Wars The Clone Wars Avatar - Unknown"
             },
             {
                 "page_start": 12,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Star Wars The Clone Wars Avatar - Unknown"
             },
             {
                 "page_start": 23,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Star Wars The Clone Wars Avatar - Unknown"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 10,
                 "page_end": 10
@@ -1049,7 +1105,7 @@
                 "page_end": 22
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 25,
                 "page_end": 25
@@ -1058,28 +1114,32 @@
     },
     {
         "hash_code": "The Warning 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 12
+                "page_end": 12,
+                "title": "The Warning 002"
             },
             {
                 "page_start": 14,
-                "page_end": 18
+                "page_end": 18,
+                "title": "The Warning 002"
             },
             {
                 "page_start": 20,
-                "page_end": 24
+                "page_end": 24,
+                "title": "The Warning 002"
             },
             {
                 "page_start": 27,
-                "page_end": 27
+                "page_end": 27,
+                "title": "The Warning 002"
             }
         ],
         "credits": [
@@ -1096,7 +1156,7 @@
                 "page_end": 25
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 26
@@ -1106,7 +1166,7 @@
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -1115,7 +1175,7 @@
     },
     {
         "hash_code": "savagedragon issue174 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -1127,21 +1187,24 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 23
+                "page_end": 23,
+                "title": "savagedragon issue174 - Unknown"
             },
             {
                 "page_start": 26,
-                "page_end": 29
+                "page_end": 29,
+                "title": "savagedragon issue174 - Unknown"
             },
             {
                 "page_start": 31,
-                "page_end": 31
+                "page_end": 31,
+                "title": "savagedragon issue174 - Unknown"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -1157,7 +1220,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -1166,7 +1229,7 @@
     },
     {
         "hash_code": "Blue Estate 006",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1178,14 +1241,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 12
+                "page_end": 12,
+                "title": "Blue Estate 006"
             },
             {
                 "page_start": 14,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Blue Estate 006"
             }
         ],
         "art": [
@@ -1194,13 +1259,13 @@
                 "page_end": 13
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 25,
                 "page_end": 26
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 27,
                 "page_end": 27
@@ -1209,7 +1274,7 @@
     },
     {
         "hash_code": "Vampirella (2019-) 021",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1221,14 +1286,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 6
+                "page_end": 6,
+                "title": "Vampirella (2019-) 021"
             },
             {
                 "page_start": 8,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Vampirella (2019-) 021"
             }
         ],
         "art": [
@@ -1241,7 +1308,7 @@
                 "page_end": 27
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 22,
                 "page_end": 23
@@ -1251,7 +1318,7 @@
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -1260,7 +1327,7 @@
     },
     {
         "hash_code": "witchblade issue173 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -1272,22 +1339,26 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 17
+                "page_end": 17,
+                "title": "witchblade issue173 - Unknown"
             },
             {
                 "page_start": 19,
-                "page_end": 21
+                "page_end": 21,
+                "title": "witchblade issue173 - Unknown"
             },
             {
                 "page_start": 25,
-                "page_end": 25
+                "page_end": 25,
+                "title": "witchblade issue173 - Unknown"
             },
             {
                 "page_start": 28,
-                "page_end": 28
+                "page_end": 28,
+                "title": "witchblade issue173 - Unknown"
             }
         ],
         "art": [
@@ -1300,7 +1371,7 @@
                 "page_end": 22
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 23,
                 "page_end": 23
@@ -1320,7 +1391,7 @@
                 "page_end": 24
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -1339,16 +1410,17 @@
                 "page_end": 2
             }
         ],
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 25
+                "page_end": 25,
+                "title": "Dissonance 001"
             }
         ],
         "art": [
@@ -1357,13 +1429,13 @@
                 "page_end": 27
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 28,
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -1372,7 +1444,7 @@
     },
     {
         "hash_code": "Analog 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1406,31 +1478,35 @@
                 "page_end": 26
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 12
+                "page_end": 12,
+                "title": "Analog 003"
             },
             {
                 "page_start": 14,
-                "page_end": 15
+                "page_end": 15,
+                "title": "Analog 003"
             },
             {
                 "page_start": 17,
-                "page_end": 17
+                "page_end": 17,
+                "title": "Analog 003"
             },
             {
                 "page_start": 20,
-                "page_end": 25
+                "page_end": 25,
+                "title": "Analog 003"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 27,
                 "page_end": 27
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 28,
                 "page_end": 28
@@ -1439,7 +1515,7 @@
     },
     {
         "hash_code": "Kill or Be Killed 008",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1451,17 +1527,19 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 25
+                "page_end": 25,
+                "title": "Kill or Be Killed 008"
             },
             {
                 "page_start": 27,
-                "page_end": 31
+                "page_end": 31,
+                "title": "Kill or Be Killed 008"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 26
@@ -1471,7 +1549,7 @@
                 "page_end": 36
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 37,
                 "page_end": 37
@@ -1480,7 +1558,7 @@
     },
     {
         "hash_code": "Rat Queens 009",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1492,14 +1570,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Rat Queens 009"
             },
             {
                 "page_start": 25,
-                "page_end": 29
+                "page_end": 29,
+                "title": "Rat Queens 009"
             }
         ],
         "art": [
@@ -1508,13 +1588,13 @@
                 "page_end": 24
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 30,
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -1523,24 +1603,27 @@
     },
     {
         "hash_code": "PRG2115D - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 8
+                "page_end": 8,
+                "title": "PRG2115D - Unknown"
             },
             {
                 "page_start": 10,
-                "page_end": 28
+                "page_end": 28,
+                "title": "PRG2115D - Unknown"
             },
             {
                 "page_start": 30,
-                "page_end": 30
+                "page_end": 30,
+                "title": "PRG2115D - Unknown"
             }
         ],
         "credits": [
@@ -1559,7 +1642,7 @@
                 "page_end": 31
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -1568,7 +1651,7 @@
     },
     {
         "hash_code": "Uncanny X-Men (1963-2011) 470",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -1580,13 +1663,14 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Uncanny X-Men (1963-2011) 470"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 21,
                 "page_end": 21
@@ -1595,7 +1679,7 @@
     },
     {
         "hash_code": "Baltimore The Play one shot - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1607,23 +1691,25 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 13
+                "page_end": 13,
+                "title": "Baltimore The Play one shot - Unknown"
             },
             {
                 "page_start": 15,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Baltimore The Play one shot - Unknown"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 14,
                 "page_end": 14
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -1632,7 +1718,7 @@
     },
     {
         "hash_code": "Warlord of Mars 029",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -1650,23 +1736,25 @@
                 "page_end": 3
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Warlord of Mars 029"
             },
             {
                 "page_start": 28,
-                "page_end": 31
+                "page_end": 31,
+                "title": "Warlord of Mars 029"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 25,
                 "page_end": 27
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -1675,7 +1763,7 @@
     },
     {
         "hash_code": "Green Arrow (2016-2019) 011",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -1687,14 +1775,16 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 16
+                "page_end": 16,
+                "title": "Green Arrow (2016-2019) 011"
             },
             {
                 "page_start": 18,
-                "page_end": 18
+                "page_end": 18,
+                "title": "Green Arrow (2016-2019) 011"
             }
         ],
         "credits": [
@@ -1703,13 +1793,13 @@
                 "page_end": 17
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 19,
                 "page_end": 19
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 20,
                 "page_end": 20
@@ -1724,20 +1814,22 @@
                 "page_end": 0
             }
         ],
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 8
+                "page_end": 8,
+                "title": "Morning Glories 035"
             },
             {
                 "page_start": 10,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Morning Glories 035"
             }
         ],
         "art": [
@@ -1750,13 +1842,13 @@
                 "page_end": 25
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -1765,7 +1857,7 @@
     },
     {
         "hash_code": "witchblade issue116 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -1807,39 +1899,45 @@
                 "page_end": 29
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 4,
                 "page_end": 4
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 5,
-                "page_end": 9
+                "page_end": 9,
+                "title": "witchblade issue116 - Unknown"
             },
             {
                 "page_start": 11,
-                "page_end": 11
+                "page_end": 11,
+                "title": "witchblade issue116 - Unknown"
             },
             {
                 "page_start": 13,
-                "page_end": 15
+                "page_end": 15,
+                "title": "witchblade issue116 - Unknown"
             },
             {
                 "page_start": 17,
-                "page_end": 23
+                "page_end": 23,
+                "title": "witchblade issue116 - Unknown"
             },
             {
                 "page_start": 25,
-                "page_end": 25
+                "page_end": 25,
+                "title": "witchblade issue116 - Unknown"
             },
             {
                 "page_start": 28,
-                "page_end": 28
+                "page_end": 28,
+                "title": "witchblade issue116 - Unknown"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -1848,7 +1946,7 @@
     },
     {
         "hash_code": "Rat Queens (2017-) 006",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -1860,19 +1958,20 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 22
+                "page_end": 22,
+                "title": "Rat Queens (2017-) 006"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 23,
                 "page_end": 26
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 27,
                 "page_end": 27
@@ -1881,24 +1980,27 @@
     },
     {
         "hash_code": "Interpol - Volume 3 - Rome The Purple Cats",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 19
+                "page_end": 19,
+                "title": "Interpol - Volume 3 - Rome The Purple Cats"
             },
             {
                 "page_start": 21,
-                "page_end": 41
+                "page_end": 41,
+                "title": "Interpol - Volume 3 - Rome The Purple Cats"
             },
             {
                 "page_start": 43,
-                "page_end": 55
+                "page_end": 55,
+                "title": "Interpol - Volume 3 - Rome The Purple Cats"
             }
         ],
         "art": [
@@ -1911,7 +2013,7 @@
                 "page_end": 42
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 56,
                 "page_end": 56
@@ -1920,16 +2022,17 @@
     },
     {
         "hash_code": "Uncanny Avengers (2012-2014) 005",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Uncanny Avengers (2012-2014) 005"
             }
         ],
         "credits": [
@@ -1938,7 +2041,7 @@
                 "page_end": 21
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 22,
                 "page_end": 22
@@ -1947,20 +2050,22 @@
     },
     {
         "hash_code": "Marauders (2019-) 008",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 5
+                "page_end": 5,
+                "title": "Marauders (2019-) 008"
             },
             {
                 "page_start": 7,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Marauders (2019-) 008"
             }
         ],
         "credits": [
@@ -1969,7 +2074,7 @@
                 "page_end": 6
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -1981,7 +2086,7 @@
                 "page_end": 25
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 26,
                 "page_end": 26
@@ -1996,18 +2101,21 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 6
+                "page_end": 6,
+                "title": "witchblade issue79 - Unknown"
             },
             {
                 "page_start": 8,
-                "page_end": 9
+                "page_end": 9,
+                "title": "witchblade issue79 - Unknown"
             },
             {
                 "page_start": 11,
-                "page_end": 24
+                "page_end": 24,
+                "title": "witchblade issue79 - Unknown"
             }
         ],
         "art": [
@@ -2020,7 +2128,7 @@
                 "page_end": 10
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 25,
                 "page_end": 25
@@ -2039,30 +2147,36 @@
                 "page_end": 6
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 3
+                "page_end": 3,
+                "title": "IXth Generation #3"
             },
             {
                 "page_start": 5,
-                "page_end": 5
+                "page_end": 5,
+                "title": "IXth Generation #3"
             },
             {
                 "page_start": 7,
-                "page_end": 16
+                "page_end": 16,
+                "title": "IXth Generation #3"
             },
             {
                 "page_start": 18,
-                "page_end": 22
+                "page_end": 22,
+                "title": "IXth Generation #3"
             },
             {
                 "page_start": 24,
-                "page_end": 27
+                "page_end": 27,
+                "title": "IXth Generation #3"
             },
             {
                 "page_start": 29,
-                "page_end": 30
+                "page_end": 30,
+                "title": "IXth Generation #3"
             }
         ],
         "art": [
@@ -2087,7 +2201,7 @@
                 "page_end": 31
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -2096,7 +2210,7 @@
     },
     {
         "hash_code": "Justice League of America (2017-2018) 022",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -2108,14 +2222,16 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Justice League of America (2017-2018) 022"
             },
             {
                 "page_start": 24,
-                "page_end": 28
+                "page_end": 28,
+                "title": "Justice League of America (2017-2018) 022"
             }
         ],
         "credits": [
@@ -2124,7 +2240,7 @@
                 "page_end": 22
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 23,
                 "page_end": 23
@@ -2134,7 +2250,7 @@
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -2143,7 +2259,7 @@
     },
     {
         "hash_code": "The Walking Dead 107",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2155,19 +2271,20 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 24
+                "page_end": 24,
+                "title": "The Walking Dead 107"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 25,
                 "page_end": 26
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 27,
                 "page_end": 27
@@ -2176,7 +2293,7 @@
     },
     {
         "hash_code": "The Hunt 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2188,14 +2305,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 21
+                "page_end": 21,
+                "title": "The Hunt 002"
             },
             {
                 "page_start": 24,
-                "page_end": 27
+                "page_end": 27,
+                "title": "The Hunt 002"
             }
         ],
         "art": [
@@ -2204,7 +2323,7 @@
                 "page_end": 22
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 23,
                 "page_end": 23
@@ -2214,7 +2333,7 @@
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -2223,7 +2342,7 @@
     },
     {
         "hash_code": "Pathfinder Spiral Of Bones 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2235,10 +2354,11 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 33
+                "page_end": 33,
+                "title": "Pathfinder Spiral Of Bones 003"
             }
         ],
         "art": [
@@ -2247,7 +2367,7 @@
                 "page_end": 34
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 35,
                 "page_end": 35
@@ -2256,7 +2376,7 @@
     },
     {
         "hash_code": "Lazarus 008",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2268,17 +2388,19 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Lazarus 008"
             },
             {
                 "page_start": 25,
-                "page_end": 29
+                "page_end": 29,
+                "title": "Lazarus 008"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -2290,7 +2412,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -2299,7 +2421,7 @@
     },
     {
         "hash_code": "Vinyl 004",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -2311,14 +2433,16 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Vinyl 004"
             },
             {
                 "page_start": 23,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Vinyl 004"
             }
         ],
         "art": [
@@ -2331,13 +2455,13 @@
                 "page_end": 25
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 26
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 27,
                 "page_end": 27
@@ -2346,7 +2470,7 @@
     },
     {
         "hash_code": "Nailbiter 013",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2358,14 +2482,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Nailbiter 013"
             },
             {
                 "page_start": 23,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Nailbiter 013"
             }
         ],
         "art": [
@@ -2384,7 +2510,7 @@
                 "page_end": 25
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 26
@@ -2394,7 +2520,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -2403,16 +2529,17 @@
     },
     {
         "hash_code": "Something is Killing the Children 025",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 1,
-                "page_end": 31
+                "page_end": 31,
+                "title": "Something is Killing the Children 025"
             }
         ],
         "credits": [
@@ -2421,13 +2548,13 @@
                 "page_end": 32
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 33,
                 "page_end": 34
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 35,
                 "page_end": 35
@@ -2436,7 +2563,7 @@
     },
     {
         "hash_code": "Empty Zone 004",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2448,14 +2575,16 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 6
+                "page_end": 6,
+                "title": "Empty Zone 004"
             },
             {
                 "page_start": 8,
-                "page_end": 26
+                "page_end": 26,
+                "title": "Empty Zone 004"
             }
         ],
         "art": [
@@ -2468,7 +2597,7 @@
                 "page_end": 29
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 27,
                 "page_end": 27
@@ -2478,7 +2607,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -2487,7 +2616,7 @@
     },
     {
         "hash_code": "Mara 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2499,18 +2628,21 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 13
+                "page_end": 13,
+                "title": "Mara 003"
             },
             {
                 "page_start": 15,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Mara 003"
             },
             {
                 "page_start": 24,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Mara 003"
             }
         ],
         "art": [
@@ -2523,7 +2655,7 @@
                 "page_end": 26
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 22,
                 "page_end": 23
@@ -2537,7 +2669,7 @@
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -2546,7 +2678,7 @@
     },
     {
         "hash_code": "witchblade issue181 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -2580,21 +2712,24 @@
                 "page_end": 3
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 8
+                "page_end": 8,
+                "title": "witchblade issue181 - Unknown"
             },
             {
                 "page_start": 10,
-                "page_end": 18
+                "page_end": 18,
+                "title": "witchblade issue181 - Unknown"
             },
             {
                 "page_start": 20,
-                "page_end": 22
+                "page_end": 22,
+                "title": "witchblade issue181 - Unknown"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 27
@@ -2604,7 +2739,7 @@
                 "page_end": 31
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -2613,7 +2748,7 @@
     },
     {
         "hash_code": "Ageless 001",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2629,26 +2764,31 @@
                 "page_end": 22
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 2
+                "page_end": 2,
+                "title": "Ageless 001"
             },
             {
                 "page_start": 4,
-                "page_end": 8
+                "page_end": 8,
+                "title": "Ageless 001"
             },
             {
                 "page_start": 11,
-                "page_end": 13
+                "page_end": 13,
+                "title": "Ageless 001"
             },
             {
                 "page_start": 15,
-                "page_end": 17
+                "page_end": 17,
+                "title": "Ageless 001"
             },
             {
                 "page_start": 19,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Ageless 001"
             }
         ],
         "art": [
@@ -2677,13 +2817,13 @@
                 "page_end": 23
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 25,
                 "page_end": 25
@@ -2692,7 +2832,7 @@
     },
     {
         "hash_code": "Rat Queens 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -2704,18 +2844,21 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 11
+                "page_end": 11,
+                "title": "Rat Queens 003"
             },
             {
                 "page_start": 13,
-                "page_end": 26
+                "page_end": 26,
+                "title": "Rat Queens 003"
             },
             {
                 "page_start": 28,
-                "page_end": 30
+                "page_end": 30,
+                "title": "Rat Queens 003"
             }
         ],
         "art": [
@@ -2728,13 +2871,13 @@
                 "page_end": 27
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 31,
                 "page_end": 31
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -2743,7 +2886,7 @@
     },
     {
         "hash_code": "Seven Soldiers Klarion the Witch Boy (2005-) 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2755,13 +2898,14 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 22
+                "page_end": 22,
+                "title": "Seven Soldiers Klarion the Witch Boy (2005-) 002"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 23,
                 "page_end": 23
@@ -2770,7 +2914,7 @@
     },
     {
         "hash_code": "Once & Future 009",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2782,10 +2926,11 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Once & Future 009"
             }
         ],
         "art": [
@@ -2798,7 +2943,7 @@
                 "page_end": 27
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 26
@@ -2808,7 +2953,7 @@
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -2823,18 +2968,21 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 11
+                "page_end": 11,
+                "title": "Ghost 10 - Unknown"
             },
             {
                 "page_start": 13,
-                "page_end": 18
+                "page_end": 18,
+                "title": "Ghost 10 - Unknown"
             },
             {
                 "page_start": 20,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Ghost 10 - Unknown"
             }
         ],
         "art": [
@@ -2847,7 +2995,7 @@
                 "page_end": 19
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -2856,7 +3004,7 @@
     },
     {
         "hash_code": "Ghost In The Smoke and Din 1 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2868,13 +3016,14 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Ghost In The Smoke and Din 1 - Unknown"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -2889,18 +3038,21 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 15
+                "page_end": 15,
+                "title": "Pearl III 4 - Unknown"
             },
             {
                 "page_start": 17,
-                "page_end": 18
+                "page_end": 18,
+                "title": "Pearl III 4 - Unknown"
             },
             {
                 "page_start": 21,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Pearl III 4 - Unknown"
             }
         ],
         "art": [
@@ -2913,7 +3065,7 @@
                 "page_end": 22
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 19,
                 "page_end": 19
@@ -2925,7 +3077,7 @@
                 "page_end": 20
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 23,
                 "page_end": 23
@@ -2934,7 +3086,7 @@
     },
     {
         "hash_code": "Moonshine 002",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2946,17 +3098,19 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Moonshine 002"
             },
             {
                 "page_start": 25,
-                "page_end": 28
+                "page_end": 28,
+                "title": "Moonshine 002"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 24,
                 "page_end": 24
@@ -2972,7 +3126,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 31,
                 "page_end": 31
@@ -2981,7 +3135,7 @@
     },
     {
         "hash_code": "Throwaways 012",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -2997,22 +3151,26 @@
                 "page_end": 22
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 3
+                "page_end": 3,
+                "title": "Throwaways 012"
             },
             {
                 "page_start": 5,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Throwaways 012"
             },
             {
                 "page_start": 24,
-                "page_end": 27
+                "page_end": 27,
+                "title": "Throwaways 012"
             },
             {
                 "page_start": 29,
-                "page_end": 29
+                "page_end": 29,
+                "title": "Throwaways 012"
             }
         ],
         "art": [
@@ -3025,13 +3183,13 @@
                 "page_end": 23
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 28,
                 "page_end": 28
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -3040,7 +3198,7 @@
     },
     {
         "hash_code": "savagedragon issue190 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -3074,29 +3232,34 @@
                 "page_end": 11
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 4
+                "page_end": 4,
+                "title": "savagedragon issue190 - Unknown"
             },
             {
                 "page_start": 6,
-                "page_end": 6
+                "page_end": 6,
+                "title": "savagedragon issue190 - Unknown"
             },
             {
                 "page_start": 8,
-                "page_end": 10
+                "page_end": 10,
+                "title": "savagedragon issue190 - Unknown"
             },
             {
                 "page_start": 12,
-                "page_end": 22
+                "page_end": 22,
+                "title": "savagedragon issue190 - Unknown"
             },
             {
                 "page_start": 24,
-                "page_end": 31
+                "page_end": 31,
+                "title": "savagedragon issue190 - Unknown"
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -3105,7 +3268,7 @@
     },
     {
         "hash_code": "DIE!namite 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -3117,26 +3280,31 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 9
+                "page_end": 9,
+                "title": "DIE!namite 003"
             },
             {
                 "page_start": 11,
-                "page_end": 21
+                "page_end": 21,
+                "title": "DIE!namite 003"
             },
             {
                 "page_start": 23,
-                "page_end": 23
+                "page_end": 23,
+                "title": "DIE!namite 003"
             },
             {
                 "page_start": 26,
-                "page_end": 26
+                "page_end": 26,
+                "title": "DIE!namite 003"
             },
             {
                 "page_start": 30,
-                "page_end": 30
+                "page_end": 30,
+                "title": "DIE!namite 003"
             }
         ],
         "art": [
@@ -3153,7 +3321,7 @@
                 "page_end": 29
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 22,
                 "page_end": 22
@@ -3163,7 +3331,7 @@
                 "page_end": 31
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -3172,7 +3340,7 @@
     },
     {
         "hash_code": "Anne Steelyard - The Garden of Emptiness 003",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -3192,50 +3360,61 @@
                 "page_end": 75
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 5,
-                "page_end": 10
+                "page_end": 10,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 12,
-                "page_end": 19
+                "page_end": 19,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 21,
-                "page_end": 30
+                "page_end": 30,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 32,
-                "page_end": 38
+                "page_end": 38,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 40,
-                "page_end": 50
+                "page_end": 50,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 52,
-                "page_end": 59
+                "page_end": 59,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 61,
-                "page_end": 64
+                "page_end": 64,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 66,
-                "page_end": 69
+                "page_end": 69,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 71,
-                "page_end": 74
+                "page_end": 74,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 77,
-                "page_end": 77
+                "page_end": 77,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             },
             {
                 "page_start": 80,
-                "page_end": 84
+                "page_end": 84,
+                "title": "Anne Steelyard - The Garden of Emptiness 003"
             }
         ],
         "art": [
@@ -3280,7 +3459,7 @@
                 "page_end": 86
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 85,
                 "page_end": 85
@@ -3290,7 +3469,7 @@
                 "page_end": 88
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 89,
                 "page_end": 89
@@ -3299,7 +3478,7 @@
     },
     {
         "hash_code": "Robert E Howard s Savage Sword 2",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -3311,7 +3490,7 @@
                 "page_end": 2
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 3,
                 "page_end": 3
@@ -3321,14 +3500,16 @@
                 "page_end": 67
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 12
+                "page_end": 12,
+                "title": "Robert E Howard s Savage Sword 2"
             },
             {
                 "page_start": 14,
-                "page_end": 66
+                "page_end": 66,
+                "title": "Robert E Howard s Savage Sword 2"
             }
         ],
         "art": [
@@ -3341,7 +3522,7 @@
                 "page_end": 68
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 69,
                 "page_end": 69
@@ -3350,7 +3531,7 @@
     },
     {
         "hash_code": "2000_ad_prog_2283.PRG2283D",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
@@ -3362,25 +3543,29 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 8
+                "page_end": 8,
+                "title": "2000_ad_prog_2283.PRG2283D"
             },
             {
                 "page_start": 10,
-                "page_end": 21
+                "page_end": 21,
+                "title": "2000_ad_prog_2283.PRG2283D"
             },
             {
                 "page_start": 23,
-                "page_end": 23
+                "page_end": 23,
+                "title": "2000_ad_prog_2283.PRG2283D"
             },
             {
                 "page_start": 25,
-                "page_end": 29
+                "page_end": 29,
+                "title": "2000_ad_prog_2283.PRG2283D"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 9,
                 "page_end": 9
@@ -3404,7 +3589,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -3413,7 +3598,7 @@
     },
     {
         "hash_code": "Rat Queens (2017-) 016",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -3429,14 +3614,16 @@
                 "page_end": 28
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 21
+                "page_end": 21,
+                "title": "Rat Queens (2017-) 016"
             },
             {
                 "page_start": 23,
-                "page_end": 27
+                "page_end": 27,
+                "title": "Rat Queens (2017-) 016"
             }
         ],
         "art": [
@@ -3445,13 +3632,13 @@
                 "page_end": 22
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 29,
                 "page_end": 29
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 30,
                 "page_end": 30
@@ -3460,7 +3647,7 @@
     },
     {
         "hash_code": "Warlord of Mars Dejah Thoris 034",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 1
@@ -3472,10 +3659,11 @@
                 "page_end": 2
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 3,
-                "page_end": 23
+                "page_end": 23,
+                "title": "Warlord of Mars Dejah Thoris 034"
             }
         ],
         "art": [
@@ -3484,7 +3672,7 @@
                 "page_end": 24
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 25,
                 "page_end": 25
@@ -3493,7 +3681,7 @@
     },
     {
         "hash_code": "Jook Joint 001",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -3505,10 +3693,11 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 24
+                "page_end": 24,
+                "title": "Jook Joint 001"
             }
         ],
         "art": [
@@ -3521,13 +3710,13 @@
                 "page_end": 28
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 26,
                 "page_end": 27
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 29,
                 "page_end": 29
@@ -3546,7 +3735,7 @@
                 "page_end": 28
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 2,
                 "page_end": 2
@@ -3566,30 +3755,36 @@
                 "page_end": 3
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 4,
-                "page_end": 4
+                "page_end": 4,
+                "title": "witchblade issue154 - Unknown"
             },
             {
                 "page_start": 6,
-                "page_end": 14
+                "page_end": 14,
+                "title": "witchblade issue154 - Unknown"
             },
             {
                 "page_start": 16,
-                "page_end": 17
+                "page_end": 17,
+                "title": "witchblade issue154 - Unknown"
             },
             {
                 "page_start": 20,
-                "page_end": 22
+                "page_end": 22,
+                "title": "witchblade issue154 - Unknown"
             },
             {
                 "page_start": 24,
-                "page_end": 27
+                "page_end": 27,
+                "title": "witchblade issue154 - Unknown"
             },
             {
                 "page_start": 29,
-                "page_end": 29
+                "page_end": 29,
+                "title": "witchblade issue154 - Unknown"
             }
         ],
         "art": [
@@ -3610,7 +3805,7 @@
                 "page_end": 30
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 32,
                 "page_end": 32
@@ -3619,47 +3814,55 @@
     },
     {
         "hash_code": "witchblade issue150 - Unknown",
-        "cover": [
+        "covers": [
             {
                 "page_start": 1,
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 6
+                "page_end": 6,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 8,
-                "page_end": 18
+                "page_end": 18,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 20,
-                "page_end": 20
+                "page_end": 20,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 22,
-                "page_end": 22
+                "page_end": 22,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 25,
-                "page_end": 28
+                "page_end": 28,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 30,
-                "page_end": 31
+                "page_end": 31,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 33,
-                "page_end": 44
+                "page_end": 44,
+                "title": "witchblade issue150 - Unknown"
             },
             {
                 "page_start": 49,
-                "page_end": 49
+                "page_end": 49,
+                "title": "witchblade issue150 - Unknown"
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 7,
                 "page_end": 7
@@ -3709,7 +3912,7 @@
                 "page_end": 47
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 51,
                 "page_end": 51
@@ -3718,7 +3921,7 @@
     },
     {
         "hash_code": "Rat Queens (2017-) 014",
-        "cover": [
+        "covers": [
             {
                 "page_start": 0,
                 "page_end": 0
@@ -3730,10 +3933,11 @@
                 "page_end": 1
             }
         ],
-        "story": [
+        "stories": [
             {
                 "page_start": 2,
-                "page_end": 20
+                "page_end": 20,
+                "title": "Rat Queens (2017-) 014"
             }
         ],
         "art": [
@@ -3746,7 +3950,7 @@
                 "page_end": 24
             }
         ],
-        "advertisement": [
+        "advertisements": [
             {
                 "page_start": 22,
                 "page_end": 23
@@ -3756,7 +3960,7 @@
                 "page_end": 25
             }
         ],
-        "back_cover": [
+        "back_covers": [
             {
                 "page_start": 26,
                 "page_end": 26
