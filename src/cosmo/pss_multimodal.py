@@ -100,6 +100,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
     
     emb_model = SentenceTransformer(
     emb_model_id, model_kwargs={"device_map": device},
+    #emb_model_id, device=device,
     tokenizer_kwargs={"padding_side": "left"},
     ).eval()
     
@@ -107,7 +108,8 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
     
     print(f'Loaded {emb_model_id} with feature dim {emb_feature_dim}')
     
-    bb_batch_size = 64
+    #bb_batch_size = 64
+    bb_batch_size = 16
     
     train_dataset = PSSMultimodalDataset(
                         root_dir,
