@@ -76,3 +76,8 @@ Combined **advertisement**, **back cover**, and **art**
 | Macro Avg (P/R/F1) | 0.34 / 0.40 / 0.33 |
 | Weighted Avg (P/R/F1) | 0.89 / 0.85 / 0.87 |
 | Total Samples | 2666 |
+
+
+Early stopping triggered after 7 epochs.
+Epochs:  19%|▏| 77/400 [9:53:48<41:30:56, 462.71s/it, train_loss=0.8634, train_f1=0.5870, val_loss=0.7401, val_f1=0.621
+Training finished.
