@@ -262,16 +262,9 @@ class PSSDataset(Dataset):
                     if page_num in page_map:
                         image_index = page_map[page_num]
                         
-                        # Special handling for the first page of a story
-                        if category == "stories":
-                            title = item.get('title', '')
-                            if page_num == start_page and 'continue' not in title:
-                                page_labels[image_index] = self.class_to_idx["first-page"]
-                            else:
-                                page_labels[image_index] = label_idx
-                        else:
-                            page_labels[image_index] = label_idx
-        
+                        # The original code had special handling for 'first-page'.
+                        # This has been removed to treat all story pages, including the first, as 'story'.
+                        page_labels[image_index] = label_idx        
         return page_labels
     
     def _get_page_number(self, filename: str) -> int:
@@ -319,7 +312,7 @@ class PSSDataset(Dataset):
                         # Append a placeholder black image to maintain batch size and prevent crashes
                         image = np.zeros((100, 100, 3), dtype=np.uint8)
 
-                    if self.augment_data:
+                    if self.augment_data and self.transform:
                         image, description = self.transform(image)
                     batch_images.append(image)
                 
