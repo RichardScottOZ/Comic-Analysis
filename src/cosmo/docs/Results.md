@@ -81,3 +81,47 @@ Combined **advertisement**, **back cover**, and **art**
 Early stopping triggered after 7 epochs.
 Epochs:  19%|▏| 77/400 [9:53:48<41:30:56, 462.71s/it, train_loss=0.8634, train_f1=0.5870, val_loss=0.7401, val_f1=0.621
 Training finished.
+
+
+# Third Run 604 synthetic books
+
+# Final Model Performance
+
+**Average Book MNDD:** `8.1579`
+
+## Document-level Metrics
+
+- **Precision:** `0.4459`  
+- **Recall:** `0.5313`  
+- **F1:** `0.4540`  
+- **Segmentation Quality (SQ):** `0.8967`  
+- **Panoptic Quality (PQ):** `0.4176`
+
+---
+
+## Classification Report
+
+| Label          | Precision | Recall | F1-Score | Support |
+|----------------|-----------|--------|----------|---------|
+| advertisement  | 0.70      | 0.53   | 0.61     | 372     |
+| cover          | 0.75      | 0.34   | 0.47     | 89      |
+| story          | 0.95      | 0.86   | 0.90     | 2100    |
+| textstory      | 0.00      | 0.00   | 0.00     | 0       |
+| first-page     | 0.00      | 0.00   | 0.00     | 0       |
+| credits        | 0.46      | 0.67   | 0.55     | 101     |
+| art            | 0.00      | 0.00   | 0.00     | 0       |
+| text           | 0.02      | 0.75   | 0.04     | 4       |
+| back_cover     | 0.00      | 0.00   | 0.00     | 0       |
+
+### Overall
+
+- **Accuracy:** `0.79` (2666 samples)  
+- **Macro Avg:** Precision `0.32`, Recall `0.35`, F1 `0.28`  
+- **Weighted Avg:** Precision `0.89`, Recall `0.79`, F1 `0.83`
+
+---
+
+## Final Scores
+
+- **F1 Macro Score:** `0.42678281633348153`  
+- **Accuracy Score:** `0.791072768192048`
