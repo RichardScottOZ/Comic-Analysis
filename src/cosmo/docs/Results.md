@@ -125,3 +125,46 @@ Training finished.
 
 - **F1 Macro Score:** `0.42678281633348153`  
 - **Accuracy Score:** `0.791072768192048`
+
+
+# 4th Cosmo run
+# Final Model Performance
+
+**Average Book MNDD:** `2.1184`
+
+## Document-level Metrics
+
+- **Precision:** `0.8193`  
+- **Recall:** `0.8714`  
+- **F1:** `0.8378`  
+- **Segmentation Quality (SQ):** `0.9723`  
+- **Panoptic Quality (PQ):** `0.8180`
+
+---
+
+## Classification Report
+
+| Label          | Precision | Recall | F1-Score | Support |
+|----------------|-----------|--------|----------|---------|
+| advertisement  | 0.76      | 0.90   | 0.82     | 257     |
+| cover          | 0.91      | 0.72   | 0.81     | 127     |
+| story          | 0.99      | 0.96   | 0.97     | 1861    |
+| textstory      | 0.00      | 0.00   | 0.00     | 0       |
+| first-page     | 0.00      | 0.00   | 0.00     | 0       |
+| credits        | 0.74      | 0.80   | 0.77     | 144     |
+| art            | 0.00      | 0.00   | 0.00     | 0       |
+| text           | 0.85      | 0.91   | 0.87     | 127     |
+| back_cover     | 0.00      | 0.00   | 0.00     | 0       |
+
+### Overall
+
+- **Accuracy:** `0.93` (2516 samples)  
+- **Macro Avg:** Precision `0.47`, Recall `0.48`, F1 `0.47`  
+- **Weighted Avg:** Precision `0.94`, Recall `0.93`, F1 `0.93`
+
+---
+
+## Final Scores
+
+- **F1 Macro Score:** `0.8495674169717635`  
+- **Accuracy Score:** `0.9328298887122417`
