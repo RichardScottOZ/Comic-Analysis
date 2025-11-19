@@ -128,6 +128,17 @@ Training finished.
 
 
 # 4th Cosmo run
+- Here I have hand labelled 25000 pages
+- Internal covers that are 'cover variants' I called covers
+- Sometimes previews for new comics 'with sneak preview' etc. - I called credits
+    - So this sort of category is always problematic
+    - Could lump them all in as advertisements in that sense too
+- Text - same thing is a chunk of editorial mostly doing new comics an advertisement?  Yes, but also 'text'
+- Credits - sometimes are story pages as well - so should we have multilabel
+    - credits that are single tone background with words, etc.
+- However, we can see this is significantly better than bart from VLM results (which are still pretty goodf for zero shot)
+
+![alt text](image-1.png)
 # Final Model Performance
 
 **Average Book MNDD:** `2.1184`
