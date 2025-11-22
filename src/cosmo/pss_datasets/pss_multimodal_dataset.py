@@ -49,7 +49,7 @@ class PSSMultimodalDataset(PSSDataset):
             max_seq_length=max_seq_length,
             device=device,
             precompute_features=precompute_visual_features,
-            precompute_dir=precompute_visial_featres_dir,
+            precompute_dir=precompute_visual_features_dir,
             transform=transform,
             filter_unknown=filter_unknown,
             augment_data=augment_data,
