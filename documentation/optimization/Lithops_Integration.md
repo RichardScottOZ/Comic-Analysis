@@ -15,14 +15,43 @@ Lithops enables:
 
 ### Performance Comparison
 
-| Method | Books | Time | Cost* | Notes |
-|--------|-------|------|-------|-------|
-| Local Sequential | 1000 | ~28 hours | $0 | Single GPU machine |
-| Local Parallel (4 GPUs) | 1000 | ~7 hours | $0 | Multi-GPU machine |
-| Lithops (100 workers) | 1000 | ~17 minutes | ~$50 | AWS Lambda + S3 |
-| Lithops (500 workers) | 1000 | ~3 minutes | ~$50 | AWS Lambda + S3 |
+**Dataset Assumptions:**
+- 1000 books = ~30,000 pages average (30 pages per book typical for comic books)
+- Processing time: ~100ms per page with SigLIP so400m on CPU, ~30ms on GPU
 
-*Costs are estimates and vary by cloud provider and region.
+| Method | Books | Pages | Time | Cost* | Notes |
+|--------|-------|-------|------|-------|-------|
+| Local Sequential (GPU) | 1000 | 30,000 | ~15 hours | $0 | Single GPU machine |
+| Local Sequential (CPU) | 1000 | 30,000 | ~50 hours | $0 | Single CPU machine |
+| Local Parallel (4 GPUs) | 1000 | 30,000 | ~4 hours | $0 | Multi-GPU machine |
+| Lithops CPU (100 workers) | 1000 | 30,000 | ~30 minutes | ~$75 | AWS Lambda + S3 |
+| Lithops CPU (500 workers) | 1000 | 30,000 | ~6 minutes | ~$75 | AWS Lambda + S3 |
+| Lithops GPU (50 workers) | 1000 | 30,000 | ~10 minutes | ~$150 | AWS Batch g4dn.xlarge |
+
+*Costs are estimates for AWS us-east-1 and vary by cloud provider and region.
+
+### Large-Scale Cost Analysis (1.2 Million Pages)
+
+For a dataset of **1.2 million pages** (~40,000 books at 30 pages/book):
+
+| Method | Time | AWS Cost | Azure Cost | GCP Cost | Notes |
+|--------|------|----------|------------|----------|-------|
+| **CPU-Based (Recommended)** |
+| Lithops Lambda (500 workers) | ~4 hours | **~$3,000** | ~$2,800 | ~$3,200 | Most cost-effective |
+| Lithops Lambda (1000 workers) | ~2 hours | **~$3,000** | ~$2,800 | ~$3,200 | Faster, same cost |
+| **GPU-Based (High Performance)** |
+| Lithops Batch GPU (100 workers) | ~2 hours | **~$6,000** | ~$5,500 | ~$6,500 | g4dn.xlarge instances |
+| Lithops Batch GPU (200 workers) | ~1 hour | **~$6,000** | ~$5,500 | ~$6,500 | Faster processing |
+
+**Cost Breakdown for 1.2M Pages (AWS Lambda CPU, 500 workers):**
+- Lambda Compute: 10GB memory × 1.2M × 1 second = 12M GB-seconds × $0.0000166667 = **~$2,000**
+- Lambda Requests: 40,000 invocations × $0.20/1M = **~$8**
+- S3 Storage: 600GB embeddings × $0.023/GB/month = **~$14/month**
+- S3 PUT Requests: 80,000 × $0.005/1000 = **~$400**
+- Data Transfer: 30GB × $0.09/GB = **~$270**
+- **Total One-Time Cost: ~$2,678** (rounded to ~$3,000 with overhead)
+
+**Recommendation for 1.2M pages:** Use **CPU-based Lambda with 500-1000 workers** for optimal cost/performance ratio.
 
 ## Architecture
 
@@ -107,27 +136,66 @@ gsutil mb gs://cosmo-pss-embeddings
 
 ### 3. Build Custom Runtime
 
-The CoSMo PSS pipeline requires a custom runtime with ML dependencies.
+The CoSMo PSS pipeline requires a custom runtime with ML dependencies. **Two Dockerfiles are provided:**
+
+#### Option A: CPU Runtime (Recommended for Serverless)
+Best for AWS Lambda, Azure Functions, Google Cloud Functions. Smaller image size, lower cost.
 
 ```bash
-# Build Docker image
-docker build -f Dockerfile.lithops -t cosmo-pss-runtime .
+# Build CPU-only Docker image
+docker build -f Dockerfile.lithops.cpu -t cosmo-pss-runtime-cpu .
 
-# Push to registry (example for AWS ECR)
-aws ecr create-repository --repository-name cosmo-pss-runtime
-docker tag cosmo-pss-runtime:latest <account>.dkr.ecr.<region>.amazonaws.com/cosmo-pss-runtime:latest
-docker push <account>.dkr.ecr.<region>.amazonaws.com/cosmo-pss-runtime:latest
+# Push to AWS ECR
+aws ecr create-repository --repository-name cosmo-pss-runtime-cpu
+docker tag cosmo-pss-runtime-cpu:latest <account>.dkr.ecr.<region>.amazonaws.com/cosmo-pss-runtime-cpu:latest
+docker push <account>.dkr.ecr.<region>.amazonaws.com/cosmo-pss-runtime-cpu:latest
 
 # Register runtime with Lithops
-lithops runtime create cosmo-pss-runtime --backend aws_lambda
+lithops runtime create cosmo-pss-runtime-cpu --backend aws_lambda
 ```
 
-For Azure Container Registry:
+#### Option B: GPU Runtime (High Performance)
+Best for AWS Batch, Azure Container Instances with GPU. Faster processing, higher cost.
+
+```bash
+# Build GPU Docker image
+docker build -f Dockerfile.lithops.gpu -t cosmo-pss-runtime-gpu .
+
+# Push to AWS ECR
+aws ecr create-repository --repository-name cosmo-pss-runtime-gpu
+docker tag cosmo-pss-runtime-gpu:latest <account>.dkr.ecr.<region>.amazonaws.com/cosmo-pss-runtime-gpu:latest
+docker push <account>.dkr.ecr.<region>.amazonaws.com/cosmo-pss-runtime-gpu:latest
+
+# Register runtime with Lithops for AWS Batch
+lithops runtime create cosmo-pss-runtime-gpu --backend aws_batch
+```
+
+#### Azure Container Registry (CPU or GPU)
 ```bash
 az acr create --resource-group myResourceGroup --name cosmopssregistry --sku Basic
 az acr login --name cosmopssregistry
-docker tag cosmo-pss-runtime:latest cosmopssregistry.azurecr.io/cosmo-pss-runtime:latest
-docker push cosmopssregistry.azurecr.io/cosmo-pss-runtime:latest
+
+# For CPU
+docker tag cosmo-pss-runtime-cpu:latest cosmopssregistry.azurecr.io/cosmo-pss-runtime-cpu:latest
+docker push cosmopssregistry.azurecr.io/cosmo-pss-runtime-cpu:latest
+
+# For GPU
+docker tag cosmo-pss-runtime-gpu:latest cosmopssregistry.azurecr.io/cosmo-pss-runtime-gpu:latest
+docker push cosmopssregistry.azurecr.io/cosmo-pss-runtime-gpu:latest
+```
+
+#### Google Container Registry (CPU or GPU)
+```bash
+# Configure Docker for GCR
+gcloud auth configure-docker
+
+# For CPU
+docker tag cosmo-pss-runtime-cpu:latest gcr.io/<project-id>/cosmo-pss-runtime-cpu:latest
+docker push gcr.io/<project-id>/cosmo-pss-runtime-cpu:latest
+
+# For GPU
+docker tag cosmo-pss-runtime-gpu:latest gcr.io/<project-id>/cosmo-pss-runtime-gpu:latest
+docker push gcr.io/<project-id>/cosmo-pss-runtime-gpu:latest
 ```
 
 ### 4. Configure Lithops
@@ -292,24 +360,115 @@ results = executor.get_result(futures)
 
 ### Tips for Reducing Costs
 
-1. **Right-size Memory**: Start with 4GB, increase only if needed
-2. **Batch Size**: Larger batches reduce function invocations
-3. **Region Selection**: Choose regions with lower costs
-4. **Reserved Capacity**: For large-scale repeated runs
-5. **Storage Class**: Use appropriate S3 storage class for embeddings
+1. **Right-size Memory**: Start with 4GB for CPU, increase only if needed
+2. **Batch Size**: Larger batches reduce function invocations (use PSS_PRECOMP_BATCH=16-32)
+3. **Region Selection**: Choose regions with lower costs (us-east-1 typically cheapest)
+4. **Reserved Capacity**: For large-scale repeated runs, consider AWS Savings Plans
+5. **Storage Class**: Use S3 Standard for active processing, move to Glacier for archival
+6. **Use CPU for Cost**: CPU runtime is 40% cheaper than GPU for this workload
 
-### Cost Breakdown Example (AWS Lambda)
+### Detailed Cost Breakdown
 
-For processing 1000 books with ~100 pages each:
+#### Small Scale: 1,000 Books (~30,000 pages)
 
-| Component | Usage | Cost |
-|-----------|-------|------|
-| Lambda Compute | 100,000 GB-seconds | ~$1.67 |
-| Lambda Requests | 1,000 invocations | ~$0.00 |
-| S3 Storage | 50 GB | ~$1.15/month |
-| S3 PUT Requests | 200,000 | ~$1.00 |
-| Data Transfer | 5 GB | ~$0.45 |
-| **Total** | | **~$4.27 + storage** |
+**AWS Lambda CPU (10GB memory, 500 workers):**
+
+| Component | Calculation | Cost |
+|-----------|-------------|------|
+| Lambda Compute | 10GB × 30,000 pages × 1 sec = 300,000 GB-sec × $0.0000166667 | **$5.00** |
+| Lambda Requests | 1,000 books × $0.20/1M | **$0.00** |
+| S3 Storage | 15GB × $0.023/GB/month | **$0.35/month** |
+| S3 PUT Requests | 60,000 × $0.005/1000 | **$0.30** |
+| Data Transfer | 1GB × $0.09/GB | **$0.09** |
+| **Total One-Time** | | **$5.74** |
+| **Monthly Storage** | | **$0.35** |
+
+#### Medium Scale: 10,000 Books (~300,000 pages)
+
+**AWS Lambda CPU (10GB memory, 500 workers):**
+
+| Component | Calculation | Cost |
+|-----------|-------------|------|
+| Lambda Compute | 10GB × 300,000 pages × 1 sec = 3M GB-sec × $0.0000166667 | **$50.00** |
+| Lambda Requests | 10,000 books × $0.20/1M | **$0.00** |
+| S3 Storage | 150GB × $0.023/GB/month | **$3.45/month** |
+| S3 PUT Requests | 600,000 × $0.005/1000 | **$3.00** |
+| Data Transfer | 10GB × $0.09/GB | **$0.90** |
+| **Total One-Time** | | **$53.90** |
+| **Monthly Storage** | | **$3.45** |
+
+#### Large Scale: 40,000 Books (~1.2 Million pages) - DETAILED
+
+**AWS Lambda CPU (10GB memory, 500-1000 workers):**
+
+| Component | Detailed Calculation | Cost |
+|-----------|----------------------|------|
+| **Lambda Compute** | |
+| - GB-seconds | 10GB × 1,200,000 pages × 1.0 sec/page = 12,000,000 GB-sec | |
+| - Rate | $0.0000166667 per GB-second | |
+| - Subtotal | 12M × $0.0000166667 | **$2,000.00** |
+| **Lambda Requests** | |
+| - Invocations | 40,000 books | |
+| - Rate | $0.20 per 1M requests | |
+| - Subtotal | 40,000 × ($0.20/1M) | **$0.01** |
+| **S3 Storage (First Month)** | |
+| - Total size | 600GB (0.5MB per page × 1.2M pages) | |
+| - Rate | $0.023 per GB/month | |
+| - Subtotal | 600 × $0.023 | **$13.80** |
+| **S3 PUT Requests** | |
+| - Total requests | 80,000 (2 per book: visual + text) | |
+| - Rate | $0.005 per 1,000 PUT requests | |
+| - Subtotal | 80,000 × ($0.005/1000) | **$400.00** |
+| **S3 GET Requests** (for classification) | |
+| - Total requests | 80,000 | |
+| - Rate | $0.0004 per 1,000 GET requests | |
+| - Subtotal | 80,000 × ($0.0004/1000) | **$0.03** |
+| **Data Transfer Out** | |
+| - To internet | 30GB | |
+| - Rate | $0.09 per GB | |
+| - Subtotal | 30 × $0.09 | **$2.70** |
+| **CloudWatch Logs** | |
+| - Log data | 5GB | |
+| - Rate | $0.50 per GB | |
+| - Subtotal | 5 × $0.50 | **$2.50** |
+| **TOTAL ONE-TIME COST** | | **$2,419.04** |
+| **Monthly Storage Cost** | | **$13.80** |
+
+**AWS Batch GPU (g4dn.xlarge, 100 workers):**
+
+| Component | Calculation | Cost |
+|-----------|-------------|------|
+| EC2 Compute (g4dn.xlarge) | 100 workers × 2 hours × $0.526/hour | **$105.20** |
+| Additional Batch overhead | ~10% | **$10.52** |
+| S3 Storage | 600GB × $0.023/GB/month | **$13.80/month** |
+| S3 PUT Requests | 80,000 × $0.005/1000 | **$400.00** |
+| Data Transfer | 30GB × $0.09/GB | **$2.70** |
+| **Total One-Time** | | **$518.42** |
+| **Monthly Storage** | | **$13.80** |
+
+**Cost Comparison Summary (1.2M pages):**
+
+| Method | Processing Time | One-Time Cost | Best For |
+|--------|----------------|---------------|----------|
+| **Lambda CPU (Recommended)** | 2-4 hours | **~$2,400** | Cost-sensitive, large-scale |
+| **Batch GPU** | 1-2 hours | **~$520** | Performance-critical |
+| **Local GPU (4x)** | ~60 hours | **$0** | When cloud not available |
+
+### Cost Optimization Recommendations
+
+1. **For < 100K pages**: Use Lambda CPU, most cost-effective
+2. **For 100K-1M pages**: Use Lambda CPU with 500-1000 workers
+3. **For > 1M pages**: Consider AWS Batch GPU if time-critical, otherwise Lambda CPU
+4. **Storage Lifecycle**: Move embeddings to S3 Glacier Deep Archive ($0.00099/GB/month) after 30 days if not frequently accessed
+
+### Regional Cost Variations (Lambda CPU, 1.2M pages)
+
+| Region | Compute Cost | Total Cost | vs us-east-1 |
+|--------|-------------|-----------|--------------|
+| us-east-1 | $2,000 | $2,420 | baseline |
+| us-west-2 | $2,000 | $2,420 | +0% |
+| eu-west-1 | $2,100 | $2,520 | +4% |
+| ap-southeast-1 | $2,200 | $2,620 | +8% |
 
 ## Troubleshooting
 

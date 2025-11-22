@@ -100,21 +100,23 @@ standalone:
   hard_dismantle_timeout: 600  # seconds
 
 # Docker runtime configuration
-# This is used to build custom runtime images with ML dependencies
+# Two Dockerfiles provided: CPU-only and GPU-enabled
 docker:
-  # Base image
-  base_image: nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
-  
+  # For serverless (Lambda, Functions): Use CPU Dockerfile
   # Custom Dockerfile path (relative to project root)
-  dockerfile: Dockerfile.lithops
+  dockerfile_cpu: Dockerfile.lithops.cpu
+  
+  # For batch processing with GPU: Use GPU Dockerfile
+  dockerfile_gpu: Dockerfile.lithops.gpu
   
   # Docker registry settings (for pushing custom runtime)
   registry: null  # Uses default registry for backend (ECR for AWS, ACR for Azure, etc.)
   
-  # Build arguments
+  # Build arguments (not needed for explicit Dockerfiles, kept for reference)
   build_args:
     PYTHON_VERSION: "3.10"
     PYTORCH_VERSION: "2.1.0"
+    CUDA_VERSION: "11.8"
 
 # Environment variables passed to worker functions
 env_vars:
