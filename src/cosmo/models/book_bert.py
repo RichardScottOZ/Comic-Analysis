@@ -1,3 +1,9 @@
+"""
+BookBERT models for CoSMo Page Stream Segmentation.
+
+The BookBERT architecture is the CoSMo v4 model for comic book page classification.
+A trained version is available on HuggingFace: richardscottoz/cosmo-v4
+"""
 import torch
 import torch.nn as nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
@@ -58,7 +64,12 @@ class BookBERTMultimodal(nn.Module):
 
 
 class BookBERTMultimodal2(nn.Module):
-    """BookBERT multimodal model (version 2) with enhanced capabilities."""
+    """
+    BookBERT multimodal model (version 2) with enhanced capabilities.
+    
+    This is the CoSMo v4 model architecture. A trained version is available
+    on HuggingFace at: richardscottoz/cosmo-v4
+    """
     
     def __init__(self, textual_feature_dim, visual_feature_dim, num_classes, 
                  hidden_dim=256, num_attention_heads=4, bert_input_dim=768,

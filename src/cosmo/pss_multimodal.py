@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from utils.training import compute_class_weights, train_multimodal
 from utils.metrics import calculate_mndd, panoptic_quality_metrics
-from utils.visualitzation import visualize_book
+from utils.visualization import visualize_book
 from utils.sliding_window import evaluate_multimodal_with_sliding_window
 from utils.env_paths import paths as get_env_paths
 from pss_datasets.pss_multimodal_dataset import PSSMultimodalDataset
@@ -124,7 +124,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
                         bb_feature_dim = bb_feature_dim,
                         processor = processor,
                         precompute_visual_features=False,
-                        precompute_visial_featres_dir=f'{precompute_dir}/features_train.pt',
+                        precompute_visual_features_dir=f'{precompute_dir}/features_train.pt',
                         # ---------------
                         annotations_path = f'{data_dir}/v1/comics_train.json',  
                         device=device,
@@ -154,7 +154,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
                         bb_feature_dim = bb_feature_dim,
                         processor = processor,
                         precompute_visual_features=False,
-                        precompute_visial_featres_dir=f'{precompute_dir}/features_val.pt',
+                        precompute_visual_features_dir=f'{precompute_dir}/features_val.pt',
                         # ---------------
                         annotations_path = f'{data_dir}/v1/comics_val.json',  
                         device=device,
@@ -178,7 +178,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
                         bb_feature_dim = bb_feature_dim,
                         processor = processor,
                         precompute_visual_features=False,
-                        precompute_visial_featres_dir=f'{precompute_dir}/features_test.pt',
+                        precompute_visual_features_dir=f'{precompute_dir}/features_test.pt',
                         # ---------------
                         annotations_path = f'{data_dir}/v1/comics_test.json',  
                         device=device,

@@ -1,3 +1,9 @@
+"""
+Classification-only inference script for CoSMo PSS pipeline.
+
+Loads precomputed visual and text embeddings and runs the BookBERT classifier
+(CoSMo v4, available at richardscottoz/cosmo-v4 on HuggingFace).
+"""
 import os, json, torch
 from pathlib import Path
 from tqdm import tqdm
@@ -68,7 +74,6 @@ def main():
             continue
         with torch.inference_mode():
             feats = feats.to(DEVICE)
-            # Needs implementation in model if not existing
             logits = model.forward_sequence(feats)
             probs = softmax(logits, dim=-1).cpu()
         torch.save(probs, out_dir / f"{book_id}_probs.pt")

@@ -1,5 +1,8 @@
 # CoSMo PSS Inference & Optimization
 
+## Overview
+This document describes performance and portability optimizations for the CoSMo Page Stream Segmentation (PSS) pipeline. The BookBERT model used in this pipeline is the CoSMo v4 model, available on HuggingFace at `richardscottoz/cosmo-v4`.
+
 ## Goals
 - Portable path configuration
 - Mixed precision & inference mode for backbone
@@ -66,8 +69,8 @@ python -m cosmo.classify_precomputed PSS_PRECOMPUTE=/data/precomputed PSS_CLASSI
    - Runs lightweight BookBERT classifier
    - Saves probability distributions for each page
 
-### BookBERT Model Architecture
-The `BookBERTMultimodal2` model consists of:
+### BookBERT Model Architecture (CoSMo v4)
+The BookBERT model (CoSMo v4, available at `richardscottoz/cosmo-v4` on HuggingFace) is implemented as `BookBERTMultimodal2` and consists of:
 - Input projection layer: fuses visual and text features
 - Positional embeddings (absolute or learned)
 - Transformer encoder with configurable layers and attention heads
@@ -75,6 +78,8 @@ The `BookBERTMultimodal2` model consists of:
 - Classification head
 
 The model includes a `forward_sequence` method for single-sequence inference, optimized for the classification-only phase.
+
+**HuggingFace Model**: The trained CoSMo v4 model can be loaded from `richardscottoz/cosmo-v4` for inference.
 
 ### Dynamic Batch Handling
 The `dynamic_batch.py` utility automatically reduces batch size when GPU memory is insufficient:

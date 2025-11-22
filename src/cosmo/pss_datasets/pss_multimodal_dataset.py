@@ -2,7 +2,7 @@ import tqdm
 import torch
 import os
 import json
-from .pss_dataset import PSSDataset
+from ..pss_dataset import PSSDataset
 
 class PSSMultimodalDataset(PSSDataset):
     def __init__(
@@ -20,7 +20,7 @@ class PSSMultimodalDataset(PSSDataset):
         bb_feature_dim,
         processor,
         precompute_visual_features=True,
-        precompute_visial_featres_dir=None,
+        precompute_visual_features_dir=None,
         # ---------------
         annotations_path = None,  
         max_seq_length=512,
@@ -127,7 +127,7 @@ class PSSMultimodalDataset(PSSDataset):
                     print(f'Error loading precompute features from {cache_path}: {e}')
                     self._precompute_embeddings(cache_path)
             else:
-                print(f'Perecomputing all embeddings and loading it in {cache_path}!')
+                print(f'Precomputing all embeddings and loading it in {cache_path}!')
                 self._precompute_embeddings(cache_path)
                 
                 
@@ -171,9 +171,9 @@ class PSSMultimodalDataset(PSSDataset):
                         batch_text.append("")
                 
                 with torch.no_grad():                    
-                    bacth_embeddings = self.emb_model.encode(batch_text, batch_size=len(batch_text))
-                    bacth_emb_tensor = torch.from_numpy(bacth_embeddings)
-                    all_features.extend([feat for feat in bacth_emb_tensor])
+                    batch_embeddings = self.emb_model.encode(batch_text, batch_size=len(batch_text))
+                    batch_emb_tensor = torch.from_numpy(batch_embeddings)
+                    all_features.extend([feat for feat in batch_emb_tensor])
                     
             except Exception as e:
                 print(f"Error processing batch starting at {i}: {str(e)}")
