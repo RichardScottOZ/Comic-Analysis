@@ -13,6 +13,7 @@ from utils.training import compute_class_weights, train_multimodal
 from utils.metrics import calculate_mndd, panoptic_quality_metrics
 from utils.visualitzation import visualize_book
 from utils.sliding_window import evaluate_multimodal_with_sliding_window
+from utils.env_paths import paths as get_env_paths
 from pss_datasets.pss_multimodal_dataset import PSSMultimodalDataset
 from models.book_bert import BookBERTMultimodal, BookBERTMultimodal2
 import json
@@ -54,15 +55,13 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
         num_aug_copies = 5, transforms = None, num_synthetic_books = 1000):
     
     
-    root_dir = 'E:\\PSS_Training'
-    
-    # Get the project root directory (assuming the script is in CoMix/CoSMo-ComicsPSS/CoSMo)
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-
-    precompute_dir = os.path.join(project_root, 'precomputed')
-    checkpoint_dir = os.path.join(project_root, 'checkpoints')
-    data_dir = os.path.join(project_root, 'data') # This is where comics_train.json is located
-    out_dir = os.path.join(project_root, 'output')
+    # Use environment-driven path resolution with fallback defaults
+    cfg = get_env_paths()
+    root_dir = str(cfg["root_dir"])
+    precompute_dir = str(cfg["precompute_dir"])
+    checkpoint_dir = str(cfg["checkpoint_dir"])
+    data_dir = str(cfg["data_dir"])
+    out_dir = str(cfg["output_dir"])
     
     set_all_seeds(seed)
     
@@ -127,7 +126,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
                         precompute_visual_features=False,
                         precompute_visial_featres_dir=f'{precompute_dir}/features_train.pt',
                         # ---------------
-                        annotations_path = f'{data_dir}/comics_train.json',  
+                        annotations_path = f'{data_dir}/v1/comics_train.json',  
                         device=device,
                         batch_size = bb_batch_size,
                         max_seq_length=512,
@@ -157,7 +156,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
                         precompute_visual_features=False,
                         precompute_visial_featres_dir=f'{precompute_dir}/features_val.pt',
                         # ---------------
-                        annotations_path = f'{data_dir}/comics_val.json',  
+                        annotations_path = f'{data_dir}/v1/comics_val.json',  
                         device=device,
                         batch_size = bb_batch_size,
                         max_seq_length=512,
@@ -181,7 +180,7 @@ def main(run, gpu_id = 0,train=True, lr = 1e-4, dropout_p=0.4, epochs = 10, batc
                         precompute_visual_features=False,
                         precompute_visial_featres_dir=f'{precompute_dir}/features_test.pt',
                         # ---------------
-                        annotations_path = f'{data_dir}/comics_test.json',  
+                        annotations_path = f'{data_dir}/v1/comics_test.json',  
                         device=device,
                         batch_size = bb_batch_size,
                         max_seq_length=512,
