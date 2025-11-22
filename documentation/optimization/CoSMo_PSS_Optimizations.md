@@ -93,6 +93,28 @@ The `pss_multimodal.py` training script has been updated to:
 - Support environment variable overrides for all paths
 - Maintain backward compatibility with existing functionality
 
+## Distributed Computing with Lithops
+
+For large-scale processing, the CoSMo PSS pipeline can be run using **Lithops** for serverless, distributed computing. This enables:
+- **Massive parallelization**: Process hundreds/thousands of books simultaneously
+- **Cloud-native**: Works with AWS Lambda, Azure Functions, Google Cloud Functions
+- **Cost efficiency**: Pay only for compute time used
+
+See [Lithops_Integration.md](./Lithops_Integration.md) for complete setup and usage instructions.
+
+### Quick Example
+```python
+from cosmo.lithops_precompute import run_lithops_precompute
+
+results = run_lithops_precompute(
+    books_root='/data/books',
+    annotations_path='/data/comics_train.json',
+    output_bucket='cosmo-pss-embeddings',
+    backend='aws_lambda',
+    workers=100
+)
+```
+
 ## Next Steps
 - Integrate windowed evaluation for very long omnibuses.
 - Add optional hierarchical boundary labels (Episode-Start vs Story-Start).
