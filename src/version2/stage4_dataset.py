@@ -142,6 +142,10 @@ class Stage4SequenceDataset(Dataset):
         
         Randomly mask one panel and create candidates including the correct one.
         """
+        # Need at least 2 panels for this task
+        if num_panels < 2:
+            return None
+        
         # Randomly select position to mask
         mask_pos = random.randint(0, num_panels - 1)
         
@@ -169,13 +173,22 @@ class Stage4SequenceDataset(Dataset):
         candidates = [emb for _, emb in candidate_pairs]
         
         # Create context (all panels except masked)
-        context_panels = np.concatenate([
-            panel_embeddings[:mask_pos],
-            panel_embeddings[mask_pos+1:]
-        ], axis=0)
+        if mask_pos == 0:
+            context_panels = panel_embeddings[1:]
+        elif mask_pos == num_panels - 1:
+            context_panels = panel_embeddings[:mask_pos]
+        else:
+            context_panels = np.concatenate([
+                panel_embeddings[:mask_pos],
+                panel_embeddings[mask_pos+1:]
+            ], axis=0)
         
         # Context embedding (mean of surrounding panels)
-        context_embedding = context_panels.mean(axis=0)
+        if len(context_panels) > 0:
+            context_embedding = context_panels.mean(axis=0)
+        else:
+            # Fallback: use the correct panel itself as context (shouldn't happen with >=2 panels)
+            context_embedding = correct_panel
         
         return {
             'mask_position': mask_pos,
@@ -193,7 +206,11 @@ class Stage4SequenceDataset(Dataset):
         
         Select a split point and predict continuation.
         """
-        # Split point (need at least 2 panels before)
+        # Need at least 4 panels for this task (2 before, 1 target, 1 after for negatives)
+        if num_panels < 4:
+            return None
+        
+        # Split point (need at least 2 panels before and at least 1 after)
         split_pos = random.randint(2, num_panels - 2)
         
         # Preceding panels
@@ -207,6 +224,10 @@ class Stage4SequenceDataset(Dataset):
         
         # Sample negatives from later panels
         later_positions = list(range(split_pos + 1, num_panels))
+        if len(later_positions) == 0:
+            # Fallback: use earlier panels as negatives
+            later_positions = list(range(max(0, split_pos - self.num_candidates), split_pos))
+        
         if len(later_positions) >= self.num_candidates - 1:
             neg_positions = random.sample(later_positions, self.num_candidates - 1)
         else:
@@ -277,21 +298,50 @@ class Stage4SequenceDataset(Dataset):
         num_panels = sequence['num_panels']
         
         # Randomly select task based on weights
-        tasks = list(self.task_weights.keys())
-        weights = [self.task_weights[t] for t in tasks]
-        task_type = random.choices(tasks, weights=weights, k=1)[0]
+        # Filter tasks that are applicable for this sequence length
+        applicable_tasks = []
+        applicable_weights = []
+        for task, weight in self.task_weights.items():
+            # Panel picking needs at least 2 panels
+            if task == 'panel_picking' and num_panels >= 2:
+                applicable_tasks.append(task)
+                applicable_weights.append(weight)
+            # Closure tasks need at least 4 panels
+            elif task in ['visual_closure', 'text_closure'] and num_panels >= 4:
+                applicable_tasks.append(task)
+                applicable_weights.append(weight)
+            # Reading order works with any multi-panel sequence
+            elif task == 'reading_order' and num_panels >= 2:
+                applicable_tasks.append(task)
+                applicable_weights.append(weight)
+            # Other tasks
+            elif task not in ['panel_picking', 'visual_closure', 'text_closure', 'reading_order']:
+                applicable_tasks.append(task)
+                applicable_weights.append(weight)
         
-        # Create task sample
-        if task_type == 'panel_picking':
-            task_data = self._create_panel_picking_sample(panel_embeddings, num_panels)
-        elif task_type in ['visual_closure', 'text_closure']:
-            closure_type = 'visual' if task_type == 'visual_closure' else 'text'
-            task_data = self._create_closure_sample(panel_embeddings, num_panels, closure_type)
-        elif task_type == 'reading_order':
+        # If no applicable tasks, use a default
+        if len(applicable_tasks) == 0:
+            task_type = 'reading_order'
             task_data = self._create_reading_order_sample(panel_embeddings, num_panels)
         else:
-            # For other tasks, return basic data
-            task_data = {}
+            task_type = random.choices(applicable_tasks, weights=applicable_weights, k=1)[0]
+            
+            # Create task sample
+            if task_type == 'panel_picking':
+                task_data = self._create_panel_picking_sample(panel_embeddings, num_panels)
+            elif task_type in ['visual_closure', 'text_closure']:
+                closure_type = 'visual' if task_type == 'visual_closure' else 'text'
+                task_data = self._create_closure_sample(panel_embeddings, num_panels, closure_type)
+            elif task_type == 'reading_order':
+                task_data = self._create_reading_order_sample(panel_embeddings, num_panels)
+            else:
+                # For other tasks, return basic data
+                task_data = {}
+        
+        # Safety check: if task_data is None, use reading order as fallback
+        if task_data is None:
+            task_type = 'reading_order'
+            task_data = self._create_reading_order_sample(panel_embeddings, num_panels)
         
         # Create panel mask
         panel_mask = np.ones(num_panels, dtype=np.float32)
