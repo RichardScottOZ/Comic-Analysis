@@ -16,7 +16,8 @@ Key Improvements over v1 (ClosureLiteSimple):
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModel, AutoTokenizer, SiglipVisionModel
+from transformers import AutoModel, SiglipVisionModel
+import timm
 import numpy as np
 from typing import Dict, Optional, Tuple
 
@@ -98,8 +99,7 @@ class DomainAdaptedResNet(nn.Module):
     def __init__(self, out_dim=512, freeze_backbone=True, adaptation_layers=2):
         super().__init__()
         
-        # Use timm for efficient ResNet loading
-        import timm
+        # Load ResNet50 model
         self.resnet = timm.create_model('resnet50', pretrained=True, num_classes=0)
         self.feature_dim = self.resnet.num_features  # 2048 for ResNet50
         
@@ -271,7 +271,7 @@ class TextEncoder(nn.Module):
         token_embeddings = outputs.last_hidden_state
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
         sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
-        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-6)
         pooled = sum_embeddings / sum_mask
         
         # Project to output dimension
@@ -398,7 +398,8 @@ class AdaptiveFusion(nn.Module):
         gate_logits = self.gate(gate_input)  # (B, 3)
         
         # Mask out unavailable modalities (set to very negative value)
-        gate_logits = gate_logits + (1 - modality_mask) * (-1e9)
+        # Use -1e4 to avoid numerical instability while ensuring masked values are ignored
+        gate_logits = gate_logits + (1 - modality_mask) * (-1e4)
         
         # Compute gate weights
         gate_weights = F.softmax(gate_logits, dim=-1)  # (B, 3)

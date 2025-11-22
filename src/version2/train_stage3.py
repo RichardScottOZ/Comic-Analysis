@@ -53,6 +53,9 @@ class Stage3TrainingObjectives(nn.Module):
         """
         Contrastive loss: Panels from same page should be similar.
         
+        Uses a proper contrastive formulation where all other panels on the same
+        page are positive examples, and we maximize agreement among them.
+        
         Args:
             panel_embeddings: (B, N, D) panel features
             panel_mask: (B, N) binary mask for valid panels
@@ -79,16 +82,17 @@ class Stage3TrainingObjectives(nn.Module):
             sim_matrix = torch.mm(valid_panels, valid_panels.t())  # (n_valid, n_valid)
             sim_matrix = sim_matrix / self.temperature
             
-            # Mask out self-similarity
-            mask = torch.eye(n_valid, device=sim_matrix.device).bool()
-            sim_matrix = sim_matrix.masked_fill(mask, -1e9)
+            # For proper contrastive loss: maximize similarity to all other panels
+            # on same page (all are positive examples)
+            # Create mask for positive pairs (all pairs except self)
+            pos_mask = ~torch.eye(n_valid, device=sim_matrix.device, dtype=torch.bool)
             
-            # For each panel, others in same page are positives
-            # Compute cross-entropy loss
-            labels = torch.arange(n_valid, device=sim_matrix.device)
+            # Extract positive similarities (all other panels on same page)
+            pos_sims = sim_matrix[pos_mask].view(n_valid, n_valid - 1)
             
-            # Loss: want high similarity to other panels on same page
-            loss = F.cross_entropy(sim_matrix, labels)
+            # Contrastive loss: negative log of mean similarity to positives
+            # We want to maximize similarity, so minimize negative similarity
+            loss = -pos_sims.mean()
             losses.append(loss)
         
         if len(losses) == 0:
@@ -228,8 +232,11 @@ def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
         loss_reconstruction = objectives.reconstruction_loss(panel_embeddings, batch['panel_mask'])
         loss_alignment = objectives.modality_alignment_loss(model, batch)
         
-        # Combined loss
-        loss = loss_contrastive + 0.5 * loss_reconstruction + 0.3 * loss_alignment
+        # Combined loss (weights could be made configurable via args)
+        # TODO: Add loss weight arguments for better experimentation
+        loss = (1.0 * loss_contrastive + 
+                0.5 * loss_reconstruction + 
+                0.3 * loss_alignment)
         
         # Backward pass
         optimizer.zero_grad()
@@ -391,10 +398,10 @@ def main(args):
         weight_decay=args.weight_decay
     )
     
-    # Create scheduler
+    # Create scheduler (step per epoch)
     scheduler = CosineAnnealingLR(
         optimizer,
-        T_max=args.epochs * len(train_loader),
+        T_max=args.epochs,
         eta_min=args.lr * 0.01
     )
     
