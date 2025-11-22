@@ -1,0 +1,104 @@
+# Stage 3 Training Configuration
+
+# Model Architecture
+model:
+  visual_backbone: 'both'  # Options: 'siglip', 'resnet', 'both'
+  visual_fusion: 'attention'  # Options: 'concat', 'attention', 'gate'
+  feature_dim: 512
+  freeze_backbones: true
+  use_modality_indicators: true
+
+# Training Parameters
+training:
+  batch_size: 4
+  epochs: 20
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  temperature: 0.07  # For contrastive loss
+  
+  # Loss weights
+  contrastive_weight: 1.0
+  reconstruction_weight: 0.5
+  alignment_weight: 0.3
+  
+  # Optimizer
+  optimizer: 'adamw'
+  scheduler: 'cosine'
+  warmup_epochs: 2
+  
+  # Gradient clipping
+  max_grad_norm: 1.0
+
+# Data Configuration
+data:
+  data_root: '/path/to/comics'
+  train_pss_labels: '/path/to/train_pss.json'
+  val_pss_labels: '/path/to/val_pss.json'
+  
+  # Processing
+  max_text_length: 128
+  image_size: 224
+  max_panels_per_page: 16
+  only_narrative: true
+  
+  # Data loading
+  num_workers: 4
+  pin_memory: true
+  prefetch_factor: 2
+
+# System Configuration
+system:
+  gpu: 0
+  seed: 42
+  checkpoint_dir: './checkpoints/stage3'
+  save_every: 5  # Save checkpoint every N epochs
+  
+  # Logging
+  use_wandb: false
+  wandb_project: 'comic-analysis-stage3'
+  wandb_entity: null
+  log_interval: 10  # Log every N batches
+
+# Experiment Variants
+experiments:
+  # Baseline: Single SigLIP backbone
+  baseline:
+    model:
+      visual_backbone: 'siglip'
+      freeze_backbones: true
+  
+  # Multi-backbone with fine-tuning
+  multibackbone_finetune:
+    model:
+      visual_backbone: 'both'
+      visual_fusion: 'attention'
+      freeze_backbones: false
+    training:
+      learning_rate: 0.00005  # Lower LR when fine-tuning
+  
+  # ResNet only (for comparison)
+  resnet_only:
+    model:
+      visual_backbone: 'resnet'
+      freeze_backbones: true
+  
+  # Large feature dimension
+  large_dim:
+    model:
+      feature_dim: 768
+    data:
+      batch_size: 2  # Reduce batch size due to memory
+
+# Evaluation
+evaluation:
+  metrics:
+    - 'panel_similarity'
+    - 'cross_modal_retrieval'
+    - 'semantic_clustering'
+  
+  # Similarity search evaluation
+  retrieval_k: [1, 5, 10, 50]
+  
+  # Clustering evaluation
+  n_clusters: 10
+  cluster_metric: 'silhouette'
