@@ -1,0 +1,136 @@
+# Lithops configuration for CoSMo PSS Pipeline
+# Documentation: https://lithops-cloud.github.io/docs/
+
+lithops:
+  # Backend configuration - choose one
+  backend: aws_lambda  # Options: aws_lambda, aws_batch, azure_functions, gcp_functions, ibm_cf, code_engine
+  
+  # Storage backend - where embeddings will be stored
+  storage: aws_s3  # Options: aws_s3, azure_blob, gcp_storage, ibm_cos
+  
+  # Logging level
+  log_level: INFO
+  
+  # Execution mode
+  mode: serverless  # Options: serverless, standalone, localhost
+
+# AWS Lambda configuration
+aws:
+  # AWS credentials (can also use AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars)
+  # access_key_id: YOUR_ACCESS_KEY_ID
+  # secret_access_key: YOUR_SECRET_ACCESS_KEY
+  region: us-east-1
+  
+  # Lambda-specific settings
+  lambda:
+    runtime: cosmo-pss-runtime  # Custom runtime name
+    runtime_memory: 10240  # MB - for ML models (max 10GB for Lambda)
+    runtime_timeout: 900  # seconds (15 min max for Lambda)
+    ephemeral_storage: 10240  # MB - temporary storage for models and images
+    
+  # S3 storage configuration
+  s3:
+    # Storage bucket for temporary data and results
+    storage_bucket: cosmo-pss-embeddings
+    # Region for S3 bucket
+    region: us-east-1
+
+# AWS Batch configuration (alternative for longer/GPU tasks)
+aws_batch:
+  # Batch-specific settings
+  compute_environment: cosmo-pss-compute
+  job_queue: cosmo-pss-queue
+  job_definition: cosmo-pss-job
+  runtime_memory: 32768  # MB - more memory available
+  runtime_timeout: 3600  # seconds (1 hour)
+  vcpus: 4
+  # For GPU instances
+  # instance_type: g4dn.xlarge
+  
+# Azure Functions configuration
+azure:
+  # Azure credentials
+  # storage_account_name: YOUR_STORAGE_ACCOUNT
+  # storage_account_key: YOUR_STORAGE_KEY
+  region: eastus
+  
+  # Functions-specific settings
+  functions:
+    runtime: cosmo-pss-runtime
+    runtime_memory: 4096  # MB
+    runtime_timeout: 600  # seconds (10 min)
+
+# Google Cloud Functions configuration
+gcp:
+  # GCP credentials
+  # credentials_path: /path/to/credentials.json
+  region: us-east1
+  
+  # Functions-specific settings
+  functions:
+    runtime: cosmo-pss-runtime
+    runtime_memory: 8192  # MB
+    runtime_timeout: 540  # seconds (9 min)
+
+# IBM Cloud Functions configuration
+ibm:
+  # IBM Cloud credentials
+  # iam_api_key: YOUR_IAM_API_KEY
+  region: us-south
+  
+  # Functions-specific settings
+  functions:
+    runtime: cosmo-pss-runtime
+    runtime_memory: 2048  # MB
+    runtime_timeout: 600  # seconds (10 min)
+
+# Standalone configuration (for running on VMs/containers)
+standalone:
+  # Backend for standalone execution
+  backend: aws_ec2  # Options: aws_ec2, azure_vms, gcp_compute
+  
+  # Instance configuration
+  instance_type: g4dn.xlarge  # GPU instance for faster processing
+  max_workers: 10
+  runtime_memory: 16384  # MB
+  
+  # Auto-scaling
+  auto_dismantle: true
+  soft_dismantle_timeout: 300  # seconds
+  hard_dismantle_timeout: 600  # seconds
+
+# Docker runtime configuration
+# Two Dockerfiles provided: CPU-only and GPU-enabled
+docker:
+  # For serverless (Lambda, Functions): Use CPU Dockerfile
+  # Custom Dockerfile path (relative to project root)
+  dockerfile_cpu: Dockerfile.lithops.cpu
+  
+  # For batch processing with GPU: Use GPU Dockerfile
+  dockerfile_gpu: Dockerfile.lithops.gpu
+  
+  # Docker registry settings (for pushing custom runtime)
+  registry: null  # Uses default registry for backend (ECR for AWS, ACR for Azure, etc.)
+  
+  # Build arguments (not needed for explicit Dockerfiles, kept for reference)
+  build_args:
+    PYTHON_VERSION: "3.10"
+    PYTORCH_VERSION: "2.1.0"
+    CUDA_VERSION: "11.8"
+
+# Environment variables passed to worker functions
+env_vars:
+  PSS_FP16: "1"  # Enable mixed precision
+  PSS_VIS_MODEL: "google/siglip-so400m-patch14-384"
+  PSS_TEXT_MODEL: "Qwen/Qwen3-Embedding-0.6B"
+  PSS_PRECOMP_BATCH: "16"  # Smaller batch for serverless
+  TRANSFORMERS_CACHE: "/tmp/transformers_cache"
+  HF_HOME: "/tmp/hf_home"
+
+# Monitoring and debugging
+monitoring:
+  enabled: false
+  # Integration with CloudWatch, Application Insights, Cloud Monitoring, etc.
+  # backend: cloudwatch  # aws
+  # backend: application_insights  # azure
+  # backend: cloud_monitoring  # gcp
