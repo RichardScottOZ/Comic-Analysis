@@ -47,6 +47,9 @@ matplotlib
 seaborn
 wandb  # optional
 
+# Serverless / distributed computing (optional)
+# lithops  # For cloud-native distributed processing - see documentation/optimization/Lithops_Integration.md
+
 # Other useful packages
 pycocotools
 beautifulsoup4

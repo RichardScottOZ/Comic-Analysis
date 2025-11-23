@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -20,12 +26,38 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+koo# Virtual environments
 venv/
 env/
 ENV/
 
 # IDE
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
 .vscode/
 .idea/
 *.swp
@@ -54,3 +86,15 @@ wandb/
 # OS
 .DS_Store
 Thumbs.db
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+precomputed/
+output/
+data/books/
