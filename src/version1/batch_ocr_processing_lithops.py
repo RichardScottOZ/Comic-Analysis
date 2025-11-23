@@ -191,7 +191,7 @@ def process_image_lithops(task_data: Dict[str, Any], storage=None) -> Dict[str, 
         if local_image_path != image_path and os.path.exists(local_image_path):
             try:
                 os.unlink(local_image_path)
-            except:
+            except (OSError, FileNotFoundError):
                 pass
         
         return result_status
@@ -453,14 +453,14 @@ Examples:
     # Prepare OCR configuration
     ocr_config = {}
     
-    if args.method in ['tesseract', 'easyocr', 'paddleocr']:
+    if args.method == 'tesseract':
         ocr_config['lang'] = args.lang
-        if args.method in ['easyocr', 'paddleocr']:
-            if args.method == 'easyocr':
-                ocr_config['languages'] = [args.lang]
-                ocr_config['gpu'] = args.gpu
-            else:  # paddleocr
-                ocr_config['use_gpu'] = args.gpu
+    elif args.method == 'easyocr':
+        ocr_config['languages'] = [args.lang]
+        ocr_config['gpu'] = args.gpu
+    elif args.method == 'paddleocr':
+        ocr_config['lang'] = args.lang
+        ocr_config['use_gpu'] = args.gpu
     elif args.method in ['qwen', 'gemma', 'deepseek']:
         if not args.api_key:
             print("Error: OPENROUTER_API_KEY environment variable not set and --api-key not provided.")
