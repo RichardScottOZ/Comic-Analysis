@@ -1,0 +1,88 @@
+# Dockerfile for Comic Analysis OCR Lithops Runtime (CPU-ONLY)
+# Optimized for AWS Lambda, Azure Functions, Google Cloud Functions
+# Includes Tesseract, EasyOCR, and PaddleOCR for CPU-based OCR
+
+FROM python:3.10-slim
+
+LABEL maintainer="Comic Analysis Team"
+LABEL description="Comic Analysis OCR Lithops Runtime - CPU-only with Tesseract, EasyOCR, PaddleOCR"
+LABEL runtime_type="cpu"
+
+# Install system dependencies including Tesseract
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    curl \
+    build-essential \
+    libgomp1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1-mesa-glx \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libtesseract-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /function
+
+# Upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install PyTorch CPU-only (for EasyOCR and PaddleOCR)
+RUN pip install --no-cache-dir \
+    torch==2.1.0 \
+    torchvision==0.16.0 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Install OCR packages
+RUN pip install --no-cache-dir \
+    pytesseract==0.3.10 \
+    easyocr==1.7.0 \
+    paddleocr==2.7.0.3 \
+    paddlepaddle==2.6.0
+
+# Install image processing libraries
+RUN pip install --no-cache-dir \
+    Pillow==10.1.0 \
+    opencv-python-headless==4.8.1.78
+
+# Install scientific computing packages
+RUN pip install --no-cache-dir \
+    numpy==1.24.3 \
+    scipy==1.11.4
+
+# Install Lithops
+RUN pip install --no-cache-dir lithops==3.3.1
+
+# Install HTTP client for VLM OCR methods
+RUN pip install --no-cache-dir \
+    requests==2.31.0
+
+# Install additional utilities
+RUN pip install --no-cache-dir \
+    tqdm==4.66.1 \
+    pyyaml==6.0.1
+
+# Copy OCR module
+COPY src/version1/ocr /function/ocr
+
+# Set Python path
+ENV PYTHONPATH=/function:$PYTHONPATH
+
+# Environment variables for model caching
+ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
+ENV HF_HOME=/tmp/hf_home
+ENV TORCH_HOME=/tmp/torch_home
+ENV EASYOCR_MODULE_PATH=/tmp/easyocr
+
+# Create cache directories
+RUN mkdir -p /tmp/transformers_cache /tmp/hf_home /tmp/torch_home /tmp/easyocr
+
+# Pre-download EasyOCR models (optional, uncomment if needed)
+# RUN python -c "import easyocr; reader = easyocr.Reader(['en'])"
+
+# Set entrypoint for Lithops
+CMD ["python", "-c", "print('Comic Analysis OCR Lithops CPU Runtime Ready')"]

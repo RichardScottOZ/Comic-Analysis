@@ -286,12 +286,35 @@ python ocr/example_ocr_usage.py --help
 python batch_ocr_processing.py --list-methods
 ```
 
+## Scaling to Large Datasets
+
+For processing thousands or millions of pages, use **Lithops** for serverless distributed computing:
+
+```bash
+# Process 10,000 pages in ~2 minutes with AWS Lambda
+python batch_ocr_processing_lithops.py \
+  --manifest large_dataset.csv \
+  --method tesseract \
+  --output-bucket comic-ocr-results \
+  --backend aws_lambda \
+  --workers 500
+```
+
+**Benefits:**
+- ⚡ **Speed**: Process 100K pages in 15-30 minutes
+- 💰 **Cost**: ~$0.50-$1 per 1000 pages (Tesseract)
+- 📈 **Scale**: Up to 1000+ parallel workers
+- ☁️ **Cloud Native**: AWS Lambda, Azure Functions, Google Cloud Functions
+
+See [OCR_Lithops_Integration.md](../documentation/OCR_Lithops_Integration.md) for setup and usage.
+
 ## Summary
 
 The OCR module provides:
 - ✅ 6 OCR methods (3 CPU-based, 3 VLM-based)
 - ✅ Configurable via command-line
 - ✅ Batch processing with multiprocessing
+- ✅ **Lithops integration for serverless distributed processing**
 - ✅ Same manifest format as VLM analysis
 - ✅ JSON output for easy integration
 - ✅ Example scripts and comprehensive documentation

@@ -122,7 +122,9 @@ python batch_ocr_processing.py --list-methods
 
 ### Batch Processing
 
-Process a manifest file with OCR:
+### Local Batch Processing
+
+Process a manifest file with OCR on a local machine:
 
 ```bash
 # Using Tesseract (CPU, fast)
@@ -148,6 +150,36 @@ python batch_ocr_processing.py \
   --api_key $OPENROUTER_API_KEY \
   --max_workers 2
 ```
+
+### Lithops Distributed Processing (Serverless)
+
+For large-scale processing, use Lithops for serverless distributed computing:
+
+```bash
+# Process 10,000 pages with 500 Lambda workers (~2 minutes, ~$25)
+python batch_ocr_processing_lithops.py \
+  --manifest manifest.csv \
+  --method tesseract \
+  --output-bucket comic-ocr-results \
+  --backend aws_lambda \
+  --workers 500
+
+# Process with GPU on AWS Batch (50 workers)
+python batch_ocr_processing_lithops.py \
+  --manifest manifest.csv \
+  --method paddleocr \
+  --output-bucket comic-ocr-results \
+  --backend aws_batch \
+  --workers 50 \
+  --gpu
+```
+
+**Performance Comparison** (10,000 pages):
+- **Local Sequential**: ~8 hours (1 CPU core)
+- **Local Parallel**: ~1 hour (8 CPU cores)
+- **Lithops Lambda** (500 workers): **~2 minutes**, ~$25
+
+See [OCR_Lithops_Integration.md](OCR_Lithops_Integration.md) for detailed setup and usage.
 
 ### Programmatic Usage
 
