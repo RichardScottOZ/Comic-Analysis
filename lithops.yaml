@@ -126,6 +126,10 @@ env_vars:
   PSS_PRECOMP_BATCH: "16"  # Smaller batch for serverless
   TRANSFORMERS_CACHE: "/tmp/transformers_cache"
   HF_HOME: "/tmp/hf_home"
+  # OCR-specific environment variables
+  EASYOCR_MODULE_PATH: "/tmp/easyocr"  # EasyOCR model cache
+  TESSDATA_PREFIX: "/usr/share/tesseract-ocr/4.00/tessdata"  # Tesseract data
+  # OPENROUTER_API_KEY: ""  # Set for VLM OCR methods (Qwen, Gemma, Deepseek)
 
 # Monitoring and debugging
 monitoring:
