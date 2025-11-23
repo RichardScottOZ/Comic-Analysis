@@ -56,6 +56,13 @@ beautifulsoup4
 lxml
 sentencepiece
 
+# OCR packages (optional - install as needed for OCR functionality)
+# pytesseract  # Tesseract OCR wrapper (also requires tesseract binary installation)
+# easyocr  # Deep learning-based OCR, supports 80+ languages
+# paddleocr  # PaddlePaddle OCR (also requires paddlepaddle or paddlepaddle-gpu)
+# paddlepaddle  # CPU version for PaddleOCR
+# paddlepaddle-gpu  # GPU version for PaddleOCR (requires CUDA)
+
 # Notes:
 # - On Windows, install the correct torch+cuda wheel first using the PyTorch install selector
 #   (https://pytorch.org/get-started/locally/) then run: python -m pip install -r distillist.txt
