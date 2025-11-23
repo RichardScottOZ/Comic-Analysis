@@ -82,38 +82,38 @@ def list_available_methods() -> Dict[str, bool]:
     try:
         ocr = TesseractOCR()
         methods['tesseract'] = ocr.is_available()
-    except:
+    except Exception:
         pass
     
     try:
         ocr = EasyOCR()
         methods['easyocr'] = ocr.is_available()
-    except:
+    except Exception:
         pass
     
     try:
         ocr = PaddleOCR()
         methods['paddleocr'] = ocr.is_available()
-    except:
+    except Exception:
         pass
     
     # Check VLM methods (they're available if API key is set)
     try:
         ocr = QwenOCR()
         methods['qwen'] = ocr.is_available()
-    except:
+    except Exception:
         pass
     
     try:
         ocr = GemmaOCR()
         methods['gemma'] = ocr.is_available()
-    except:
+    except Exception:
         pass
     
     try:
         ocr = DeepseekOCR()
         methods['deepseek'] = ocr.is_available()
-    except:
+    except Exception:
         pass
     
     return methods

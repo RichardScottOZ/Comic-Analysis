@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict, Any
 from pathlib import Path
-import numpy as np
 
 
 @dataclass

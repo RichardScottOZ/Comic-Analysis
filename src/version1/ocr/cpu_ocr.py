@@ -1,6 +1,7 @@
 """CPU-based OCR implementations using traditional OCR engines."""
 
 from typing import List, Optional
+import math
 from PIL import Image
 import numpy as np
 
@@ -284,7 +285,6 @@ class PaddleOCR(OCRBase):
                 
                 # Calculate angle
                 p0, p1 = polygon[0], polygon[1]
-                import math
                 angle = math.degrees(math.atan2(p1[1] - p0[1], p1[0] - p0[0]))
                 
                 results.append(OCRResult(
@@ -334,7 +334,6 @@ class PaddleOCR(OCRBase):
                 
                 # Calculate angle
                 p0, p1 = polygon[0], polygon[1]
-                import math
                 angle = math.degrees(math.atan2(p1[1] - p0[1], p1[0] - p0[0]))
                 
                 results.append(OCRResult(
