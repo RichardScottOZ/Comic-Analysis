@@ -2,6 +2,13 @@
 
 This document outlines the ongoing work in analyzing comics using data science techniques, focusing on multimodal modeling for content understanding and querying.
 
+# Models Available
+Cosmo Page Stream Segmentation - https://huggingface.co/RichardScottOZ/cosmo-v4
+   - trained on a 25K page subset of more modern comics from multi companies and multiple genres and styles (not manga)
+Closure Lite Simple - https://huggingface.co/RichardScottOZ/comics-analysis-closure-lite-simple
+   - composition and structural analysis
+   
+
 ## 1. Project Goals & Evolution
 
 *   **Version 1 (Closure Lite Framework):**
