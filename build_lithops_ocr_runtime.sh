@@ -16,15 +16,11 @@ echo "Step 2: Adding Tesseract, EasyOCR AND PaddleOCR dependencies to Dockerfile
 # Add Tesseract, EasyOCR, and PaddleOCR with required system libraries
 sed -i '/# Put your dependencies here/a \
 # OCR dependencies - Tesseract, EasyOCR, and PaddleOCR\
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr tesseract-ocr-eng \
-    libgl1 libglib2.0-0 libgomp1 \
-    && rm -rf /var/lib/apt/lists/*\
+RUN apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-eng libgl1 libglib2.0-0 libgomp1 && rm -rf /var/lib/apt/lists/*\
 RUN pip install --no-cache-dir pytesseract Pillow\
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu\
 RUN pip install --no-cache-dir easyocr opencv-python-headless\
 RUN pip install --no-cache-dir paddlepaddle==2.6.2 paddleocr==2.7.0.3\
-# Pre-download models\
 RUN python -c "import easyocr; easyocr.Reader(['"'"'en'"'"'], gpu=False, download_enabled=True)" || true\
 RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='"'"'en'"'"', use_gpu=False)" || true
 ' Dockerfile
