@@ -86,7 +86,7 @@ RUN pip install --no-cache-dir \
 
 # Then install PaddleOCR and its specific dependencies
 RUN pip install --no-cache-dir paddlepaddle==2.6.2 -f https://paddlepaddle.org.cn/whl/cpu.html
-
+RUN pip install paddleocr
 
 # Pre-download PaddleOCR models
 RUN python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False, show_log=False)" || true
