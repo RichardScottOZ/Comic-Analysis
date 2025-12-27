@@ -55,7 +55,7 @@ RUN pip install --no-cache-dir \
     scipy==1.11.4
 
 # Install Lithops
-RUN pip install --no-cache-dir lithops==3.3.1
+RUN pip install --no-cache-dir lithops==3.6.2
 
 # Install HTTP client for VLM OCR methods
 RUN pip install --no-cache-dir \
