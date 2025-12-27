@@ -86,7 +86,6 @@ RUN mkdir -p /tmp/transformers_cache /tmp/hf_home /tmp/torch_home /tmp/easyocr
 # Pre-download EasyOCR models (optional, uncomment if needed)
 # RUN python -c "import easyocr; reader = easyocr.Reader(['en'])"
 
-# Set the Lambda task handler
-# Lithops will override this at runtime, but we need a valid entry point
-ENTRYPOINT ["/usr/local/bin/python", "-m", "awslambdaric"]
-CMD ["lithops.worker.handler.main"]
+# Lithops entry point for Lambda
+# Lambda will invoke lithops.worker.handler.main_handler
+ENTRYPOINT []
