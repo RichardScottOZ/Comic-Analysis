@@ -83,10 +83,9 @@ RUN pip install --no-cache-dir \
 
 # CRITICAL: Install CPU-only PaddlePaddle (GPU version will segfault in Lambda)
 # Use 2.6.2 stable - last version confirmed compatible with paddleocr 2.7.0.3
-RUN pip install --no-cache-dir paddlepaddle==2.6.2
 
 # Then install PaddleOCR and its specific dependencies
-RUN pip install --no-cache-dir paddlepaddle==2.6.0 -f https://paddlepaddle.org.cn/whl/cpu.html
+RUN pip install --no-cache-dir paddlepaddle==2.6.2 -f https://paddlepaddle.org.cn/whl/cpu.html
 
 
 # Pre-download PaddleOCR models
