@@ -1,6 +1,18 @@
 #!/bin/bash
 set -e
 
+# Function to verify Docker daemon accessibility
+check_docker() {
+  if ! docker info >/dev/null 2>&1; then
+    echo "ERROR: Cannot connect to Docker daemon."
+    echo "Make sure Docker Desktop is running and WSL integration is enabled, or run this script with sudo."
+    exit 1
+  fi
+}
+
+# Verify Docker before proceeding
+check_docker
+
 echo "=== Building Lithops PaddleOCR Runtime ==="
 echo ""
 
@@ -74,7 +86,8 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir paddlepaddle==2.6.2
 
 # Then install PaddleOCR and its specific dependencies
-RUN pip install --no-cache-dir paddleocr==2.7.0.3
+RUN pip install --no-cache-dir paddlepaddle==2.6.0 -f https://paddlepaddle.org.cn/whl/cpu.html
+
 
 # Pre-download PaddleOCR models
 RUN python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False, show_log=False)" || true
@@ -95,10 +108,10 @@ aws ecr batch-delete-image \
     --region us-east-1 2>/dev/null || echo "No existing ECR image to delete"
 
 # Remove local Docker image
-sudo docker rmi paddleocr-runtime:latest 2>/dev/null || echo "No local image to remove"
+docker rmi paddleocr-runtime:latest 2>/dev/null || echo "No local image to remove"
 
 # Clear build cache
-sudo docker builder prune -af
+docker builder prune -af
 
 # Delete any existing Lambda functions
 aws lambda list-functions --region us-east-1 --query 'Functions[?contains(FunctionName, `paddleocr`)].FunctionName' --output text | \
@@ -153,3 +166,18 @@ echo ""
 echo "You can now run PaddleOCR:"
 echo "  cd src/version1 && LITHOPS_CONFIG_FILE=~/.lithops/config_paddleocr python batch_ocr_paddleocr_lithops.py --manifest ../../manifests/test_manifest100.csv --output-bucket calibrecomics-extracted --output-prefix ocr_results_paddleocr/neon_test --workers 50"
 echo ""
+
+# Ensure Docker config directory exists with correct permissions
+mkdir -p "$HOME/.docker"
+chmod 700 "$HOME/.docker"
+# Create an empty config file if missing and restrict permissions
+if [ ! -f "$HOME/.docker/config.json" ]; then
+  touch "$HOME/.docker/config.json"
+fi
+chmod 600 "$HOME/.docker/config.json"
+
+# If the user is not in the docker group, suggest adding them (no sudo in script)
+if ! groups $(whoami) | grep -qw docker; then
+  echo "WARNING: User $(whoami) is not in the 'docker' group. Docker commands may require sudo."
+  echo "You can add the user to the group with: sudo usermod -aG docker $(whoami) && newgrp docker"
+fi
