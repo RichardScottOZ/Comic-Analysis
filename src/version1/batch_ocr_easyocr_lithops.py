@@ -26,8 +26,8 @@ def process_image_easyocr(canonical_id, image_path, output_bucket, output_key_pr
     os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
     
     try:
-        # Initialize reader (EasyOCR and models are pre-installed in the runtime)
-        reader = easyocr.Reader(['en'], gpu=False, model_storage_directory='/tmp/easyocr', user_network_directory='/tmp/easyocr', download_enabled=False)
+        # Initialize reader - allow download on first run since models weren't baked in
+        reader = easyocr.Reader(['en'], gpu=False, model_storage_directory='/tmp/easyocr', user_network_directory='/tmp/easyocr', download_enabled=True)
         
         # Download image from S3
         s3_client = boto3.client('s3')
