@@ -70,9 +70,11 @@ RUN pip install --no-cache-dir \
     opencv-contrib-python-headless==4.8.1.78
 
 # CRITICAL: Install CPU-only PaddlePaddle (GPU version will segfault in Lambda)
-RUN pip install --no-cache-dir \
-    paddlepaddle==3.0.0b1 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/ \
-    paddleocr==2.7.0.3
+# Use 2.6.2 stable - last version confirmed compatible with paddleocr 2.7.0.3
+RUN pip install --no-cache-dir paddlepaddle==2.6.2
+
+# Then install PaddleOCR and its specific dependencies
+RUN pip install --no-cache-dir paddleocr==2.7.0.3
 
 # Pre-download PaddleOCR models
 RUN python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False, show_log=False)" || true
