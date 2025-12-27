@@ -54,8 +54,10 @@ RUN pip install --no-cache-dir \
     numpy==1.24.3 \
     scipy==1.11.4
 
-# Install Lithops
-RUN pip install --no-cache-dir lithops==3.6.2
+# Install Lithops and AWS Lambda Runtime Interface Client
+RUN pip install --no-cache-dir \
+    lithops==3.6.2 \
+    awslambdaric==2.0.10
 
 # Install HTTP client for VLM OCR methods
 RUN pip install --no-cache-dir \
@@ -84,5 +86,7 @@ RUN mkdir -p /tmp/transformers_cache /tmp/hf_home /tmp/torch_home /tmp/easyocr
 # Pre-download EasyOCR models (optional, uncomment if needed)
 # RUN python -c "import easyocr; reader = easyocr.Reader(['en'])"
 
-# Set entrypoint for Lithops
-CMD ["python", "-c", "print('Comic Analysis OCR Lithops CPU Runtime Ready')"]
+# Set the Lambda task handler
+# Lithops will override this at runtime, but we need a valid entry point
+ENTRYPOINT ["/usr/local/bin/python", "-m", "awslambdaric"]
+CMD ["lithops.worker.handler.main"]
