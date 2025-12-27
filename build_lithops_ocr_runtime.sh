@@ -13,10 +13,13 @@ echo "Step 1: Downloading official Lithops Dockerfile..."
 wget -q https://raw.githubusercontent.com/lithops-cloud/lithops/master/runtime/aws_lambda/Dockerfile
 
 echo "Step 2: Adding Tesseract, EasyOCR AND PaddleOCR dependencies to Dockerfile..."
-# Add Tesseract, EasyOCR, and PaddleOCR
+# Add Tesseract, EasyOCR, and PaddleOCR with required system libraries
 sed -i '/# Put your dependencies here/a \
 # OCR dependencies - Tesseract, EasyOCR, and PaddleOCR\
-RUN apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-eng && rm -rf /var/lib/apt/lists/*\
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr tesseract-ocr-eng \
+    libgl1 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*\
 RUN pip install --no-cache-dir pytesseract Pillow\
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu\
 RUN pip install --no-cache-dir easyocr opencv-python-headless\
