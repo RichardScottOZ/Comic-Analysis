@@ -68,11 +68,14 @@ RUN pip install --no-cache-dir \
     tqdm==4.66.1 \
     pyyaml==6.0.1
 
+# Set working directory to function root directory
+WORKDIR ${FUNCTION_DIR}
+
 # Copy OCR module
-COPY src/version1/ocr /function/ocr
+COPY src/version1/ocr ${FUNCTION_DIR}/ocr
 
 # Set Python path
-ENV PYTHONPATH=/function:$PYTHONPATH
+ENV PYTHONPATH=${FUNCTION_DIR}:$PYTHONPATH
 
 # Environment variables for model caching
 ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
@@ -86,14 +89,7 @@ RUN mkdir -p /tmp/transformers_cache /tmp/hf_home /tmp/torch_home /tmp/easyocr
 # Pre-download EasyOCR models (optional, uncomment if needed)
 # RUN python -c "import easyocr; reader = easyocr.Reader(['en'])"
 
-# Create bootstrap script for Lambda
-RUN echo '#!/bin/sh' > /var/runtime/bootstrap && \
-    echo 'exec /usr/local/bin/python -m awslambdaric $@' >> /var/runtime/bootstrap && \
-    chmod +x /var/runtime/bootstrap
-
-# Set working directory for Lambda
-WORKDIR /var/task
-
-# Lithops will set the handler via environment variable
-ENTRYPOINT ["/var/runtime/bootstrap"]
-CMD ["lithops.worker.handler.main_handler"]
+# Lithops Lambda entry point
+# Note: Lithops will copy lithops_lambda.zip and set up handler at deploy time
+ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
+CMD [ "handler.entry_point.lambda_handler" ]
