@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir \
     pytesseract==0.3.10 \
     easyocr==1.7.0 \
     paddleocr==2.7.0.3 \
-    paddlepaddle==2.6.0
+    paddlepaddle==2.6.2
 
 # Install image processing libraries
 RUN pip install --no-cache-dir \
