@@ -64,7 +64,7 @@ def process_image_easyocr(canonical_id, image_path, output_bucket, output_key_pr
                     text_regions.append({
                         'text': text,
                         'confidence': float(confidence),
-                        'bbox': [min(x_coords), min(y_coords), max(x_coords), max(y_coords)],
+                        'bbox': [int(min(x_coords)), int(min(y_coords)), int(max(x_coords)), int(max(y_coords))],
                         'polygon': [[int(p[0]), int(p[1])] for p in bbox]
                     })
                     full_text_parts.append(text)
