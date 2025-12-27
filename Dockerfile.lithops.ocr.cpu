@@ -86,6 +86,14 @@ RUN mkdir -p /tmp/transformers_cache /tmp/hf_home /tmp/torch_home /tmp/easyocr
 # Pre-download EasyOCR models (optional, uncomment if needed)
 # RUN python -c "import easyocr; reader = easyocr.Reader(['en'])"
 
-# Lithops entry point for Lambda
-# Lambda will invoke lithops.worker.handler.main_handler
-ENTRYPOINT []
+# Create bootstrap script for Lambda
+RUN echo '#!/bin/sh' > /var/runtime/bootstrap && \
+    echo 'exec /usr/local/bin/python -m awslambdaric $@' >> /var/runtime/bootstrap && \
+    chmod +x /var/runtime/bootstrap
+
+# Set working directory for Lambda
+WORKDIR /var/task
+
+# Lithops will set the handler via environment variable
+ENTRYPOINT ["/var/runtime/bootstrap"]
+CMD ["lithops.worker.handler.main_handler"]
