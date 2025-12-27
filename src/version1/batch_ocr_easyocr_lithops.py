@@ -18,10 +18,16 @@ def process_image_easyocr(canonical_id, image_path, output_bucket, output_key_pr
     import boto3
     from PIL import Image
     import easyocr
+    import os
+    
+    # Set all paths to /tmp (Lambda /home is read-only)
+    os.environ['HOME'] = '/tmp'
+    os.environ['EASYOCR_MODULE_PATH'] = '/tmp/easyocr'
+    os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
     
     try:
         # Initialize reader (EasyOCR and models are pre-installed in the runtime)
-        reader = easyocr.Reader(['en'], gpu=False)
+        reader = easyocr.Reader(['en'], gpu=False, model_storage_directory='/tmp/easyocr', user_network_directory='/tmp/easyocr', download_enabled=False)
         
         # Download image from S3
         s3_client = boto3.client('s3')
