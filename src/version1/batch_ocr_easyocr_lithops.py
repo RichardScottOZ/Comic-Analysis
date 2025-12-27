@@ -13,21 +13,14 @@ from typing import Dict, Any, List
 
 
 def process_image_easyocr(canonical_id, image_path, output_bucket, output_key_prefix) -> Dict[str, Any]:
-    """Process a single image with EasyOCR."""
+    """Process a single image with EasyOCR (pre-installed in runtime)."""
     import tempfile
     import boto3
     from PIL import Image
+    import easyocr
     
     try:
-        # Install easyocr if needed
-        try:
-            import easyocr
-        except ImportError:
-            print("Installing EasyOCR...")
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-q', 'easyocr', 'pillow'])
-            import easyocr
-        
-        # Initialize reader (this will download model on first run)
+        # Initialize reader (EasyOCR and models are pre-installed in the runtime)
         reader = easyocr.Reader(['en'], gpu=False)
         
         # Download image from S3
