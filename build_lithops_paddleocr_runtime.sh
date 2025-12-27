@@ -76,6 +76,9 @@ RUN apt-get update && apt-get install -y \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install numpy first (pinned to PaddlePaddle compatible version)
+RUN pip install --no-cache-dir numpy==1.24.4
+
 # Install PaddleOCR and dependencies in correct order
 RUN pip install --no-cache-dir \
     opencv-python-headless==4.8.1.78 \
@@ -86,7 +89,7 @@ RUN pip install --no-cache-dir \
 
 # Then install PaddleOCR and its specific dependencies
 RUN pip install --no-cache-dir paddlepaddle==2.6.2 -f https://paddlepaddle.org.cn/whl/cpu.html
-RUN pip install paddleocr
+RUN pip install paddleocr==2.7.0.3
 
 # Pre-download PaddleOCR models
 RUN python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False, show_log=False)" || true
@@ -148,7 +151,7 @@ aws:
 aws_lambda:
   execution_role: arn:aws:iam::958539196701:role/lithops-execution-role
   runtime: paddleocr-runtime
-  runtime_memory: 10240
+  runtime_memory: 9999
   runtime_timeout: 600
 
 aws_s3:
