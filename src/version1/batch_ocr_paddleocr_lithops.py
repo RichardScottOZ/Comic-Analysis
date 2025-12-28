@@ -16,7 +16,7 @@ def process_image_paddleocr(canonical_id, image_path, output_bucket, output_key_
     """Process a single image with PaddleOCR (pre-installed in runtime)."""
 
     import os
-    
+
     os.environ['HOME'] = '/tmp'
     os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
     os.makedirs('/tmp/.cache', exist_ok=True)
@@ -27,44 +27,11 @@ def process_image_paddleocr(canonical_id, image_path, output_bucket, output_key_
     from paddleocr import PaddleOCR
     import os
 
-
-    
-    if 1 == 2:
-        # Set all paths to /tmp (Lambda /home is read-only)
-        # Ensure writable directories exist
-        tmp_cache = '/tmp/.cache'
-        ####os.environ['HOME'] = '/tmp'
-        ####os.environ['XDG_CACHE_HOME'] = tmp_cache
-        os.makedirs(tmp_cache, exist_ok=True)
-
-        ocr_model_dir = '/tmp/paddleocr_models'
-        os.makedirs(ocr_model_dir, exist_ok=True)
-
-    #TMP_BASE = '/tmp'
-    #os.environ['HOME'] = TMP_BASE
-    #os.environ['XDG_CACHE_HOME'] = os.path.join(TMP_BASE, '.cache')
-    #os.environ['TMPDIR'] = TMP_BASE
-
-
-
-    # 2️⃣ Create directories
-    #os.makedirs(os.environ['XDG_CACHE_HOME'], exist_ok=True)
-    #paddle_model_dir = os.path.join(TMP_BASE, 'paddleocr_models')
-    #os.makedirs(paddle_model_dir, exist_ok=True)
     
     try:
         # Initialize PaddleOCR (models should be pre-downloaded, but allow download if needed)
         #ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False, show_log=False)
 
-        # Initialize OCR
-        if 1 == 2:
-            ocr = PaddleOCR(
-                use_angle_cls=True,
-                lang='en',
-                use_gpu=False,
-                show_log=False,
-                model_storage_directory='/tmp'
-            )
 
         # Pass explicit directories for models and cache
         from paddleocr import PaddleOCR
