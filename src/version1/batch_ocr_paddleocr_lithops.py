@@ -272,5 +272,6 @@ if __name__ == "__main__":
         manifest_file=args.manifest,
         output_bucket=args.output_bucket,
         output_key_prefix=args.output_prefix,
-        workers=args.workers
+        workers=args.workers,
+        batch_size=args.batch_size
     )
