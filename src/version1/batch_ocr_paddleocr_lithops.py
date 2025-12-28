@@ -133,6 +133,185 @@ def run_lithops_ocr_paddleocr(
     output_bucket: str,
     output_key_prefix: str = 'ocr_results_paddleocr',
     workers: int = 50,
+    batch_size: int = 500  # controls number of tasks submitted per map() call
+):
+    """Run PaddleOCR using Lithops, skipping images already done in S3."""
+    import lithops
+    import boto3
+    import csv
+
+    print(f"Loading manifest from: {manifest_file}")
+    with open(manifest_file, 'r', encoding='utf-8') as f:
+        records = list(csv.DictReader(f))
+
+    print(f"Loaded {len(records)} images")
+
+    # Prepare tasks
+    tasks = []
+    for record in records:
+        tasks.append({
+            'canonical_id': record['canonical_id'],
+            'image_path': record['absolute_image_path'],
+            'output_bucket': output_bucket,
+            'output_key_prefix': output_key_prefix
+        })
+
+    # Skip already done images by scanning S3
+    s3_client = boto3.client('s3')
+    print("Checking for already processed images in S3...")
+
+    existing_keys = set()
+    paginator = s3_client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=output_bucket, Prefix=output_key_prefix + '/'):
+        for obj in page.get('Contents', []):
+            key = obj['Key']
+            # Remove prefix and _ocr.json suffix
+            canonical_id = key[len(output_key_prefix)+1:]  # strip prefix + '/'
+            if canonical_id.endswith('_ocr.json'):
+                canonical_id = canonical_id[:-len('_ocr.json')]
+            existing_keys.add(canonical_id)
+
+    tasks = [t for t in tasks if t['canonical_id'] not in existing_keys]
+    skipped = len(records) - len(tasks)
+    print(f"Skipping {skipped} already processed images")
+
+    if not tasks:
+        print("All images already processed, nothing to do.")
+        return []
+
+    print(f"\nStarting Lithops PaddleOCR processing:")
+    print(f"  Workers: {workers}")
+    print(f"  Remaining images to process: {len(tasks)}")
+    print(f"  Output: s3://{output_bucket}/{output_key_prefix}/")
+    print(f"  Note: PaddleOCR handles rotated/skewed text well\n")
+
+    # Execute in batches to avoid 4 MiB limit
+    executor = lithops.FunctionExecutor()
+    all_results = []
+
+    for i in range(0, len(tasks), batch_size):
+        batch_tasks = tasks[i:i+batch_size]
+        print(f"Processing batch {i//batch_size + 1}: {len(batch_tasks)} images")
+        futures = executor.map(process_image_paddleocr, batch_tasks)
+        results = executor.get_result(futures)
+        all_results.extend(results)
+
+        # Optional: intermediate summary
+        successful = sum(1 for r in results if r['status'] == 'success')
+        failed = sum(1 for r in results if r['status'] == 'error')
+        print(f"  Batch complete. Successful: {successful}, Failed: {failed}")
+
+    # Final summary
+    successful = sum(1 for r in all_results if r['status'] == 'success')
+    failed = sum(1 for r in all_results if r['status'] == 'error')
+
+    print(f"\n{'='*60}")
+    print(f"PaddleOCR Processing Complete")
+    print(f"{'='*60}")
+    print(f"  Successful: {successful}/{len(tasks)}")
+    print(f"  Failed: {failed}/{len(tasks)}")
+    print(f"  Output: s3://{output_bucket}/{output_key_prefix}/")
+    print(f"{'='*60}\n")
+
+    if failed > 0:
+        print("Failed images:")
+        for r in all_results:
+            if r['status'] == 'error':
+                print(f"  - {r['canonical_id']}: {r.get('error', 'Unknown error')}")
+
+    return all_resu_
+
+
+def run_lithops_ocr_paddleocr_old3(
+    manifest_file: str,
+    output_bucket: str,
+    output_key_prefix: str = 'ocr_results_paddleocr',
+    workers: int = 50,
+    batch_size: int = 500  # controls number of tasks submitted per map() call
+):
+    """Run PaddleOCR using Lithops, skipping images already done."""
+    import lithops
+    import boto3
+    import csv
+    from pathlib import Path
+
+    print(f"Loading manifest from: {manifest_file}")
+    with open(manifest_file, 'r', encoding='utf-8') as f:
+        records = list(csv.DictReader(f))
+
+    print(f"Loaded {len(records)} images")
+
+    # Prepare tasks
+    tasks = []
+    for record in records:
+        tasks.append({
+            'canonical_id': record['canonical_id'],
+            'image_path': record['absolute_image_path'],
+            'output_bucket': output_bucket,
+            'output_key_prefix': output_key_prefix
+        })
+
+    # Skip already done images
+    s3_client = boto3.client('s3')
+    print("Checking for already processed images in S3...")
+
+    existing_keys = set()
+    paginator = s3_client.get_paginator('list_objects_v2')
+    for page in paginator.paginate(Bucket=output_bucket, Prefix=output_key_prefix + '/'):
+        for obj in page.get('Contents', []):
+            existing_keys.add(Path(obj['Key']).stem.replace('_ocr',''))
+
+    tasks = [t for t in tasks if t['canonical_id'] not in existing_keys]
+    skipped = len(records) - len(tasks)
+    print(f"Skipping {skipped} already processed images")
+
+    if not tasks:
+        print("All images already processed, nothing to do.")
+        return []
+
+    print(f"\nStarting Lithops PaddleOCR processing:")
+    print(f"  Workers: {workers}")
+    print(f"  Remaining images to process: {len(tasks)}")
+    print(f"  Output: s3://{output_bucket}/{output_key_prefix}/")
+    print(f"  Note: PaddleOCR handles rotated/skewed text well\n")
+
+    # Execute in batches to avoid 4 MiB limit
+    executor = lithops.FunctionExecutor()
+    all_results = []
+
+    for i in range(0, len(tasks), batch_size):
+        batch_tasks = tasks[i:i+batch_size]
+        print(f"Processing batch {i//batch_size + 1}: {len(batch_tasks)} images")
+        futures = executor.map(process_image_paddleocr, batch_tasks)
+        results = executor.get_result(futures)
+        all_results.extend(results)
+
+    # Summary
+    successful = sum(1 for r in all_results if r['status'] == 'success')
+    failed = sum(1 for r in all_results if r['status'] == 'error')
+
+    print(f"\n{'='*60}")
+    print(f"PaddleOCR Processing Complete")
+    print(f"{'='*60}")
+    print(f"  Successful: {successful}/{len(tasks)}")
+    print(f"  Failed: {failed}/{len(tasks)}")
+    print(f"  Output: s3://{output_bucket}/{output_key_prefix}/")
+    print(f"{'='*60}\n")
+
+    if failed > 0:
+        print("Failed images:")
+        for r in all_results:
+            if r['status'] == 'error':
+                print(f"  - {r['canonical_id']}: {r.get('error', 'Unknown error')}")
+
+    return all_results
+
+
+def run_lithops_ocr_paddleocr_old2(
+    manifest_file: str,
+    output_bucket: str,
+    output_key_prefix: str = 'ocr_results_paddleocr',
+    workers: int = 50,
     batch_size: int = 5000   # NEW: adjust batch size to stay under 4MiB
 ):
     """Run PaddleOCR using Lithops with automatic batching."""
