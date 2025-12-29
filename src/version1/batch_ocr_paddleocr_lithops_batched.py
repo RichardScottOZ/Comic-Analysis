@@ -380,5 +380,5 @@ if __name__ == '__main__':
         output_key_prefix=args.output_prefix,
         workers=args.workers,
         batch_size=args.batch_size,
-        memory_levels=[1024, 1280, 1536, 1792, 2048]  # Your requested 256MB steps
+        memory_levels=[892, 1024, 1280, 1536, 1792, 2048]  # Your requested 256MB steps
     )
