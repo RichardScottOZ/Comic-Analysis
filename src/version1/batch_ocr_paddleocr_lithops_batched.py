@@ -60,6 +60,9 @@ def process_image_paddleocr(canonical_id, image_path, output_bucket, output_key_
     from PIL import Image
     import numpy as np
 
+    # Disable decompression bomb protection
+    Image.MAX_IMAGE_PIXELS = None
+
     try:
         # Critical: Redirect all home/cache dirs to /tmp which is writable in Lambda
         os.environ['HOME'] = '/tmp'
@@ -257,9 +260,9 @@ def run_lithops_ocr_paddleocr_batched(
         
         for memory_mb in memory_levels:
             if len(tasks) == 0:
-                break  # All tasks in batch succeeded
+                break
             
-            logger.info(f"\nAttempting {len(tasks)} tasks with {memory_mb}MB memory...")
+            logger.info(f"\n>>> Attempting {len(tasks)} tasks with {memory_mb}MB memory...")
             
             try:
                 executor = lithops.FunctionExecutor(backend='aws_lambda', runtime_memory=memory_mb)
@@ -271,22 +274,26 @@ def run_lithops_ocr_paddleocr_batched(
                 
                 # Process results
                 remaining_tasks = []
+                attempt_success = 0
+                attempt_mem_errors = 0
+                attempt_hard_failures = 0
+
                 for task, result in zip(tasks, results):
-                    # Handle None result (unexpected)
+                    # Handle None result (unexpected infrastructure failure)
                     if result is None:
-                         # Treat as a failure or retry - usually implies a serious infrastructure fail
                          remaining_tasks.append(task)
-                         logger.warning(f"  ⚠ {task['canonical_id']} - Result is None, retrying")
+                         attempt_mem_errors += 1
                          continue
 
-                    # Handle exceptions (Lithops execution errors like MemoryError)
+                    # Handle exceptions (Lithops execution errors like Lambda OOM)
                     if isinstance(result, Exception):
                         error_msg = str(result)
                         if 'MemoryError' in error_msg or 'exceeded maximum memory' in error_msg:
                             remaining_tasks.append(task)
-                            logger.warning(f"  ⚠ {task['canonical_id']} - MemoryError ({error_msg}), will retry at higher memory")
+                            attempt_mem_errors += 1
                         else:
                             batch_failed += 1
+                            attempt_hard_failures += 1
                             logger.error(f"  ✗ {task['canonical_id']} - Exception: {error_msg}")
                             with open(failure_csv, 'a', newline='') as f:
                                 writer = csv.writer(f)
@@ -297,38 +304,41 @@ def run_lithops_ocr_paddleocr_batched(
                     if isinstance(result, dict):
                         if result.get('status') == 'success':
                             batch_success += 1
-                            logger.info(f"  ✓ {result['canonical_id']} - {result.get('text_regions', 0)} text regions")
+                            attempt_success += 1
                         
                         elif result.get('status') == 'error':
                             error_msg = result.get('error', 'Unknown error')
                             if 'MemoryError' in error_msg:
                                 remaining_tasks.append(task)
-                                logger.warning(f"  ⚠ {result['canonical_id']} - MemoryError, will retry at higher memory")
+                                attempt_mem_errors += 1
                             else:
                                 batch_failed += 1
+                                attempt_hard_failures += 1
                                 logger.error(f"  ✗ {result['canonical_id']} - {error_msg}")
                                 with open(failure_csv, 'a', newline='') as f:
                                     writer = csv.writer(f)
-                                    writer.writerow([
-                                        result['canonical_id'],
-                                        memory_mb,
-                                        error_msg
-                                    ])
+                                    writer.writerow([result['canonical_id'], memory_mb, error_msg])
                         else:
-                            # Unexpected dict structure
                             batch_failed += 1
-                            logger.error(f"  ✗ {task['canonical_id']} - Unexpected result format: {result}")
+                            attempt_hard_failures += 1
+                            logger.error(f"  ✗ {task['canonical_id']} - Unexpected result format")
                     else:
-                        # Result is something else (not None, not Exception, not dict)
                         batch_failed += 1
-                        logger.error(f"  ✗ {task['canonical_id']} - Unexpected result type: {type(result)}")
+                        attempt_hard_failures += 1
+                        logger.error(f"  ✗ {task['canonical_id']} - Unexpected result type")
 
+                logger.info(f"--- Attempt Summary ({memory_mb}MB) ---")
+                logger.info(f"    Success: {attempt_success}")
+                logger.info(f"    Memory Errors (will retry): {attempt_mem_errors}")
+                logger.info(f"    Hard Failures: {attempt_hard_failures}")
+                
                 tasks = remaining_tasks
                 executor.clean()
                 
             except Exception as e:
                 # This catches errors in the orchestration itself (e.g. executor setup), not individual task errors
-                logger.error(f"Batch orchestration failed at {memory_mb}MB: {e}")
+                logger.error(f"!!! Critical batch orchestration failure at {memory_mb}MB: {e}")
+                logger.info("Retrying current task list at next memory level...")
                 continue
         
         # Any remaining tasks after all memory levels are failures
@@ -380,5 +390,5 @@ if __name__ == '__main__':
         output_key_prefix=args.output_prefix,
         workers=args.workers,
         batch_size=args.batch_size,
-        memory_levels=[892, 1024, 1280, 1536, 1792, 2048]  # Your requested 256MB steps
+        memory_levels=[892, 1024, 1088, 1152, 1216, 1280, 1344, 1408, 1472, 1536, 1792, 2048]  # Your requested 256MB steps
     )
