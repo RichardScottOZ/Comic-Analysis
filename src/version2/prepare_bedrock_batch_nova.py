@@ -136,8 +136,26 @@ def main():
             # HOWEVER: Nova models specifically support "s3Location" in the image block for Batch inference 
             # to avoid base64 encoding 1.2M images into a JSON file.
             
+            # Determine format
+            ext = os.path.splitext(s3_uri_raw)[1].lstrip('.').lower()
+            if ext in ['jpg', 'jpeg']:
+                fmt = 'jpeg'
+            elif ext == 'png':
+                fmt = 'png'
+            elif ext == 'webp':
+                fmt = 'webp'
+            elif ext == 'gif':
+                fmt = 'gif'
+            else:
+                # Default fallback or skip? Nova usually requires one of the above.
+                # Let's default to jpeg but log a warning if it's weird
+                fmt = 'jpeg'
+                if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+                    # print(f"Warning: Unknown extension '{ext}' for {s3_uri_raw}, defaulting to jpeg")
+                    pass
+
             batch_item["modelInput"]["messages"][0]["content"][1]["image"] = {
-                "format": "jpeg", # Nova is tolerant, but generally expects 'jpeg', 'png', 'gif', 'webp'
+                "format": fmt,
                 "source": {
                     "s3Location": {
                         "uri": s3_uri
