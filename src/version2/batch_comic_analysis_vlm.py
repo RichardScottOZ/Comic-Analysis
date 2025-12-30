@@ -80,6 +80,7 @@ def repair_json(json_str):
     Attempts to repair broken JSON strings using simple heuristics.
     Useful for models that truncate output or mess up formatting.
     """
+    import re
     json_str = json_str.strip()
     
     # 1. Try to find the first '{' and the last '}'
@@ -92,6 +93,12 @@ def repair_json(json_str):
         # If we have a start but no end, it's likely truncated.
         # We can try to close it blindly (risky but better than nothing for some cases)
         json_str = json_str[start:] + '}' 
+    
+    # 2. Fix missing commas between key-value pairs
+    # Pattern: "value" <newline/space> "key" -> "value", "key"
+    # This regex looks for a double quote, followed by whitespace/newlines, followed by a double quote
+    # It avoids cases where there is already a comma or colon.
+    json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
     
     return json_str
 
@@ -140,14 +147,16 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
             content = content.strip()
             
             try:
-                return {'status': 'success', 'content': json.loads(content)}
+                return {'status': 'success', 'content': json.loads(content, strict=False)}
             except json.JSONDecodeError:
                 # Attempt simple repair
                 try:
                     repaired = repair_json(content)
-                    return {'status': 'success', 'content': json.loads(repaired)}
+                    return {'status': 'success', 'content': json.loads(repaired, strict=False)}
                 except json.JSONDecodeError as e:
-                     return {'status': 'error', 'error': f"JSON Parse Error: {str(e)}"}
+                     # Log the raw content for debugging (truncated)
+                     preview = content[:500].replace('\n', '\\n')
+                     return {'status': 'error', 'error': f"JSON Parse Error: {str(e)} | Raw: {preview}"}
 
         else:
             return {'status': 'error', 'error': f"API Error {response.status_code}: {response.text}"}
