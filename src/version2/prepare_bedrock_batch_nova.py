@@ -16,6 +16,22 @@ import argparse
 import csv
 import json
 import os
+import urllib.parse
+
+def encode_s3_uri(s3_uri):
+    """Encodes spaces and special characters in an S3 URI while preserving s3:// and slashes."""
+    if not s3_uri.startswith('s3://'):
+        return s3_uri
+    
+    # Split s3://bucket/key
+    parts = s3_uri[5:].split('/', 1)
+    bucket = parts[0]
+    key = parts[1] if len(parts) > 1 else ''
+    
+    # Encode only the key part, but preserve slashes
+    encoded_key = urllib.parse.quote(key, safe='/')
+    
+    return f"s3://{bucket}/{encoded_key}"
 
 def create_structured_prompt():
     return """Analyze this comic page and provide a detailed structured analysis in JSON format. Focus on:
@@ -75,7 +91,8 @@ def main():
     with open(args.output_jsonl, 'w', encoding='utf-8') as f_out:
         for rec in records:
             canonical_id = rec['canonical_id']
-            s3_uri = rec['absolute_image_path']
+            s3_uri_raw = rec['absolute_image_path']
+            s3_uri = encode_s3_uri(s3_uri_raw)
             
             # Ensure uri is valid s3://
             if not s3_uri.startswith('s3://'):
