@@ -193,8 +193,12 @@ def main():
     # --- Inference Loop ---
     print(f"Starting detection processing for {len(dataset)} images...")
     
+    total_processed = 0
+    total_errors = 0
+    
+    pbar = tqdm(dataloader, desc="Detecting Panels")
     with torch.no_grad():
-        for batch_imgs, batch_infos in tqdm(dataloader, desc="Detecting Panels"):
+        for batch_imgs, batch_infos in pbar:
             # Filter out failed loads (where info['status'] == 'error')
             valid_batch_imgs = []
             valid_batch_infos = []
@@ -207,8 +211,10 @@ def main():
                 elif info and info['status'] == 'error':
                     # Log error immediately
                     save_output({'canonical_id': info['canonical_id'], 'error': info['error']}, args.output_dir)
+                    total_errors += 1
 
             if not valid_batch_imgs:
+                pbar.set_description(f"Success: {total_processed} | Errors: {total_errors}")
                 continue
 
             # --- Inference ---
@@ -220,6 +226,8 @@ def main():
                 # Log batch failure for all images in this valid batch
                 for info in valid_batch_infos:
                     save_output({'canonical_id': info['canonical_id'], 'error': f'Batch inference failed: {e}'}, args.output_dir)
+                    total_errors += 1
+                pbar.set_description(f"Success: {total_processed} | Errors: {total_errors}")
                 continue
 
             # --- Process & Save Results ---
@@ -263,6 +271,10 @@ def main():
                     'detections': detections
                 }
                 save_output(out_data, args.output_dir)
+                total_processed += 1
+                
+            # Update progress bar description
+            pbar.set_description(f"Success: {total_processed} | Errors: {total_errors}")
 
     print(f"\n--- Detection Complete ---")
     print(f"Results saved in: {args.output_dir}")
