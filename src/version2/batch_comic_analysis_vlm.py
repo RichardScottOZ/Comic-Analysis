@@ -75,6 +75,26 @@ def encode_image_to_data_uri(image_path):
     with open(image_path, "rb") as image_file:
         return f"data:image/jpeg;base64,{base64.b64encode(image_file.read()).decode('utf-8')}"
 
+def repair_json(json_str):
+    """
+    Attempts to repair broken JSON strings using simple heuristics.
+    Useful for models that truncate output or mess up formatting.
+    """
+    json_str = json_str.strip()
+    
+    # 1. Try to find the first '{' and the last '}'
+    start = json_str.find('{')
+    end = json_str.rfind('}')
+    
+    if start != -1 and end != -1:
+        json_str = json_str[start:end+1]
+    elif start != -1:
+        # If we have a start but no end, it's likely truncated.
+        # We can try to close it blindly (risky but better than nothing for some cases)
+        json_str = json_str[start:] + '}' 
+    
+    return json_str
+
 def analyze_comic_page(image_path, model, api_key, timeout=120):
     """Sends image to OpenRouter API (or compatible)."""
     try:
@@ -108,13 +128,27 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
         
         if response.status_code == 200:
             content = response.json()['choices'][0]['message']['content']
+            
             # Clean Markdown code blocks if present
             if '```json' in content:
-                content = content.split('```json')[1].split('```')[0].strip()
+                content = content.split('```json')[1]
+                if '```' in content:
+                    content = content.split('```')[0]
             elif '```' in content:
-                content = content.split('```')[1].strip()
+                content = content.split('```')[1]
             
-            return {'status': 'success', 'content': json.loads(content)}
+            content = content.strip()
+            
+            try:
+                return {'status': 'success', 'content': json.loads(content)}
+            except json.JSONDecodeError:
+                # Attempt simple repair
+                try:
+                    repaired = repair_json(content)
+                    return {'status': 'success', 'content': json.loads(repaired)}
+                except json.JSONDecodeError as e:
+                     return {'status': 'error', 'error': f"JSON Parse Error: {str(e)}"}
+
         else:
             return {'status': 'error', 'error': f"API Error {response.status_code}: {response.text}"}
             
@@ -125,7 +159,7 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
 
 def process_single_record(args):
     """Worker function to process one manifest record."""
-    record, output_dir, image_root, model, api_key = args
+    record, output_dir, image_root, model, api_key, timeout = args
     
     canonical_id = record['canonical_id']
     path_raw = record['absolute_image_path']
@@ -157,7 +191,7 @@ def process_single_record(args):
         return {'status': 'error', 'canonical_id': canonical_id, 'error': f"File not found: {local_path}"}
 
     # 3. Call API
-    result = analyze_comic_page(local_path, model, api_key)
+    result = analyze_comic_page(local_path, model, api_key, timeout)
     
     # 4. Save Result
     if result['status'] == 'success':
@@ -185,6 +219,8 @@ def main():
     parser.add_argument('--model', default='google/gemini-pro-1.5', help='OpenRouter model ID')
     parser.add_argument('--workers', type=int, default=8, help='Parallel workers')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='API Key')
+    parser.add_argument('--limit', type=int, help='Limit the number of images to process (useful for testing)')
+    parser.add_argument('--timeout', type=int, default=120, help='API Timeout in seconds')
     args = parser.parse_args()
 
     if not args.api_key:
@@ -199,10 +235,15 @@ def main():
         records = list(reader)
     print(f"Loaded {len(records)} records.")
 
+    # Apply limit if specified
+    if args.limit:
+        records = records[:args.limit]
+        print(f"Limited to {len(records)} records for testing.")
+
     # 2. Prepare Tasks
     tasks = []
     for rec in records:
-        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key))
+        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.timeout))
 
     # 3. Process
     print(f"Starting processing with {args.workers} workers...")
