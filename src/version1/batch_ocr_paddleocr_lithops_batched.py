@@ -14,6 +14,7 @@ import csv
 import json
 import logging
 import time
+import os
 from pathlib import Path
 
 import boto3
@@ -57,11 +58,12 @@ def process_image_paddleocr(canonical_id, image_path, output_bucket, output_key_
     import os
     import boto3
     from io import BytesIO
-    from PIL import Image
+    from PIL import Image, ImageFile
     import numpy as np
 
-    # Disable decompression bomb protection
+    # Disable decompression bomb protection & allow truncated images
     Image.MAX_IMAGE_PIXELS = None
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
 
     try:
         # Critical: Redirect all home/cache dirs to /tmp which is writable in Lambda
@@ -100,7 +102,21 @@ def process_image_paddleocr(canonical_id, image_path, output_bucket, output_key_
             source_key = parts[1] if len(parts) > 1 else ''
             
         response = s3_client.get_object(Bucket=source_bucket, Key=source_key)
-        image_data = response['Body'].read()
+        try:
+            image_data = response['Body'].read()
+        except Exception as e:
+            # Handle IncompleteRead by attempting to use partial data
+            # This works in conjunction with ImageFile.LOAD_TRUNCATED_IMAGES = True
+            partial_data = None
+            if hasattr(e, 'partial'): # Standard IncompleteRead
+                partial_data = e.partial
+            elif hasattr(e, 'args') and len(e.args) >= 2 and hasattr(e.args[1], 'partial'): # urllib3 wrapped
+                partial_data = e.args[1].partial
+            
+            if partial_data:
+                image_data = partial_data
+            else:
+                raise e
         
         # Load image
         Image.MAX_IMAGE_PIXELS = None  # Disable decompression bomb protection
@@ -219,11 +235,12 @@ def run_lithops_ocr_paddleocr_batched(
         logger.info("No images to process!")
         return
     
-    # Create failure manifest
+    # Create failure manifest (initialize if not exists)
     failure_csv = 'paddleocr_failures.csv'
-    with open(failure_csv, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(['canonical_id', 'last_memory', 'error'])
+    if not os.path.exists(failure_csv):
+        with open(failure_csv, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['canonical_id', 'last_memory', 'error'])
     
     # Process in batches
     total_batches = (len(to_process) + batch_size - 1) // batch_size
@@ -264,28 +281,29 @@ def run_lithops_ocr_paddleocr_batched(
             
             logger.info(f"\n>>> Attempting {len(tasks)} tasks with {memory_mb}MB memory...")
             
+            executor = None
             try:
                 executor = lithops.FunctionExecutor(backend='aws_lambda', runtime_memory=memory_mb)
-                # Pass tasks as a list of dicts - Lithops unpacks them as kwargs
                 futures = executor.map(process_image_paddleocr, tasks)
-                
-                # Wait for results, allowing exceptions to be returned as objects rather than raising
                 results = executor.get_result(futures, throw_except=False)
                 
-                # Process results
+                # Separate tasks for the next attempt
                 remaining_tasks = []
                 attempt_success = 0
                 attempt_mem_errors = 0
                 attempt_hard_failures = 0
+                
+                # Buffer failures to write them in one go
+                failures_to_write = []
 
                 for task, result in zip(tasks, results):
-                    # Handle None result (unexpected infrastructure failure)
+                    # Handle None result
                     if result is None:
                          remaining_tasks.append(task)
                          attempt_mem_errors += 1
                          continue
 
-                    # Handle exceptions (Lithops execution errors like Lambda OOM)
+                    # Handle exceptions
                     if isinstance(result, Exception):
                         error_msg = str(result)
                         if 'MemoryError' in error_msg or 'exceeded maximum memory' in error_msg:
@@ -295,17 +313,14 @@ def run_lithops_ocr_paddleocr_batched(
                             batch_failed += 1
                             attempt_hard_failures += 1
                             logger.error(f"  ✗ {task['canonical_id']} - Exception: {error_msg}")
-                            with open(failure_csv, 'a', newline='') as f:
-                                writer = csv.writer(f)
-                                writer.writerow([task['canonical_id'], memory_mb, error_msg])
+                            failures_to_write.append([task['canonical_id'], memory_mb, error_msg])
                         continue
                     
-                    # Handle dictionary results (our function returned successfully)
+                    # Handle dictionary results
                     if isinstance(result, dict):
                         if result.get('status') == 'success':
                             batch_success += 1
                             attempt_success += 1
-                        
                         elif result.get('status') == 'error':
                             error_msg = result.get('error', 'Unknown error')
                             if 'MemoryError' in error_msg:
@@ -315,9 +330,7 @@ def run_lithops_ocr_paddleocr_batched(
                                 batch_failed += 1
                                 attempt_hard_failures += 1
                                 logger.error(f"  ✗ {result['canonical_id']} - {error_msg}")
-                                with open(failure_csv, 'a', newline='') as f:
-                                    writer = csv.writer(f)
-                                    writer.writerow([result['canonical_id'], memory_mb, error_msg])
+                                failures_to_write.append([result['canonical_id'], memory_mb, error_msg])
                         else:
                             batch_failed += 1
                             attempt_hard_failures += 1
@@ -327,30 +340,48 @@ def run_lithops_ocr_paddleocr_batched(
                         attempt_hard_failures += 1
                         logger.error(f"  ✗ {task['canonical_id']} - Unexpected result type")
 
+                # Write all hard failures for this batch attempt in one go
+                if failures_to_write:
+                    try:
+                        with open(failure_csv, 'a', newline='') as f:
+                            writer = csv.writer(f)
+                            writer.writerows(failures_to_write)
+                    except OSError as e:
+                        logger.error(f"Failed to write to failure log: {e}")
+
                 logger.info(f"--- Attempt Summary ({memory_mb}MB) ---")
                 logger.info(f"    Success: {attempt_success}")
                 logger.info(f"    Memory Errors (will retry): {attempt_mem_errors}")
                 logger.info(f"    Hard Failures: {attempt_hard_failures}")
                 
                 tasks = remaining_tasks
-                executor.clean()
                 
             except Exception as e:
-                # This catches errors in the orchestration itself (e.g. executor setup), not individual task errors
                 logger.error(f"!!! Critical batch orchestration failure at {memory_mb}MB: {e}")
                 logger.info("Retrying current task list at next memory level...")
                 continue
+            finally:
+                if executor:
+                    try:
+                        executor.clean()
+                        # Explicitly close/del executor to free file handles
+                        del executor
+                    except:
+                        pass
         
         # Any remaining tasks after all memory levels are failures
-        for task in tasks:
-            batch_failed += 1
-            with open(failure_csv, 'a', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    task['canonical_id'],
-                    memory_levels[-1],
-                    'Failed at all memory levels'
-                ])
+        if tasks:
+            final_failures = []
+            for task in tasks:
+                batch_failed += 1
+                final_failures.append([task['canonical_id'], memory_levels[-1], 'Failed at all memory levels'])
+            
+            try:
+                with open(failure_csv, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerows(final_failures)
+            except OSError as e:
+                logger.error(f"Failed to write final failures: {e}")
         
         total_success += batch_success
         total_failed += batch_failed
@@ -391,5 +422,6 @@ if __name__ == '__main__':
         workers=args.workers,
         batch_size=args.batch_size,
         #memory_levels=[892, 1024, 1088, 1152, 1216, 1280, 1344, 1408, 1472, 1536, 1792, 2048]  # Your requested 256MB steps
-        memory_levels=[768, 892, 1024, 1280, 1536, 1792, 2048]  # Your requested 256MB steps
+        #memory_levels=[704, 768, 892, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048]  # Your requested 256MB steps
+        memory_levels=[768, 892, 1024, 1152, 1280, 1408, 1536, 1664, 1792, 1920, 2048]  # Your requested 256MB steps
     )
