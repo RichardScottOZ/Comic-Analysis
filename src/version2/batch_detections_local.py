@@ -135,7 +135,7 @@ def main():
     parser = argparse.ArgumentParser(description='Manifest-driven Faster R-CNN detection (Local GPU).')
     parser.add_argument('--manifest', required=True, help='Path to manifest CSV file')
     parser.add_argument('--output-dir', required=True, help='Root directory to save JSON files')
-    parser.add_argument('--weights', default='benchmarks/weights/fasterrcnn/faster_rcnn-c100-best-10052024_092536.pth', help='Path to the .pth weights file')
+    parser.add_argument('--weights', default='C:\\Users\\Richard\\OneDrive\\GIT\\CoMix\\benchmarks\\weights\\fasterrcnn\\faster_rcnn-c100-best-10052024_092536.pth', help='Path to the .pth weights file')
     parser.add_argument('--image-root', required=False, help='Local root folder (optional).')
     parser.add_argument('--batch-size', type=int, default=8, help='Batch size for GPU inference.')
     parser.add_argument('--workers', type=int, default=4, help='Number of workers for data loading.')
@@ -194,12 +194,13 @@ def main():
     print(f"Starting detection processing for {len(dataset)} images...")
     
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Detecting Panels"):
+        for batch_imgs, batch_infos in tqdm(dataloader, desc="Detecting Panels"):
             # Filter out failed loads (where info['status'] == 'error')
             valid_batch_imgs = []
             valid_batch_infos = []
             
-            for img, info in batch:
+            # Since collate_fn zips them, batch_imgs is a tuple of images, batch_infos is a tuple of dicts
+            for img, info in zip(batch_imgs, batch_infos):
                 if info and info['status'] == 'success':
                     valid_batch_imgs.append(img)
                     valid_batch_infos.append(info)
