@@ -71,13 +71,34 @@ def repair_json(json_str):
     """Attempts to repair broken JSON strings from VLMs."""
     import re
     json_str = json_str.strip()
+    
+    # Remove leading/trailing markdown code blocks if they exist
+    if json_str.startswith('```'):
+        json_str = re.sub(r'^```(?:json)?', '', json_str)
+        json_str = re.sub(r'```$', '', json_str)
+    json_str = json_str.strip()
+
     start = json_str.find('{')
     if start == -1: return json_str
     json_str = json_str[start:]
     
-    # Close unclosed quotes
-    quotes = len(re.findall(r'(?<!\\)"', json_str))
-    if quotes % 2 != 0: json_str += '"'
+    # Close unclosed quotes. 
+    # We look for a quote that isn't preceded by an odd number of backslashes.
+    def is_balanced_quotes(s):
+        count = 0
+        escaped = False
+        for char in s:
+            if char == '\\':
+                escaped = not escaped
+            elif char == '"' and not escaped:
+                count += 1
+                escaped = False
+            else:
+                escaped = False
+        return count % 2 == 0
+
+    if not is_balanced_quotes(json_str):
+        json_str += '"'
 
     # Balance braces/brackets
     open_braces = json_str.count('{')
@@ -86,13 +107,18 @@ def repair_json(json_str):
     close_brackets = json_str.count(']')
     
     if open_brackets > close_brackets: json_str += ']' * (open_brackets - close_brackets)
+    
+    # Re-count braces after adding brackets
     open_braces = json_str.count('{')
     close_braces = json_str.count('}')
     if open_braces > close_braces: json_str += '}' * (open_braces - close_braces)
     
-    # Fix missing commas
-    json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
-    json_str = json_str.replace("'", "'")
+    # Fix common VLM-ism: escaped single quotes in JSON strings (invalid JSON)
+    json_str = json_str.replace("\'", "'" )
+    
+    # Fix missing commas between fields: "field": "val" "field2": "val"
+    json_str = re.sub(r'(")\s*\n?\s*(")', r'\1,\n\2', json_str)
+    
     return json_str
 
 def process_page_vlm(task_data):
@@ -223,10 +249,9 @@ def process_page_vlm(task_data):
 
 def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False):
     # Memory Escalation Levels (MB)
-    # Start cheap (128MB), ramp up in finer increments to save cost.
     MEMORY_LEVELS = [128, 192, 256, 384, 512, 640, 768, 896, 1024]
     if backend == 'localhost':
-         MEMORY_LEVELS = [512] # Localhost doesn't really enforce memory the same way, stick to one.
+         MEMORY_LEVELS = [512]
 
     logger.info(f"Loading manifest: {manifest_path}")
     
@@ -250,8 +275,6 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         for obj in page.get('Contents', []):
             key = obj['Key']
             if key.endswith('.json'):
-                # Robustly extract ID: remove prefix and .json
-                # key: vlm_results/Folder/Image.json -> Folder/Image
                 relative_path = key[len(prefix):-5] 
                 existing_ids.add(relative_path)
             
@@ -273,13 +296,12 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
     # Configure Runtime
     runtime = 'comic-vlm-lite'
     if use_default_runtime:
-        runtime = None # Lithops picks default
-        logger.info("Using default Lithops runtime (zipping local modules).")
+        runtime = None
+        logger.info("Using default Lithops runtime.")
     elif backend == 'localhost':
         runtime = None
         if workers > 16:
             workers = 8
-            logger.warning("Clamping localhost workers to 8")
 
     logger.info(f"Starting Batched Processing: {total_batches} batches of ~{batch_size} items")
     logger.info(f"Memory Escalation Strategy: {MEMORY_LEVELS} MB")
@@ -290,7 +312,6 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         logger.info(f"Batch {i+1}/{total_batches} - Processing {len(batch_records)} items...")
         logger.info(f"{'='*60}")
         
-        # Prepare initial tasks
         current_tasks = []
         for rec in batch_records:
             data = {
@@ -306,7 +327,6 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         batch_success_count = 0
         batch_failed_count = 0
         
-        # Memory Escalation Loop
         for mem_level in MEMORY_LEVELS:
             if not current_tasks:
                 break
@@ -323,37 +343,28 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
                 )
                 
                 futures = executor.map(process_page_vlm, current_tasks)
-                results = executor.get_result(futures) # Wait for all results
+                results = executor.get_result(futures)
                 
                 next_round_tasks = []
                 current_round_failures = []
                 
                 for task_input, res in zip(current_tasks, results):
-                    # Check for Lithops system errors (e.g. Runtime.ExitError, MemoryError)
-                    # Lithops might return Exception object or a dict with 'status' if our function caught it.
-                    
                     is_success = False
                     is_retryable = False
                     error_msg = "Unknown"
 
-                    # 1. Check if 'res' itself is an Exception object (Lithops system failure)
                     if isinstance(res, Exception):
                         error_msg = str(res)
-                        # Runtime.ExitError is typical for OOM at startup or Segfault
                         if 'Runtime.ExitError' in error_msg or 'MemoryError' in error_msg:
                             is_retryable = True
                         else:
-                            # Other system errors might also be worth retrying at higher mem, 
-                            # but let's be conservative. If it crashed, maybe more mem helps.
                             is_retryable = True 
                     
-                    # 2. Check our function's return dict
                     elif isinstance(res, dict):
                         if res.get('status') == 'success':
                             is_success = True
                         else:
                             error_msg = res.get('error', 'Unknown Error')
-                            # If our code caught a memory error (unlikely in Python but possible)
                             if 'MemoryError' in error_msg:
                                 is_retryable = True
                     else:
@@ -362,39 +373,30 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
                     if is_success:
                         batch_success_count += 1
                     elif is_retryable:
-                        # Add back to queue for next memory level
                         next_round_tasks.append(task_input)
                     else:
-                        # Hard failure (e.g. 404, API error) - do not retry
                         batch_failed_count += 1
                         cid = task_input['task_data']['canonical_id']
                         logger.error(f"    ✗ {cid} - {error_msg}")
                         current_round_failures.append(f"{cid}: {error_msg}")
 
-                # Log hard failures from this round
                 if current_round_failures:
                     with open(failure_log, 'a', encoding='utf-8') as logf:
                         for failure in current_round_failures:
                             logf.write(failure + "\n")
 
-                # Prepare for next level
                 current_tasks = next_round_tasks
-                
-                # Cleanup executor
                 executor.clean()
                 del executor
 
             except Exception as e:
                 logger.error(f"  !!! Executor orchestration failed at {mem_level}MB: {e}")
-                # If the orchestrator itself fails (e.g. network), we might want to retry.
-                # For simplicity, we just move to next memory level with same tasks.
                 if executor:
                      try:
                         executor.clean()
                      except: pass
                 continue
 
-        # After all memory levels, if tasks remain, they are final failures
         if current_tasks:
             for task in current_tasks:
                 batch_failed_count += 1
