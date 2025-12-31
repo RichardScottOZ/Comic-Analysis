@@ -210,7 +210,7 @@ def process_page_vlm(task_data):
 
 # --- Orchestrator Logic ---
 
-def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda'):
+def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False):
     # 1. Load Manifest
     logger.info(f"Loading manifest: {manifest_path}")
     all_records = []
@@ -227,12 +227,15 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
     s3_client = boto3.client('s3')
     existing_ids = set()
     paginator = s3_client.get_paginator('list_objects_v2')
-    for page in paginator.paginate(Bucket=output_bucket, Prefix=output_prefix + '/'):
+    
+    prefix = output_prefix.rstrip('/') + '/'
+    for page in paginator.paginate(Bucket=output_bucket, Prefix=prefix):
         for obj in page.get('Contents', []):
             key = obj['Key']
-            # e.g. vlm_results/comic_page_1.json -> comic_page_1
-            fname = Path(key).stem
-            existing_ids.add(fname)
+            # Remove prefix and .json extension to recover the canonical_id
+            if key.endswith('.json'):
+                relative_path = key[len(prefix):-5] # -5 for .json
+                existing_ids.add(relative_path)
             
     to_process = [r for r in all_records if r['canonical_id'] not in existing_ids]
     skipped = len(all_records) - len(to_process)
@@ -250,8 +253,14 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
     
     failure_log = 'vlm_lithops_failures.log'
     
-    # Adjust settings for localhost to prevent OOM
+    # Adjust settings
     runtime = 'comic-vlm-lite'
+    
+    # If forcing default runtime (bypasses custom Docker image issues)
+    if use_default_runtime:
+        runtime = None # Lithops will pick default and zip modules
+        logger.info("Using default Lithops runtime (zipping local modules).")
+
     if backend == 'localhost':
         runtime = None  # Use local python environment
         if workers > 16:
@@ -259,12 +268,12 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
             workers = 8
 
     # Initialize Lithops Executor with minimal runtime
-    # Note: 128MB is the absolute floor for Lambda. Plentiful for API proxying.
+    # Note: 512MB is a safe floor for Docker runtimes.
     try:
         fexec = lithops.FunctionExecutor(
             backend=backend, 
             runtime=runtime,
-            runtime_memory=128,
+            runtime_memory=512,
             workers=workers
         )
     except Exception as e:
@@ -323,6 +332,7 @@ if __name__ == "__main__":
     parser.add_argument('--limit', type=int, help='Limit total records')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='OpenRouter API Key')
     parser.add_argument('--backend', default='aws_lambda', help='Lithops backend (aws_lambda, localhost, etc)')
+    parser.add_argument('--use-default-runtime', action='store_true', help='Use default Lithops runtime instead of custom Docker image')
     
     args = parser.parse_args()
     
@@ -338,5 +348,6 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             limit=args.limit,
             api_key=args.api_key,
-            backend=args.backend
+            backend=args.backend,
+            use_default_runtime=args.use_default_runtime
         )
