@@ -210,7 +210,7 @@ def process_page_vlm(task_data):
 
 # --- Orchestrator Logic ---
 
-def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False):
+def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False, memory=512):
     # 1. Load Manifest
     logger.info(f"Loading manifest: {manifest_path}")
     all_records = []
@@ -273,7 +273,7 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
         fexec = lithops.FunctionExecutor(
             backend=backend, 
             runtime=runtime,
-            runtime_memory=512,
+            runtime_memory=memory,
             workers=workers
         )
     except Exception as e:
@@ -333,6 +333,7 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='OpenRouter API Key')
     parser.add_argument('--backend', default='aws_lambda', help='Lithops backend (aws_lambda, localhost, etc)')
     parser.add_argument('--use-default-runtime', action='store_true', help='Use default Lithops runtime instead of custom Docker image')
+    parser.add_argument('--memory', type=int, default=512, help='Runtime memory in MB')
     
     args = parser.parse_args()
     
@@ -349,5 +350,6 @@ if __name__ == "__main__":
             limit=args.limit,
             api_key=args.api_key,
             backend=args.backend,
-            use_default_runtime=args.use_default_runtime
+            use_default_runtime=args.use_default_runtime,
+            memory=args.memory
         )
