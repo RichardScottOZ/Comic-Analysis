@@ -4,10 +4,10 @@ Batched VLM Analysis with Lithops (Serverless) - _batched version
 Based on the proven PaddleOCR batching strategy.
 
 Features:
-- Handles millions of pages by processing in chunks (avoiding 4MB payload limit)
+- Handles millions of pages by processing in chunks
+- Memory Escalation: Retries OOM/failed tasks with higher memory
 - S3 skip logic (checks existing results)
 - Robust JSON repair for VLM outputs
-- Single-pass workflow with explicit batch management
 """
 
 import os
@@ -92,7 +92,7 @@ def repair_json(json_str):
     
     # Fix missing commas
     json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
-    json_str = json_str.replace("\'", "'"")
+    json_str = json_str.replace("'", "'")
     return json_str
 
 def process_page_vlm(task_data):
@@ -199,7 +199,6 @@ def process_page_vlm(task_data):
                 repaired = repair_json(content)
                 out_data = json.loads(repaired, strict=False)
             except:
-                # Save raw content even if parse fails, for manual debugging? No, stick to error report.
                 return {'status': 'error', 'canonical_id': canonical_id, 'error': f"JSON Parse Failure | Raw: {content[:200]}"}
         
         # 4. Save to S3
@@ -223,10 +222,14 @@ def process_page_vlm(task_data):
 # --- Orchestrator Logic ---
 
 def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False):
+    # Memory Escalation Levels (MB)
+    # Start cheap (128MB), ramp up in finer increments to save cost.
+    MEMORY_LEVELS = [128, 192, 256, 384, 512, 640, 768, 896, 1024]
+    if backend == 'localhost':
+         MEMORY_LEVELS = [512] # Localhost doesn't really enforce memory the same way, stick to one.
+
     logger.info(f"Loading manifest: {manifest_path}")
     
-    # Stream manifest instead of loading all at once (though for now we load to filter)
-    # Ideally for 1M+ we would stream-filter, but let's stick to list for the <100k scale first
     all_records = []
     with open(manifest_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
@@ -236,7 +239,7 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         all_records = all_records[:limit]
         logger.info(f"Limited to {limit} records.")
 
-    # 2. FAST Skip check (Check S3 for existing results)
+    # 2. FAST Skip check
     logger.info(f"Checking S3 for existing results in s3://{output_bucket}/{output_prefix}/...")
     s3_client = boto3.client('s3')
     existing_ids = set()
@@ -279,15 +282,17 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
             logger.warning("Clamping localhost workers to 8")
 
     logger.info(f"Starting Batched Processing: {total_batches} batches of ~{batch_size} items")
+    logger.info(f"Memory Escalation Strategy: {MEMORY_LEVELS} MB")
 
     for i in range(total_batches):
-        batch = to_process[i*batch_size : (i+1)*batch_size]
+        batch_records = to_process[i*batch_size : (i+1)*batch_size]
         logger.info(f"\n{'='*60}")
-        logger.info(f"Batch {i+1}/{total_batches} - Processing {len(batch)} items...")
+        logger.info(f"Batch {i+1}/{total_batches} - Processing {len(batch_records)} items...")
         logger.info(f"{'='*60}")
         
-        task_list = []
-        for rec in batch:
+        # Prepare initial tasks
+        current_tasks = []
+        for rec in batch_records:
             data = {
                 'canonical_id': rec['canonical_id'],
                 'image_path': rec['absolute_image_path'],
@@ -296,50 +301,114 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
                 'model': model,
                 'api_key': api_key
             }
-            task_list.append({'task_data': data})
+            current_tasks.append({'task_data': data})
+
+        batch_success_count = 0
+        batch_failed_count = 0
+        
+        # Memory Escalation Loop
+        for mem_level in MEMORY_LEVELS:
+            if not current_tasks:
+                break
+                
+            logger.info(f"  >>> Attempting {len(current_tasks)} tasks with {mem_level}MB memory...")
             
-        # Initialize Executor for THIS batch (clean slate each time)
-        # 512MB memory - safer for VLM tasks than 128MB
-        try:
-            with lithops.FunctionExecutor(
-                backend=backend, 
-                runtime=runtime,
-                runtime_memory=512,
-                workers=workers
-            ) as fexec:
+            executor = None
+            try:
+                executor = lithops.FunctionExecutor(
+                    backend=backend, 
+                    runtime=runtime,
+                    runtime_memory=mem_level,
+                    workers=workers
+                )
                 
-                futures = fexec.map(process_page_vlm, task_list)
-                results = fexec.get_result(futures)
+                futures = executor.map(process_page_vlm, current_tasks)
+                results = executor.get_result(futures) # Wait for all results
                 
-                batch_success = 0
-                batch_failed = 0
-                batch_failures = []
+                next_round_tasks = []
+                current_round_failures = []
+                
+                for task_input, res in zip(current_tasks, results):
+                    # Check for Lithops system errors (e.g. Runtime.ExitError, MemoryError)
+                    # Lithops might return Exception object or a dict with 'status' if our function caught it.
+                    
+                    is_success = False
+                    is_retryable = False
+                    error_msg = "Unknown"
 
-                for res in results:
-                    if res.get('status') == 'success':
-                        batch_success += 1
+                    # 1. Check if 'res' itself is an Exception object (Lithops system failure)
+                    if isinstance(res, Exception):
+                        error_msg = str(res)
+                        # Runtime.ExitError is typical for OOM at startup or Segfault
+                        if 'Runtime.ExitError' in error_msg or 'MemoryError' in error_msg:
+                            is_retryable = True
+                        else:
+                            # Other system errors might also be worth retrying at higher mem, 
+                            # but let's be conservative. If it crashed, maybe more mem helps.
+                            is_retryable = True 
+                    
+                    # 2. Check our function's return dict
+                    elif isinstance(res, dict):
+                        if res.get('status') == 'success':
+                            is_success = True
+                        else:
+                            error_msg = res.get('error', 'Unknown Error')
+                            # If our code caught a memory error (unlikely in Python but possible)
+                            if 'MemoryError' in error_msg:
+                                is_retryable = True
                     else:
-                        batch_failed += 1
-                        err = res.get('error', 'Unknown Error')
-                        cid = res.get('canonical_id', 'unknown_id')
-                        batch_failures.append(f"{cid}: {err}")
-                        logger.error(f"  ✗ {cid} - {err}")
+                        error_msg = f"Unexpected result type: {type(res)}"
+                    
+                    if is_success:
+                        batch_success_count += 1
+                    elif is_retryable:
+                        # Add back to queue for next memory level
+                        next_round_tasks.append(task_input)
+                    else:
+                        # Hard failure (e.g. 404, API error) - do not retry
+                        batch_failed_count += 1
+                        cid = task_input['task_data']['canonical_id']
+                        logger.error(f"    ✗ {cid} - {error_msg}")
+                        current_round_failures.append(f"{cid}: {error_msg}")
 
-                total_success += batch_success
-                total_failed += batch_failed
-                
-                if batch_failures:
+                # Log hard failures from this round
+                if current_round_failures:
                     with open(failure_log, 'a', encoding='utf-8') as logf:
-                        for failure in batch_failures:
+                        for failure in current_round_failures:
                             logf.write(failure + "\n")
 
-                logger.info(f"Batch {i+1} Result: Success={batch_success}, Fail={batch_failed}")
-                logger.info(f"Overall Progress: {total_success + total_failed}/{len(to_process)}")
+                # Prepare for next level
+                current_tasks = next_round_tasks
                 
-        except Exception as e:
-            logger.error(f"CRITICAL EXECUTOR FAILURE IN BATCH {i+1}: {e}")
-            # If the whole batch crashes, log it and continue to next batch
-            continue
+                # Cleanup executor
+                executor.clean()
+                del executor
+
+            except Exception as e:
+                logger.error(f"  !!! Executor orchestration failed at {mem_level}MB: {e}")
+                # If the orchestrator itself fails (e.g. network), we might want to retry.
+                # For simplicity, we just move to next memory level with same tasks.
+                if executor:
+                     try:
+                        executor.clean()
+                     except: pass
+                continue
+
+        # After all memory levels, if tasks remain, they are final failures
+        if current_tasks:
+            for task in current_tasks:
+                batch_failed_count += 1
+                cid = task['task_data']['canonical_id']
+                msg = f"{cid}: Failed at all memory levels (Max {MEMORY_LEVELS[-1]}MB)"
+                logger.error(f"    ✗ {msg}")
+                with open(failure_log, 'a', encoding='utf-8') as logf:
+                    logf.write(msg + "\n")
+
+        total_success += batch_success_count
+        total_failed += batch_failed_count
+        
+        logger.info(f"Batch {i+1} Summary: Success={batch_success_count}, Fail={batch_failed_count}")
+        logger.info(f"Overall Progress: {total_success + total_failed}/{len(to_process)}")
 
     logger.info(f"\nProcessing Complete. Success: {total_success}, Failed: {total_failed}")
     if total_failed > 0:
