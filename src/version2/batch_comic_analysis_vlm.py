@@ -72,33 +72,67 @@ Return ONLY valid JSON with this structure:
 }"""
 
 def encode_image_to_data_uri(image_path):
+    """Encodes image to base64 with correct MIME type based on extension."""
+    import mimetypes
+    
+    # Guess mime type based on file extension
+    mime_type, _ = mimetypes.guess_type(image_path)
+    if not mime_type:
+        # Fallback if unknown
+        if str(image_path).lower().endswith('.png'):
+            mime_type = 'image/png'
+        elif str(image_path).lower().endswith('.webp'):
+            mime_type = 'image/webp'
+        else:
+            mime_type = 'image/jpeg'
+            
     with open(image_path, "rb") as image_file:
-        return f"data:image/jpeg;base64,{base64.b64encode(image_file.read()).decode('utf-8')}"
+        return f"data:{mime_type};base64,{base64.b64encode(image_file.read()).decode('utf-8')}"
 
 def repair_json(json_str):
     """
     Attempts to repair broken JSON strings using simple heuristics.
-    Useful for models that truncate output or mess up formatting.
+    Specifically handles truncated responses by closing quotes and braces.
     """
     import re
     json_str = json_str.strip()
     
-    # 1. Try to find the first '{' and the last '}'
+    # 1. Find the start
     start = json_str.find('{')
-    end = json_str.rfind('}')
+    if start == -1:
+        return json_str
+    json_str = json_str[start:]
+
+    # 2. Check for truncation and close unclosed string
+    # Count double quotes (excluding escaped ones)
+    quotes = len(re.findall(r'(?<!\\)"', json_str))
+    if quotes % 2 != 0:
+        json_str += '"'
+
+    # 3. Balance Brackets and Braces
+    # We iterate backwards and add missing closers
+    open_braces = json_str.count('{')
+    close_braces = json_str.count('}')
+    open_brackets = json_str.count('[')
+    close_brackets = json_str.count(']')
+
+    # If truncated, we often need to close an object inside an array inside the root object
+    # So we add closers in the reverse order of typical nested structures
+    if open_brackets > close_brackets:
+        json_str += ']' * (open_brackets - close_brackets)
     
-    if start != -1 and end != -1:
-        json_str = json_str[start:end+1]
-    elif start != -1:
-        # If we have a start but no end, it's likely truncated.
-        # We can try to close it blindly (risky but better than nothing for some cases)
-        json_str = json_str[start:] + '}' 
-    
-    # 2. Fix missing commas between key-value pairs
-    # Pattern: "value" <newline/space> "key" -> "value", "key"
-    # This regex looks for a double quote, followed by whitespace/newlines, followed by a double quote
-    # It avoids cases where there is already a comma or colon.
+    # Re-calculate braces after possibly adding brackets
+    open_braces = json_str.count('{')
+    close_braces = json_str.count('}')
+    if open_braces > close_braces:
+        json_str += '}' * (open_braces - close_braces)
+
+    # 4. Fix missing commas (Object and Array)
     json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
+    json_str = re.sub(r'(?<=[^:,\[])"\s+"', '", "', json_str)
+    
+    # 5. Fix Invalid Escapes
+    json_str = json_str.replace("\\'", "'")
     
     return json_str
 
@@ -134,7 +168,11 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
         )
         
         if response.status_code == 200:
-            content = response.json()['choices'][0]['message']['content']
+            res_json = response.json()
+            if 'choices' not in res_json:
+                return {'status': 'error', 'error': f"KeyError: 'choices' missing. Keys found: {list(res_json.keys())} | Full: {str(res_json)[:200]}"}
+            
+            content = res_json['choices'][0]['message']['content']
             
             # Clean Markdown code blocks if present
             if '```json' in content:
@@ -277,7 +315,7 @@ def main():
                 else:
                     failed += 1
                     # Log failure to a separate file so we don't lose track
-                    with open('vlm_failures.log', 'a') as log:
+                    with open('vlm_failures.log', 'a', encoding='utf-8') as log:
                         log.write(f"{res['canonical_id']}: {res.get('error')}\n")
                 
                 pbar.set_description(f"Success: {successful} | Skip: {skipped} | Fail: {failed}")
