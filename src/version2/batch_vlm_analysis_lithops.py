@@ -158,7 +158,7 @@ def process_page_vlm(task_data):
                     ]
                 }
             ],
-            "max_tokens": 4000
+            "max_tokens": 8192
         }
         
         api_res = requests.post(
@@ -210,7 +210,7 @@ def process_page_vlm(task_data):
 
 # --- Orchestrator Logic ---
 
-def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key):
+def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda'):
     # 1. Load Manifest
     logger.info(f"Loading manifest: {manifest_path}")
     all_records = []
@@ -222,7 +222,7 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
         all_records = all_records[:limit]
         logger.info(f"Limited to {limit} records.")
 
-    # 2. FAST Skip check (Check S3 for existing files)
+    # 2. FAST Skip check (Check S3 for existing results)
     logger.info(f"Checking S3 for existing results in s3://{output_bucket}/{output_prefix}/...")
     s3_client = boto3.client('s3')
     existing_ids = set()
@@ -250,13 +250,26 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
     
     failure_log = 'vlm_lithops_failures.log'
     
+    # Adjust settings for localhost to prevent OOM
+    runtime = 'comic-vlm-lite'
+    if backend == 'localhost':
+        runtime = None  # Use local python environment
+        if workers > 16:
+            logger.warning(f"Backend is localhost but workers={workers}. Clamping to 8 to prevent OOM.")
+            workers = 8
+
     # Initialize Lithops Executor with minimal runtime
-    # Note: Using 256MB to ensure enough headroom for container initialization.
-    fexec = lithops.FunctionExecutor(
-        backend='aws_lambda', 
-        runtime='comic-vlm-lite',
-        runtime_memory=256
-    )
+    # Note: 128MB is the absolute floor for Lambda. Plentiful for API proxying.
+    try:
+        fexec = lithops.FunctionExecutor(
+            backend=backend, 
+            runtime=runtime,
+            runtime_memory=128,
+            workers=workers
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize Lithops executor: {e}")
+        return
     
     for i in range(total_batches):
         batch = to_process[i*batch_size : (i+1)*batch_size]
@@ -264,14 +277,15 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
         
         task_list = []
         for rec in batch:
-            task_list.append({
+            data = {
                 'canonical_id': rec['canonical_id'],
                 'image_path': rec['absolute_image_path'],
                 'output_bucket': output_bucket,
                 'output_prefix': output_prefix,
                 'model': model,
                 'api_key': api_key
-            })
+            }
+            task_list.append({'task_data': data})
             
         # Map
         futures = fexec.map(process_page_vlm, task_list)
@@ -308,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=500, help='Items per Lithops map call')
     parser.add_argument('--limit', type=int, help='Limit total records')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='OpenRouter API Key')
+    parser.add_argument('--backend', default='aws_lambda', help='Lithops backend (aws_lambda, localhost, etc)')
     
     args = parser.parse_args()
     
@@ -322,5 +337,6 @@ if __name__ == "__main__":
             workers=args.workers,
             batch_size=args.batch_size,
             limit=args.limit,
-            api_key=args.api_key
+            api_key=args.api_key,
+            backend=args.backend
         )
