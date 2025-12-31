@@ -87,14 +87,14 @@ def repair_json(json_str):
     open_brackets = json_str.count('[')
     close_brackets = json_str.count(']')
     
-    if open_brackets > close_braces: json_str += ']' * (open_brackets - close_brackets)
+    if open_brackets > close_brackets: json_str += ']' * (open_brackets - close_brackets)
     open_braces = json_str.count('{')
     close_braces = json_str.count('}')
     if open_braces > close_braces: json_str += '}' * (open_braces - close_braces)
     
     # Fix missing commas
     json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
-    json_str = json_str.replace("\'", "'"")
+    json_str = json_str.replace("\\'", "'")
     return json_str
 
 def process_page_vlm(task_data):
@@ -251,11 +251,11 @@ def run_vlm_analysis_lithops(manifest_path, output_bucket, output_prefix, model,
     failure_log = 'vlm_lithops_failures.log'
     
     # Initialize Lithops Executor with minimal runtime
-    # Note: Using 128MB (absolute minimum) to maximize cost efficiency during API wait times.
+    # Note: Using 256MB to ensure enough headroom for container initialization.
     fexec = lithops.FunctionExecutor(
         backend='aws_lambda', 
         runtime='comic-vlm-lite',
-        runtime_memory=128
+        runtime_memory=256
     )
     
     for i in range(total_batches):
