@@ -72,22 +72,27 @@ Return ONLY valid JSON with this structure:
 }"""
 
 def encode_image_to_data_uri(image_path):
-    """Encodes image to base64 with correct MIME type based on extension."""
-    import mimetypes
-    
-    # Guess mime type based on file extension
-    mime_type, _ = mimetypes.guess_type(image_path)
-    if not mime_type:
-        # Fallback if unknown
-        if str(image_path).lower().endswith('.png'):
-            mime_type = 'image/png'
-        elif str(image_path).lower().endswith('.webp'):
-            mime_type = 'image/webp'
-        else:
-            mime_type = 'image/jpeg'
-            
+    """Encodes image to base64 with correct MIME type detected from file content."""
     with open(image_path, "rb") as image_file:
-        return f"data:{mime_type};base64,{base64.b64encode(image_file.read()).decode('utf-8')}"
+        header = image_file.read(12)
+        image_file.seek(0)
+        content = image_file.read()
+        
+    # Detect MIME type from magic numbers
+    if header.startswith(b'\x89PNG\r\n\x1a\n'):
+        mime_type = 'image/png'
+    elif header.startswith(b'\xff\xd8\xff'):
+        mime_type = 'image/jpeg'
+    elif header.startswith(b'RIFF') and header[8:12] == b'WEBP':
+        mime_type = 'image/webp'
+    else:
+        # Fallback to extension if magic number unknown
+        import mimetypes
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type:
+             mime_type = 'image/jpeg' # Final fallback
+
+    return f"data:{mime_type};base64,{base64.b64encode(content).decode('utf-8')}"
 
 def repair_json(json_str):
     """
@@ -143,7 +148,7 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
         headers = {
             "Authorization": f"Bearer {api_key}", 
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/comicanalysis", # Required by OpenRouter
+            "HTTP-Referer": "https://github.com/RichardScottOZ/Comic-Analysis", # Required by OpenRouter
             "X-Title": "Comic Analysis"
         }
         data = {
