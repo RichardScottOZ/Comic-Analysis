@@ -7,7 +7,8 @@ Features:
 - Handles millions of pages by processing in chunks
 - Memory Escalation: Retries OOM/failed tasks with higher memory
 - S3 skip logic (checks existing results)
-- Robust JSON repair for VLM outputs
+- Robust JSON repair for VLM outputs (Aggressive Mode)
+- Adjustable Temperature
 """
 
 import os
@@ -68,22 +69,26 @@ Return ONLY valid JSON with this structure:
 }"""
 
 def repair_json(json_str):
-    """Attempts to repair broken JSON strings from VLMs."""
+    """
+    Attempts to repair broken JSON strings using aggressive heuristics.
+    Handles truncated responses, unclosed quotes, and missing delimiters.
+    """
     import re
     json_str = json_str.strip()
     
-    # Remove leading/trailing markdown code blocks if they exist
+    # 1. Basic Markdown Cleanup
     if json_str.startswith('```'):
         json_str = re.sub(r'^```(?:json)?', '', json_str)
         json_str = re.sub(r'```$', '', json_str)
     json_str = json_str.strip()
 
+    # 2. Find the start of the JSON object
     start = json_str.find('{')
-    if start == -1: return json_str
+    if start == -1:
+        return json_str
     json_str = json_str[start:]
-    
-    # Close unclosed quotes. 
-    # We look for a quote that isn't preceded by an odd number of backslashes.
+
+    # 3. Close unclosed quotes accurately
     def is_balanced_quotes(s):
         count = 0
         escaped = False
@@ -100,24 +105,28 @@ def repair_json(json_str):
     if not is_balanced_quotes(json_str):
         json_str += '"'
 
-    # Balance braces/brackets
+    # 4. Fix missing commas between fields
+    json_str = re.sub(r'(")\s*\n?\s*(")', r'\1,\n\2', json_str)
+    json_str = re.sub(r'(\})\s*\n?\s*(")', r'\1,\n\2', json_str)
+    json_str = re.sub(r'(\])\s*\n?\s*(")', r'\1,\n\2', json_str)
+
+    # 5. Balance Brackets and Braces
     open_braces = json_str.count('{')
     close_braces = json_str.count('}')
     open_brackets = json_str.count('[')
     close_brackets = json_str.count(']')
+
+    if open_brackets > close_brackets:
+        json_str += ']' * (open_brackets - close_brackets)
     
-    if open_brackets > close_brackets: json_str += ']' * (open_brackets - close_brackets)
-    
-    # Re-count braces after adding brackets
+    # Re-check braces after adding brackets
     open_braces = json_str.count('{')
     close_braces = json_str.count('}')
-    if open_braces > close_braces: json_str += '}' * (open_braces - close_braces)
-    
-    # Fix common VLM-ism: escaped single quotes in JSON strings (invalid JSON)
-    json_str = json_str.replace("\'", "'" )
-    
-    # Fix missing commas between fields: "field": "val" "field2": "val"
-    json_str = re.sub(r'(")\s*\n?\s*(")', r'\1,\n\2', json_str)
+    if open_braces > close_braces:
+        json_str += '}' * (open_braces - close_braces)
+
+    # 6. Final cleanup
+    json_str = json_str.replace("\'", "'")
     
     return json_str
 
@@ -140,6 +149,7 @@ def process_page_vlm(task_data):
     model = task_data['model']
     api_key = task_data['api_key']
     timeout = task_data.get('timeout', 120)
+    temperature = task_data.get('temperature', 0.0)
     
     s3_client = boto3.client('s3')
     
@@ -178,6 +188,7 @@ def process_page_vlm(task_data):
         
         payload = {
             "model": model,
+            "temperature": temperature,
             "messages": [
                 {
                     "role": "user",
@@ -247,7 +258,7 @@ def process_page_vlm(task_data):
 
 # --- Orchestrator Logic ---
 
-def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False):
+def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False, temperature=0.0):
     # Memory Escalation Levels (MB)
     MEMORY_LEVELS = [128, 192, 256, 384, 512, 640, 768, 896, 1024]
     if backend == 'localhost':
@@ -275,6 +286,8 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         for obj in page.get('Contents', []):
             key = obj['Key']
             if key.endswith('.json'):
+                # Robustly extract ID: remove prefix and .json
+                # key: vlm_results/Folder/Image.json -> Folder/Image
                 relative_path = key[len(prefix):-5] 
                 existing_ids.add(relative_path)
             
@@ -296,12 +309,13 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
     # Configure Runtime
     runtime = 'comic-vlm-lite'
     if use_default_runtime:
-        runtime = None
+        runtime = None # Lithops picks default
         logger.info("Using default Lithops runtime.")
     elif backend == 'localhost':
         runtime = None
         if workers > 16:
             workers = 8
+            logger.warning("Clamping localhost workers to 8")
 
     logger.info(f"Starting Batched Processing: {total_batches} batches of ~{batch_size} items")
     logger.info(f"Memory Escalation Strategy: {MEMORY_LEVELS} MB")
@@ -320,7 +334,8 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
                 'output_bucket': output_bucket,
                 'output_prefix': output_prefix,
                 'model': model,
-                'api_key': api_key
+                'api_key': api_key,
+                'temperature': temperature
             }
             current_tasks.append({'task_data': data})
 
@@ -394,7 +409,8 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
                 if executor:
                      try:
                         executor.clean()
-                     except: pass
+                     except:
+                        pass
                 continue
 
         if current_tasks:
@@ -428,6 +444,7 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='OpenRouter API Key')
     parser.add_argument('--backend', default='aws_lambda', help='Lithops backend')
     parser.add_argument('--use-default-runtime', action='store_true', help='Use default Lithops runtime')
+    parser.add_argument('--temperature', type=float, default=0.0, help='Sampling temperature (0.0 for deterministic)')
     
     args = parser.parse_args()
     
@@ -444,5 +461,6 @@ if __name__ == "__main__":
             limit=args.limit,
             api_key=args.api_key,
             backend=args.backend,
-            use_default_runtime=args.use_default_runtime
+            use_default_runtime=args.use_default_runtime,
+            temperature=args.temperature
         )
