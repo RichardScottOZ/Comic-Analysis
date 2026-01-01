@@ -188,7 +188,6 @@ def process_page_vlm(task_data):
         
         payload = {
             "model": model,
-            "temperature": temperature,
             "messages": [
                 {
                     "role": "user",
@@ -200,6 +199,9 @@ def process_page_vlm(task_data):
             ],
             "max_tokens": 8192
         }
+        
+        if temperature is not None:
+            payload["temperature"] = temperature
         
         try:
             api_res = requests.post(
@@ -444,7 +446,7 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='OpenRouter API Key')
     parser.add_argument('--backend', default='aws_lambda', help='Lithops backend')
     parser.add_argument('--use-default-runtime', action='store_true', help='Use default Lithops runtime')
-    parser.add_argument('--temperature', type=float, default=0.0, help='Sampling temperature (0.0 for deterministic)')
+    parser.add_argument('--temperature', type=float, default=None, help='Sampling temperature (omit for model default, 0.0 for deterministic)')
     
     args = parser.parse_args()
     
