@@ -242,6 +242,7 @@ if __name__ == "__main__":
     
     models = [
         "google/gemini-2.0-flash-001",
+        "google/gemini-2.0-flash-lite-001",
         "google/gemini-2.5-flash-preview-09-2025",
         "google/gemini-2.5-flash-image-preview",
         "google/gemini-3-flash-preview",
@@ -254,7 +255,7 @@ if __name__ == "__main__":
         "qwen/qwen3-vl-235b-a22b-instruct",
         "qwen/qwen3-vl-32b-instruct",
         "qwen/qwen-vl-max",
-        # "google/gemini-2.0-flash-lite-001",
+        # "qwen/qwen3-vl-8b-instruct",
         # "qwen/qwen3-vl-8b-instruct",
         # "amazon/nova-lite-v1",
         # "mistralai/mistral-small-3.2-24b-instruct",
