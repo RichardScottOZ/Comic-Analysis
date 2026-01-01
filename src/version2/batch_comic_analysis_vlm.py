@@ -96,52 +96,73 @@ def encode_image_to_data_uri(image_path):
 
 def repair_json(json_str):
     """
-    Attempts to repair broken JSON strings using simple heuristics.
-    Specifically handles truncated responses by closing quotes and braces.
+    Attempts to repair broken JSON strings using aggressive heuristics.
+    Handles truncated responses, unclosed quotes, and missing delimiters.
     """
     import re
     json_str = json_str.strip()
     
-    # 1. Find the start
+    # 1. Basic Markdown Cleanup (in case it wasn't caught earlier)
+    if json_str.startswith('```'):
+        json_str = re.sub(r'^```(?:json)?', '', json_str)
+        json_str = re.sub(r'```$', '', json_str)
+    json_str = json_str.strip()
+
+    # 2. Find the start of the JSON object
     start = json_str.find('{')
     if start == -1:
         return json_str
     json_str = json_str[start:]
 
-    # 2. Check for truncation and close unclosed string
-    # Count double quotes (excluding escaped ones)
-    quotes = len(re.findall(r'(?<!\\)"', json_str))
-    if quotes % 2 != 0:
+    # 3. Close unclosed quotes accurately
+    def is_balanced_quotes(s):
+        count = 0
+        escaped = False
+        for char in s:
+            if char == '\\':
+                escaped = not escaped
+            elif char == '"' and not escaped:
+                count += 1
+                escaped = False
+            else:
+                escaped = False
+        return count % 2 == 0
+
+    if not is_balanced_quotes(json_str):
+        # Truncation often happens at a random spot. 
+        # If we are inside a string, close it.
         json_str += '"'
 
-    # 3. Balance Brackets and Braces
-    # We iterate backwards and add missing closers
+    # 4. Fix missing commas between fields and elements
+    # Case: "key": "val" "key2"
+    json_str = re.sub(r'(")\s*\n?\s*(")', r'\1,\n\2', json_str)
+    # Case: } "key"
+    json_str = re.sub(r'(\})\s*\n?\s*(")', r'\1,\n\2', json_str)
+    # Case: ] "key"
+    json_str = re.sub(r'(\])\s*\n?\s*(")', r'\1,\n\2', json_str)
+
+    # 5. Balance Brackets and Braces
     open_braces = json_str.count('{')
     close_braces = json_str.count('}')
     open_brackets = json_str.count('[')
     close_brackets = json_str.count(']')
 
-    # If truncated, we often need to close an object inside an array inside the root object
-    # So we add closers in the reverse order of typical nested structures
+    # Close open structures in correct order (innermost likely first)
     if open_brackets > close_brackets:
         json_str += ']' * (open_brackets - close_brackets)
     
-    # Re-calculate braces after possibly adding brackets
+    # Re-check braces after adding brackets
     open_braces = json_str.count('{')
     close_braces = json_str.count('}')
     if open_braces > close_braces:
         json_str += '}' * (open_braces - close_braces)
 
-    # 4. Fix missing commas (Object and Array)
-    json_str = re.sub(r'"\s*\n\s*"', '",\n"', json_str)
-    json_str = re.sub(r'(?<=[^:,\[])"\s+"', '", "', json_str)
-    
-    # 5. Fix Invalid Escapes
-    json_str = json_str.replace("\\'", "'")
+    # 6. Final cleanup of common invalid artifacts
+    json_str = json_str.replace("\\'", "'") # Escaped single quotes
     
     return json_str
 
-def analyze_comic_page(image_path, model, api_key, timeout=120):
+def analyze_comic_page(image_path, model, api_key, temperature=0.0, timeout=120):
     """Sends image to OpenRouter API (or compatible)."""
     try:
         image_data_uri = encode_image_to_data_uri(image_path)
@@ -153,6 +174,7 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
         }
         data = {
             "model": model,
+            "temperature": temperature,
             "messages": [
                 {
                     "role": "user", 
@@ -162,7 +184,7 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
                     ]
                 }
             ],
-            "max_tokens": 4000
+            "max_tokens": 8192
         }
         
         response = requests.post(
@@ -211,7 +233,7 @@ def analyze_comic_page(image_path, model, api_key, timeout=120):
 
 def process_single_record(args):
     """Worker function to process one manifest record."""
-    record, output_dir, image_root, model, api_key, timeout = args
+    record, output_dir, image_root, model, api_key, temperature, timeout = args
     
     canonical_id = record['canonical_id']
     path_raw = record['absolute_image_path']
@@ -243,7 +265,7 @@ def process_single_record(args):
         return {'status': 'error', 'canonical_id': canonical_id, 'error': f"File not found: {local_path}"}
 
     # 3. Call API
-    result = analyze_comic_page(local_path, model, api_key, timeout)
+    result = analyze_comic_page(local_path, model, api_key, temperature, timeout)
     
     # 4. Save Result
     if result['status'] == 'success':
@@ -272,6 +294,7 @@ def main():
     parser.add_argument('--workers', type=int, default=8, help='Parallel workers')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='API Key')
     parser.add_argument('--limit', type=int, help='Limit the number of images to process (useful for testing)')
+    parser.add_argument('--temperature', type=float, default=0.0, help='Sampling temperature (0.0 for deterministic)')
     parser.add_argument('--timeout', type=int, default=120, help='API Timeout in seconds')
     args = parser.parse_args()
 
@@ -295,7 +318,7 @@ def main():
     # 2. Prepare Tasks
     tasks = []
     for rec in records:
-        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.timeout))
+        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.temperature, args.timeout))
 
     # 3. Process
     print(f"Starting processing with {args.workers} workers...")
