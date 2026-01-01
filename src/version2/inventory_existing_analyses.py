@@ -144,9 +144,19 @@ def scan_and_match(analysis_root, manifest_lookup, output_csv, debug=False):
                             candidates = [best_match]
                             match_type = 'suffix_reassembly'
                             break # Stop once we find a valid match
-                        
-                        # If we found candidates by filename but the path didn't match, 
-                        # we continue loop to try a longer filename suffix.
+            
+            # Strategy 4: Reverse Normalization
+            if not candidates and '_' in clean_stem:
+                # Use the last part to find candidates quickly
+                last_part = clean_stem.split('_')[-1]
+                potential_cids = manifest_lookup.get(last_part)
+                if potential_cids:
+                    for cid in potential_cids:
+                        cid_flat = cid.replace('/', '_').replace('\\', '_')
+                        if cid_flat.endswith(clean_stem):
+                            candidates = [cid]
+                            match_type = 'reverse_normalization'
+                            break
 
             if not candidates:
                 if debug and no_match < 10:
