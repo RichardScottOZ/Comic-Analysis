@@ -221,35 +221,14 @@ def run_test(model, api_key, image_path, temperature=None):
         safe_model = model.replace('/', '_').replace(':', '_')
         
         # Save Raw JSON
-        raw_json_out = f"grounding_output_{safe_model}_raw.json"
+        raw_json_out = f"grounding_output_{safe_model}.json"
         with open(raw_json_out, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
-        print(f"✅ Saved Raw JSON: {raw_json_out}")
+        print(f"✅ Saved JSON: {raw_json_out}")
         
-        # Visualize Raw
-        out_name_raw = f"grounding_viz_{safe_model}_raw.jpg"
-        draw_boxes(image_path, raw_objects, out_name_raw)
-        
-        # Cleanup
-        clean_objects = deduplicate_objects(raw_objects)
-        
-        # Re-assign IDs for clean list
-        for i, obj in enumerate(clean_objects):
-            obj['id'] = i
-            
-        print(f"Cleaned to {len(clean_objects)} unique objects.")
-        
-        # Save Clean JSON
-        clean_data = data.copy()
-        clean_data['objects'] = clean_objects
-        clean_json_out = f"grounding_output_{safe_model}_clean.json"
-        with open(clean_json_out, 'w', encoding='utf-8') as f:
-            json.dump(clean_data, f, indent=2)
-        print(f"✅ Saved Clean JSON: {clean_json_out}")
-        
-        # Visualize Clean
-        out_name_clean = f"grounding_viz_{safe_model}_clean.jpg"
-        draw_boxes(image_path, clean_objects, out_name_clean)
+        # Visualize
+        out_name = f"grounding_viz_{safe_model}.jpg"
+        draw_boxes(args.image, raw_objects, out_name)
 
     except Exception as e:
         print(f"Exception: {e}")
