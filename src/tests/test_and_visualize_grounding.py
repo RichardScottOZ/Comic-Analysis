@@ -62,6 +62,7 @@ def draw_boxes(image_path, objects, output_path):
         
         for obj in objects:
             label = obj.get('label', 'unknown').lower()
+            oid = obj.get('id', '?')
             # Handle inconsistent keys from some models (box vs box_2d)
             box = obj.get('box_2d', [])
             if not box:
@@ -83,7 +84,8 @@ def draw_boxes(image_path, objects, output_path):
             # Draw Label Text
             try:
                 # Use default font
-                draw.text((abs_xmin + 5, abs_ymin + 5), label, fill=color)
+                label_text = f"#{oid} {label}"
+                draw.text((abs_xmin + 5, abs_ymin + 5), label_text, fill=color)
             except:
                 pass # Fallback if font issues
 
@@ -92,6 +94,55 @@ def draw_boxes(image_path, objects, output_path):
         
     except Exception as e:
         print(f"Error drawing boxes: {e}")
+
+def deduplicate_objects(objects):
+    """
+    Cleans up duplicate detections where the model assigns multiple labels 
+    (e.g., panel + person) to the exact same box.
+    Priority: text > person > panel
+    """
+    if not objects: return []
+    
+    # Sort by priority score (higher is better)
+    priority = {'text': 3, 'person': 2, 'panel': 1}
+    
+    # Helper to calculate IoU
+    def get_iou(boxA, boxB):
+        # determine the (x, y)-coordinates of the intersection rectangle
+        xA = max(boxA[1], boxB[1])
+        yA = max(boxA[0], boxB[0])
+        xB = min(boxA[3], boxB[3])
+        yB = min(boxA[2], boxB[2])
+        interArea = max(0, xB - xA) * max(0, yB - yA)
+        boxAArea = (boxA[3] - boxA[1]) * (boxA[2] - boxA[0])
+        boxBArea = (boxB[3] - boxB[1]) * (boxB[2] - boxB[0])
+        iou = interArea / float(boxAArea + boxBArea - interArea) if (boxAArea + boxBArea - interArea) > 0 else 0
+        return iou
+
+    # Group by box coordinates (approximate matching)
+    cleaned_objects = []
+    # Sort objects so we process highest priority first
+    objects.sort(key=lambda x: priority.get(x.get('label', ''), 0), reverse=True)
+    
+    for obj in objects:
+        is_duplicate = False
+        box = obj.get('box_2d') or obj.get('box')
+        if not box or len(box) != 4: continue
+        
+        for kept in cleaned_objects:
+            kept_box = kept.get('box_2d') or kept.get('box')
+            iou = get_iou(box, kept_box)
+            
+            # If boxes are nearly identical (IoU > 0.95), keep the one with higher priority
+            # Since we sorted by priority, 'kept' is already the higher priority one.
+            if iou > 0.95:
+                is_duplicate = True
+                break
+        
+        if not is_duplicate:
+            cleaned_objects.append(obj)
+            
+    return cleaned_objects
 
 def run_test(model, api_key, image_path, temperature=None):
     print(f"\n--- Testing {model} ---")
@@ -148,19 +199,46 @@ def run_test(model, api_key, image_path, temperature=None):
                 print(f"❌ JSON Parse Error. Raw start: {content[:100]}")
                 return
 
-        objects = data.get('objects', [])
-        print(f"Found {len(objects)} objects.")
+        raw_objects = data.get('objects', [])
+        print(f"Found {len(raw_objects)} raw objects.")
         
-        # Save JSON for inspection
+        # Add IDs to raw objects
+        for i, obj in enumerate(raw_objects):
+            obj['id'] = i
+            
         safe_model = model.replace('/', '_').replace(':', '_')
-        json_out = f"grounding_output_{safe_model}.json"
-        with open(json_out, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2)
-        print(f"✅ Saved JSON: {json_out}")
         
-        # 3. Visualize
-        out_name = f"grounding_viz_{safe_model}.jpg"
-        draw_boxes(image_path, objects, out_name)
+        # Save Raw JSON
+        raw_json_out = f"grounding_output_{safe_model}_raw.json"
+        with open(raw_json_out, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        print(f"✅ Saved Raw JSON: {raw_json_out}")
+        
+        # Visualize Raw
+        out_name_raw = f"grounding_viz_{safe_model}_raw.jpg"
+        draw_boxes(image_path, raw_objects, out_name_raw)
+        
+        # Cleanup
+        # Note: deduplicate_objects creates a new list, so raw_objects is safe
+        clean_objects = deduplicate_objects(raw_objects)
+        
+        # Re-assign IDs for clean list (so they are sequential 0..N)
+        for i, obj in enumerate(clean_objects):
+            obj['id'] = i
+            
+        print(f"Cleaned to {len(clean_objects)} unique objects.")
+        
+        # Save Clean JSON
+        clean_data = data.copy()
+        clean_data['objects'] = clean_objects
+        clean_json_out = f"grounding_output_{safe_model}_clean.json"
+        with open(clean_json_out, 'w', encoding='utf-8') as f:
+            json.dump(clean_data, f, indent=2)
+        print(f"✅ Saved Clean JSON: {clean_json_out}")
+        
+        # Visualize Clean
+        out_name_clean = f"grounding_viz_{safe_model}_clean.jpg"
+        draw_boxes(image_path, clean_objects, out_name_clean)
 
     except Exception as e:
         print(f"Exception: {e}")
