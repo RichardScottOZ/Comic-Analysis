@@ -162,7 +162,7 @@ def repair_json(json_str):
     
     return json_str
 
-def analyze_comic_page(image_path, model, api_key, temperature=0.0, timeout=120):
+def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120):
     """Sends image to OpenRouter API (or compatible)."""
     try:
         image_data_uri = encode_image_to_data_uri(image_path)
@@ -174,7 +174,6 @@ def analyze_comic_page(image_path, model, api_key, temperature=0.0, timeout=120)
         }
         data = {
             "model": model,
-            "temperature": temperature,
             "messages": [
                 {
                     "role": "user", 
@@ -186,6 +185,9 @@ def analyze_comic_page(image_path, model, api_key, temperature=0.0, timeout=120)
             ],
             "max_tokens": 8192
         }
+        
+        if temperature is not None:
+            data["temperature"] = temperature
         
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions", 
@@ -294,7 +296,7 @@ def main():
     parser.add_argument('--workers', type=int, default=8, help='Parallel workers')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='API Key')
     parser.add_argument('--limit', type=int, help='Limit the number of images to process (useful for testing)')
-    parser.add_argument('--temperature', type=float, default=0.0, help='Sampling temperature (0.0 for deterministic)')
+    parser.add_argument('--temperature', type=float, default=None, help='Sampling temperature (omit for model default, 0.0 for deterministic)')
     parser.add_argument('--timeout', type=int, default=120, help='API Timeout in seconds')
     args = parser.parse_args()
 
