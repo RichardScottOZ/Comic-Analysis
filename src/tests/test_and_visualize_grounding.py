@@ -194,10 +194,21 @@ def run_test(model, api_key, image_path, temperature=None):
             return
         
         # 2. Parse JSON
+        # Remove Markdown
         if '```json' in content:
             content = content.split('```json')[1].split('```')[0]
         elif '```' in content:
             content = content.split('```')[1].split('```')[0]
+            
+        # Remove any prefix text (like <|begin_of_box|>) by finding the first '{'
+        start_idx = content.find('{')
+        if start_idx != -1:
+            content = content[start_idx:]
+            
+        # Remove any suffix text by finding the last '}'
+        end_idx = content.rfind('}')
+        if end_idx != -1:
+            content = content[:end_idx+1]
         
         try:
             data = json.loads(content.strip(), strict=False)
@@ -248,14 +259,36 @@ if __name__ == "__main__":
         "google/gemini-3-flash-preview",
         "google/gemini-2.5-flash-lite",
         "google/gemini-2.5-flash-lite-preview-09-2025",
-        "qwen/qwen2.5-vl-72b-instruct",
-        "qwen/qwen2.5-vl-32b-instruct",
-        "qwen/qwen3-vl-30b-a3b-instruct",
-        "qwen/qwen-vl-plus",
-        "qwen/qwen3-vl-235b-a22b-instruct",
-        "qwen/qwen3-vl-32b-instruct",
-        "qwen/qwen-vl-max",
-        # "qwen/qwen3-vl-8b-instruct",
+        "amazon/nova-lite-v1",
+        "amazon/nova-pro-v1",
+        #"meta-llama/llama-4-maverick",
+        #"openai/gpt-4.1-nano",
+        #"openai/gpt-4.1-mini",
+        #"openai/gpt-4o-mini",
+        #"openai/gpt-4o-mini-2024-07-18",
+        #"openai/gpt-5-mini",
+        #"openai/gpt-5-image-mini",
+        ####close"openai/o4-mini",
+        #"x-ai/grok-4-fast",
+        #"x-ai/grok-4.1-fast",
+        #"anthropic/claude-3-haiku",
+        #"anthropic/claude-3.5-haiku-20241022",
+        #"anthropic/claude-haiku-4.5",
+        #"z-ai/glm-4.5v",
+        "z-ai/glm-4.6v",
+        #"bytedance-seed/seed-1.6-flash",
+        "bytedance-seed/seed-1.6",
+        #"bytedance/ui-tars-1.5-7b",
+        #"baidu/ernie-4.5-vl-28b-a3b",
+        #"baidu/ernie-4.5-vl-424b-a47b",
+        #"minimax/minimax-01",
+        # "qwen/qwen2.5-vl-72b-instruct",
+        # "qwen/qwen2.5-vl-32b-instruct",
+        # "qwen/qwen3-vl-30b-a3b-instruct",
+        # "qwen/qwen-vl-plus",
+        # "qwen/qwen3-vl-235b-a22b-instruct",
+        # "qwen/qwen3-vl-32b-instruct",
+        # "qwen/qwen-vl-max",
         # "qwen/qwen3-vl-8b-instruct",
         # "amazon/nova-lite-v1",
         # "mistralai/mistral-small-3.2-24b-instruct",
@@ -264,6 +297,8 @@ if __name__ == "__main__":
         # "google/gemma-3-27b-it",
         # "meta-llama/llama-4-scout"
     ]
+
+    models = ["z-ai/glm-4.6v"]
     
     if not args.api_key:
         print("Need API Key")
