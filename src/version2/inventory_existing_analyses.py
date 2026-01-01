@@ -76,11 +76,77 @@ def scan_and_match(analysis_root, manifest_lookup, output_csv, debug=False):
                     candidates = manifest_lookup.get(suffix)
                     if candidates: match_type = 'suffix_split'
             
-            # Strategy 3: Handle Archive subfolder variations
-            # Sometimes canonical has 'JPG4CBZ/Image' but local file is just 'Image'
-            if not candidates:
-                 # Check if clean_stem exists as a substring in manifest lookup keys? No, too slow.
-                 pass
+            # Strategy 3: Path Reconstruction / Suffix Reassembly
+            # The local filename is a flattened path like 'Folder_Sub_File'.
+            # The manifest filename might be 'File' or 'Sub_File'.
+            # We don't know where the 'path' ends and 'filename' begins because both use '_'.
+            # So we split by '_' and try to match suffixes of increasing length against the manifest lookup.
+            
+            if not candidates and '_' in clean_stem:
+                parts = clean_stem.split('_')
+                # Try suffixes of length 1 to N
+                # e.g. "A_B_C" -> check "C", then "B_C", then "A_B_C"
+                
+                for i in range(1, len(parts) + 1):
+                    # Reassemble suffix: e.g. "2000AD_Regened_001"
+                    potential_filename = "_".join(parts[-i:])
+                    
+                    lookup_matches = manifest_lookup.get(potential_filename)
+                    if lookup_matches:
+                        # We found a candidate list! 
+                        # Now we must verify if the FULL path matches (reconstructed)
+                        # Local: A_B_C -> Reconstructed: A/B/C (roughly)
+                        
+                        # We convert the *prefix* (the part we didn't use for filename) to a path
+                        prefix_parts = parts[:-i]
+                        prefix_path = "/".join(prefix_parts)
+                        
+                        # Check if any candidate ends with "prefix/filename"
+                        # OR if prefix is empty, just "filename"
+                        
+                        best_match = None
+                        
+                        # Filter down candidates if we have a prefix
+                        # Local: A_B_C_D_Filename
+                        # Candidate: A/B/C/D/Filename
+                        
+                        if len(lookup_matches) == 1:
+                            best_match = lookup_matches[0]
+                        else:
+                            # Disambiguation needed
+                            # Check if our reconstructed prefix is a SUBSTRING of the candidate path
+                            # This handles truncated local names: 'Abe Sapien The Devil Does Not J' in 'Abe Sapien The Devil Does Not Jest'
+                            
+                            # Reconstruct prefix from parts, replacing _ with space or nothing since truncation might cut words
+                            # Better: Check if the *raw local stem* (minus filename) matches the start of the candidate
+                            
+                            local_prefix_raw = "_".join(prefix_parts) # e.g. "Abe_Sapien_The_..."
+                            # Normalize local prefix for matching (replace _ with space? or just ignore non-alnum?)
+                            # Let's try simple normalized substring.
+                            
+                            norm_local = local_prefix_raw.lower().replace('_', ' ').replace('-', ' ').strip()
+                            
+                            for cid in lookup_matches:
+                                # Check if CID path (minus filename) roughly matches local prefix
+                                cid_parent = str(Path(cid).parent).lower().replace('_', ' ').replace('-', ' ').strip()
+                                
+                                # Check containment both ways to handle truncations
+                                if norm_local in cid_parent or cid_parent in norm_local:
+                                    best_match = cid
+                                    break
+                                
+                                # Fallback: Check checking raw prefix path as constructed
+                                if prefix_path and prefix_path in cid:
+                                    best_match = cid
+                                    break
+
+                        if best_match:
+                            candidates = [best_match]
+                            match_type = 'suffix_reassembly'
+                            break # Stop once we find a valid match
+                        
+                        # If we found candidates by filename but the path didn't match, 
+                        # we continue loop to try a longer filename suffix.
 
             if not candidates:
                 if debug and no_match < 10:
