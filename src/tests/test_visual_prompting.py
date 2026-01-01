@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 # Paths (Update if needed)
-ORIGINAL_IMAGE = "E:\\amazon\\#Guardian 001_#Guardian 001 - p003.jpg.png"
+ORIGINAL_IMAGE = "E:\\amazon\\#Guardian 001\\#Guardian 001 - p003.jpg"
 ANNOTATED_IMAGE = "viz_faster_rcnn_p003.jpg" # Created by visualize_faster_rcnn.py
 RCNN_JSON = "E:\\Comic_Analysis_Results_v2\\detections\\#Guardian 001\\#Guardian 001 - p003.json"
 
