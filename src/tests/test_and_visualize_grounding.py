@@ -2,6 +2,7 @@
 """
 Test & Visualize VLM Grounding
 Queries models for bounding boxes and immediately renders them onto the image.
+Saves RAW and CLEAN versions of both JSON and Visualization.
 """
 
 import os
@@ -13,7 +14,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 # Target Page (Default)
-DEFAULT_IMAGE = "E:\\amazon\\#Guardian 001_#Guardian 001 - p003.jpg.png"
+DEFAULT_IMAGE = "E:\\amazon\\#Guardian 001\\#Guardian 001 - p003.jpg"
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
@@ -38,73 +39,36 @@ def get_grounding_prompt():
 Identify the bounding box for:
 1. Every PANEL (labelled 'panel')
 2. Every CHARACTER (labelled 'person')
-3. Every SPEECH BUBBLE (labelled 'text')
+3. Every FACE (labelled 'face')
+4. Every SPEECH BUBBLE (labelled 'text')
+
+STRICT RULES:
+- Return ONLY ONE label per distinct region. 
+- DO NOT assign multiple labels (e.g., both 'panel' and 'person') to the same or nearly identical coordinates.
+- If a character or text bubble takes up an entire region, prioritize the 'person' or 'text' label over 'panel'.
 
 Return ONLY a JSON object with this format:
 {
   "objects": [
     {"label": "panel", "box_2d": [ymin, xmin, ymax, xmax]},
     {"label": "person", "box_2d": [ymin, xmin, ymax, xmax]},
+    {"label": "face", "box_2d": [ymin, xmin, ymax, xmax]},
     {"label": "text", "box_2d": [ymin, xmin, ymax, xmax]}
   ]
 }
 Coordinates should be normalized 0-1000.
 """
 
-def draw_boxes(image_path, objects, output_path):
-    try:
-        img = Image.open(image_path).convert("RGB")
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
-        
-        # Colors
-        colors = {'panel': 'blue', 'person': 'red', 'text': 'green'}
-        
-        for obj in objects:
-            label = obj.get('label', 'unknown').lower()
-            oid = obj.get('id', '?')
-            # Handle inconsistent keys from some models (box vs box_2d)
-            box = obj.get('box_2d', [])
-            if not box:
-                box = obj.get('box', [])
-            
-            if len(box) != 4: continue
-            
-            ymin, xmin, ymax, xmax = box
-            
-            # Normalize 0-1000 -> Pixels
-            abs_xmin = (xmin / 1000) * width
-            abs_ymin = (ymin / 1000) * height
-            abs_xmax = (xmax / 1000) * width
-            abs_ymax = (ymax / 1000) * height
-            
-            color = colors.get(label, 'yellow')
-            draw.rectangle([abs_xmin, abs_ymin, abs_xmax, abs_ymax], outline=color, width=5)
-            
-            # Draw Label Text
-            try:
-                # Use default font
-                label_text = f"#{oid} {label}"
-                draw.text((abs_xmin + 5, abs_ymin + 5), label_text, fill=color)
-            except:
-                pass # Fallback if font issues
-
-        img.save(output_path)
-        print(f"✅ Saved visualization: {output_path}")
-        
-    except Exception as e:
-        print(f"Error drawing boxes: {e}")
-
 def deduplicate_objects(objects):
     """
     Cleans up duplicate detections where the model assigns multiple labels 
     (e.g., panel + person) to the exact same box.
-    Priority: text > person > panel
+    Priority: text > face > person > panel
     """
     if not objects: return []
     
     # Sort by priority score (higher is better)
-    priority = {'text': 3, 'person': 2, 'panel': 1}
+    priority = {'text': 4, 'face': 3, 'person': 2, 'panel': 1}
     
     # Helper to calculate IoU
     def get_iou(boxA, boxB):
@@ -143,6 +107,54 @@ def deduplicate_objects(objects):
             cleaned_objects.append(obj)
             
     return cleaned_objects
+
+def draw_boxes(image_path, objects, output_path):
+    try:
+        img = Image.open(image_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        
+        # Colors
+        colors = {'panel': 'blue', 'person': 'red', 'text': 'green', 'face': 'magenta'}
+        
+        for obj in objects:
+            label = obj.get('label', 'unknown').lower()
+            oid = obj.get('id', '?')
+            # Handle inconsistent keys from some models (box vs box_2d)
+            box = obj.get('box_2d', [])
+            if not box:
+                box = obj.get('box', [])
+            
+            if len(box) != 4: continue
+            
+            ymin, xmin, ymax, xmax = box
+            
+            # Normalize 0-1000 -> Pixels
+            abs_xmin = (xmin / 1000) * width
+            abs_ymin = (ymin / 1000) * height
+            abs_xmax = (xmax / 1000) * width
+            abs_ymax = (ymax / 1000) * height
+            
+            # Fix swapped coordinates (e.g. xmin > xmax)
+            x0, x1 = sorted([abs_xmin, abs_xmax])
+            y0, y1 = sorted([abs_ymin, abs_ymax])
+            
+            color = colors.get(label, 'yellow')
+            draw.rectangle([x0, y0, x1, y1], outline=color, width=5)
+            
+            # Draw Label Text
+            try:
+                # Use default font
+                label_text = f"#{oid} {label}"
+                draw.text((x0 + 5, y0 + 5), label_text, fill=color)
+            except:
+                pass # Fallback if font issues
+
+        img.save(output_path)
+        print(f"✅ Saved visualization: {output_path}")
+        
+    except Exception as e:
+        print(f"Error drawing boxes: {e}")
 
 def run_test(model, api_key, image_path, temperature=None):
     print(f"\n--- Testing {model} ---")
@@ -192,7 +204,7 @@ def run_test(model, api_key, image_path, temperature=None):
         except json.JSONDecodeError:
             # Try a quick repair for common truncation
             if content.strip().startswith('{') and not content.strip().endswith('}'):
-                 content += ']}' # Very basic attempt
+                 content += ']}\n' # Very basic attempt
             try:
                 data = json.loads(content.strip())
             except:
@@ -219,10 +231,9 @@ def run_test(model, api_key, image_path, temperature=None):
         draw_boxes(image_path, raw_objects, out_name_raw)
         
         # Cleanup
-        # Note: deduplicate_objects creates a new list, so raw_objects is safe
         clean_objects = deduplicate_objects(raw_objects)
         
-        # Re-assign IDs for clean list (so they are sequential 0..N)
+        # Re-assign IDs for clean list
         for i, obj in enumerate(clean_objects):
             obj['id'] = i
             
@@ -242,6 +253,7 @@ def run_test(model, api_key, image_path, temperature=None):
 
     except Exception as e:
         print(f"Exception: {e}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"))
@@ -252,10 +264,13 @@ if __name__ == "__main__":
     models = [
         "google/gemini-2.0-flash-001",
         "google/gemini-2.0-flash-lite-001",
-        "google/gemini-3-flash-preview",
-        "google/gemini-3-pro-image-preview",
         "qwen/qwen3-vl-8b-instruct",
-        "amazon/nova-lite-v1"
+        "amazon/nova-lite-v1",
+        "mistralai/mistral-small-3.2-24b-instruct",
+        "google/gemma-3-4b-it",
+        "google/gemma-3-12b-it",
+        "google/gemma-3-27b-it",
+        "meta-llama/llama-4-scout"
     ]
     
     if not args.api_key:
