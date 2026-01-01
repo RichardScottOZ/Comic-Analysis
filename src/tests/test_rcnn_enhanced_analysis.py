@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 
 # Paths
-ORIGINAL_IMAGE = "E:\\amazon\\#Guardian 001_#Guardian 001 - p003.jpg.png"
+ORIGINAL_IMAGE = "E:\\amazon\\#Guardian 001\\#Guardian 001 - p003.jpg"
 RCNN_JSON = "E:\\Comic_Analysis_Results_v2\\detections\\#Guardian 001\\#Guardian 001 - p003.json"
 
 def encode_image(image_path):
