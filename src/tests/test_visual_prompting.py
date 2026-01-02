@@ -148,7 +148,7 @@ def _call_api(model, api_key, image_path, prompt, tag):
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": uri}}]}],
-            "max_tokens": 4000
+            "max_tokens": 8192
         }
         
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=120)
@@ -185,15 +185,20 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"))
     args = parser.parse_args()
     
-    # Budget Models to Test
+    # Models to Test
     models = [
-        "amazon/nova-lite-v1",
+        "google/gemini-2.0-flash-001",
         "google/gemini-2.0-flash-lite-001",
-        "google/gemma-3-4b-it",
-        "google/gemma-3-12b-it",
-        "google/gemma-3-27b-it",
-        "mistralai/pixtral-12b",
-        "meta-llama/llama-4-scout"
+        "google/gemini-2.5-flash-preview-09-2025",
+        "google/gemini-2.5-flash-image-preview",
+        "google/gemini-3-flash-preview",
+        "amazon/nova-lite-v1",
+        "z-ai/glm-4.6v",
+        "bytedance-seed/seed-1.6",
+        # "qwen/qwen3-vl-8b-instruct",
+        # "google/gemini-pro-1.5",
+        # "anthropic/claude-3-haiku",
+        # "meta-llama/llama-4-scout"
     ]
     
     if not args.api_key:
