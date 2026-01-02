@@ -330,10 +330,24 @@ def process_single_record(args):
     # 3. Resolve R-CNN JSON Path
     rcnn_json_path = None
     if rcnn_dir:
-        # Assumes structure mirrors canonical_id: rcnn_dir/canonical_id.json
-        rcnn_json_path = Path(rcnn_dir) / f"{canonical_id}.json"
+        # Strategy A: Exact mirror of detection script logic
+        p_exact = Path(rcnn_dir) / f"{canonical_id}.json"
+        
+        # Strategy B: If ID has .jpg/.png, try without it
+        clean_id = canonical_id
+        if clean_id.lower().endswith(('.jpg', '.png', '.jpeg')):
+            clean_id = clean_id.rsplit('.', 1)[0]
+        p_no_ext = Path(rcnn_dir) / f"{clean_id}.json"
+        
+        # Strategy C: If manifest used underscores but detections used slashes
+        p_slashed = Path(rcnn_dir) / f"{clean_id.replace('_', '/')}.json"
+
+        if p_exact.exists(): rcnn_json_path = p_exact
+        elif p_no_ext.exists(): rcnn_json_path = p_no_ext
+        elif p_slashed.exists(): rcnn_json_path = p_slashed
 
     # 4. Call API
+    is_guided = rcnn_json_path is not None and rcnn_json_path.exists()
     result = analyze_comic_page(local_path, model, api_key, temperature, timeout, rcnn_json_path)
     
     # 5. Save Result
@@ -343,14 +357,14 @@ def process_single_record(args):
         out_data['canonical_id'] = canonical_id
         out_data['model'] = model
         out_data['processed_at'] = time.time()
-        if rcnn_json_path and os.path.exists(rcnn_json_path):
+        if is_guided:
             out_data['guided_by_rcnn'] = True
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(out_data, f, indent=2)
             
-        return {'status': 'success', 'canonical_id': canonical_id}
+        return {'status': 'success', 'canonical_id': canonical_id, 'guided': is_guided}
     else:
         return {'status': 'error', 'canonical_id': canonical_id, 'error': result['error']}
 
@@ -396,6 +410,7 @@ def main():
     print(f"Starting processing with {args.workers} workers...")
     
     successful = 0
+    guided = 0
     skipped = 0
     failed = 0
     
@@ -410,6 +425,8 @@ def main():
                 
                 if res['status'] == 'success':
                     successful += 1
+                    if res.get('guided'):
+                        guided += 1
                 elif res['status'] == 'skipped':
                     skipped += 1
                 else:
@@ -418,11 +435,11 @@ def main():
                     with open('vlm_failures.log', 'a', encoding='utf-8') as log:
                         log.write(f"{res['canonical_id']}: {res.get('error')}\n")
                 
-                pbar.set_description(f"Success: {successful} | Skip: {skipped} | Fail: {failed}")
+                pbar.set_description(f"Succ: {successful} | Guided: {guided} | Fail: {failed}")
                 pbar.update(1)
 
     print("\nProcessing Complete.")
-    print(f"Success: {successful}")
+    print(f"Success: {successful} (Guided: {guided})")
     print(f"Skipped: {skipped}")
     print(f"Failed: {failed} (See vlm_failures.log)")
 
