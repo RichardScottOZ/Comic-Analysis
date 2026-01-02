@@ -159,9 +159,73 @@ def repair_json(json_str):
     
     return json_str
 
-def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120):
+def get_enhanced_prompt(rcnn_data):
+    # Simplify R-CNN data for the prompt to save tokens
+    detections = []
+    if rcnn_data and 'detections' in rcnn_data:
+        for d in rcnn_data['detections']:
+            if d['score'] > 0.5:
+                detections.append({
+                    "label": d['label'],
+                    "box": [int(x) for x in d['box_xyxy']]
+                })
+    
+    json_context = json.dumps(detections, indent=None)
+
+    return f"""Analyze this comic page and provide a detailed structured analysis in JSON format.
+
+GUIDANCE:
+I have pre-detected the following objects using a specialized model (Faster R-CNN):
+{json_context}
+
+Use these detections to guide your analysis. Focus on:
+1. **Panel Analysis**: Identify and describe each detected panel
+2. **Character Identification**: Note characters, their actions, and dialogue
+3. **Story Elements**: Plot points, setting, mood
+4. **Visual Elements**: Art style, colors, composition
+5. **Text Elements**: Speech bubbles, captions, sound effects
+
+Return ONLY valid JSON with this structure:
+{{
+  "overall_summary": "Brief description of the page",
+  "panels": [
+    {{
+      "panel_number": 1,
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {{
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }}
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
+    }}
+  ],
+  "summary": {{
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }}
+}}"""
+
+def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120, rcnn_json_path=None):
     """Sends image to OpenRouter API (or compatible)."""
     try:
+        # Determine prompt strategy
+        prompt_text = create_structured_prompt()
+        
+        if rcnn_json_path and os.path.exists(rcnn_json_path):
+            try:
+                with open(rcnn_json_path, 'r', encoding='utf-8') as f:
+                    rcnn_data = json.load(f)
+                prompt_text = get_enhanced_prompt(rcnn_data)
+            except Exception as e:
+                print(f"Warning: Failed to load R-CNN JSON {rcnn_json_path}: {e}")
+
         image_data_uri = encode_image_to_data_uri(image_path)
         headers = {
             "Authorization": f"Bearer {api_key}", 
@@ -175,7 +239,7 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
                 {
                     "role": "user", 
                     "content": [
-                        {"type": "text", "text": create_structured_prompt()}, 
+                        {"type": "text", "text": prompt_text}, 
                         {"type": "image_url", "image_url": {"url": image_data_uri}}
                     ]
                 }
@@ -232,7 +296,7 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
 
 def process_single_record(args):
     """Worker function to process one manifest record."""
-    record, output_dir, image_root, model, api_key, temperature, timeout = args
+    record, output_dir, image_root, model, api_key, temperature, timeout, rcnn_dir = args
     
     canonical_id = record['canonical_id']
     path_raw = record['absolute_image_path']
@@ -263,16 +327,24 @@ def process_single_record(args):
     if not local_path.exists():
         return {'status': 'error', 'canonical_id': canonical_id, 'error': f"File not found: {local_path}"}
 
-    # 3. Call API
-    result = analyze_comic_page(local_path, model, api_key, temperature, timeout)
+    # 3. Resolve R-CNN JSON Path
+    rcnn_json_path = None
+    if rcnn_dir:
+        # Assumes structure mirrors canonical_id: rcnn_dir/canonical_id.json
+        rcnn_json_path = Path(rcnn_dir) / f"{canonical_id}.json"
+
+    # 4. Call API
+    result = analyze_comic_page(local_path, model, api_key, temperature, timeout, rcnn_json_path)
     
-    # 4. Save Result
+    # 5. Save Result
     if result['status'] == 'success':
         out_data = result['content']
         # Add metadata
         out_data['canonical_id'] = canonical_id
         out_data['model'] = model
         out_data['processed_at'] = time.time()
+        if rcnn_json_path and os.path.exists(rcnn_json_path):
+            out_data['guided_by_rcnn'] = True
         
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -289,6 +361,7 @@ def main():
     parser.add_argument('--manifest', required=True, help='Path to master_manifest.csv')
     parser.add_argument('--output-dir', required=True, help='Root directory for output JSONs')
     parser.add_argument('--image-root', required=False, help='Local root folder (optional). Required if manifest has S3 URIs.')
+    parser.add_argument('--rcnn-dir', required=False, help='Root directory for R-CNN JSONs (optional). If provided, enables Guided Mode.')
     parser.add_argument('--model', default='google/gemini-pro-1.5', help='OpenRouter model ID')
     parser.add_argument('--workers', type=int, default=8, help='Parallel workers')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='API Key')
@@ -317,7 +390,7 @@ def main():
     # 2. Prepare Tasks
     tasks = []
     for rec in records:
-        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.temperature, args.timeout))
+        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.temperature, args.timeout, args.rcnn_dir))
 
     # 3. Process
     print(f"Starting processing with {args.workers} workers...")
