@@ -59,6 +59,8 @@ def verify_uploads(manifest_path, bucket, prefix, sample_size=50):
                 
         except s3.exceptions.NoSuchKey:
             missing += 1
+            if missing <= 5:
+                print(f"[MISSING] {key}")
         except Exception as e:
             print(f"\n[ERR] Error checking {cid}: {e}")
             missing += 1
