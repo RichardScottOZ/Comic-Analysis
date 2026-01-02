@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Visualize VLM Folder (Manifest Driven)
-Generates bounding box visualizations for VLM JSONs corresponding to a manifest.
-Guarantees correct image-to-json pairing.
+Visualize VLM Folder (Optimized Scan-Driven)
+Scans the JSON folder first, then looks up images in the manifest.
 """
 
 import os
@@ -13,6 +12,26 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+def load_manifest_lookup(manifest_path):
+    print(f"Loading manifest: {manifest_path}")
+    lookup = {}
+    with open(manifest_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            cid = row['canonical_id']
+            img_path = row['absolute_image_path']
+            # Store full ID
+            lookup[cid] = img_path
+            # Also store by filename stem for robust matching if JSONs are flat
+            # e.g. "Page001" -> path
+            stem = Path(cid).name # file.jpg
+            lookup[stem] = img_path
+            # And without extension
+            stem_no_ext = Path(cid).stem
+            lookup[stem_no_ext] = img_path
+            
+    return lookup
 
 def draw_boxes(img_path, json_path, out_path):
     try:
@@ -64,67 +83,62 @@ def draw_boxes(img_path, json_path, out_path):
         # print(f"Error processing {json_path}: {e}")
         pass
 
-def process_record(record, input_dir, output_dir):
-    canonical_id = record['canonical_id']
-    image_path = record['absolute_image_path']
+def process_file(json_file, manifest_lookup, output_dir):
+    # Determine Canonical ID from JSON filename
+    # E:\...\Folder\File.json -> Folder/File ?
+    # Or just File.json -> File
     
-    # Resolve JSON path (try flat or nested)
-    # 1. Flat: output_dir/Canonical_ID.json
-    # 2. Nested: output_dir/Folder/File.json
+    stem = json_file.stem # "Folder_File" or "File"
     
-    # Assume flat first (as per batch script behavior on Windows often)
-    json_path = Path(input_dir) / f"{canonical_id}.json"
+    # Try direct lookup
+    img_path = manifest_lookup.get(stem)
     
-    if not json_path.exists():
-        # Try finding it if canonical_id has slashes
-        if '/' in canonical_id or '\\' in canonical_id:
-             # Just strict append
-             pass 
-        else:
-             return
+    # Try parsing canonical_id from JSON content (Safest!)
+    if not img_path:
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                cid = data.get('canonical_id')
+                if cid:
+                    img_path = manifest_lookup.get(cid)
+                    if not img_path:
+                        # Try fuzzy match on CID stem
+                        img_path = manifest_lookup.get(Path(cid).name)
+        except:
+            pass
 
-    if not json_path.exists():
-        return
-
-    # Check image exists
-    if not os.path.exists(image_path):
+    if not img_path:
         return
 
     # Create output filename
-    # Flatten the ID for the filename so all viz are in one folder
-    flat_name = canonical_id.replace('/', '_').replace('\\', '_')
-    out_path = Path(output_dir) / f"viz_{{flat_name}}.jpg"
+    out_name = f"viz_{json_file.name.replace('.json', '.jpg')}"
+    out_path = Path(output_dir) / out_name
     
     if out_path.exists():
         return
 
-    draw_boxes(image_path, json_path, out_path)
+    if os.path.exists(img_path):
+        draw_boxes(img_path, json_file, out_path)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--manifest', required=True, help='Path to manifest CSV')
-    parser.add_argument('--input-dir', required=True, help='Directory containing VLM JSONs')
-    parser.add_argument('--output-dir', required=True, help='Directory to save visualizations')
+    parser.add_argument('--manifest', required=True)
+    parser.add_argument('--input-dir', required=True)
+    parser.add_argument('--output-dir', required=True)
     parser.add_argument('--workers', type=int, default=16)
-    parser.add_argument('--limit', type=int, help='Limit number of files to process')
     args = parser.parse_args()
     
     os.makedirs(args.output_dir, exist_ok=True)
     
-    print(f"Loading manifest: {args.manifest}")
-    records = []
-    with open(args.manifest, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        records = list(reader)
-        
-    if args.limit:
-        records = records[:args.limit]
-        
-    print(f"Processing {len(records)} records...")
+    lookup = load_manifest_lookup(args.manifest)
+    
+    print(f"Scanning JSONs in {args.input_dir}...")
+    json_files = list(Path(args.input_dir).rglob("*.json"))
+    print(f"Found {len(json_files)} JSONs to process.")
     
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = [executor.submit(process_record, r, args.input_dir, args.output_dir) for r in records]
-        for _ in tqdm(as_completed(futures), total=len(records)):
+        futures = [executor.submit(process_file, f, lookup, args.output_dir) for f in json_files]
+        for _ in tqdm(as_completed(futures), total=len(json_files)):
             pass
 
 if __name__ == "__main__":
