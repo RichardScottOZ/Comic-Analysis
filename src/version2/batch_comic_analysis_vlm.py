@@ -318,6 +318,9 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
             
             content = content.strip()
             
+            if not content:
+                return {'status': 'error', 'error': "Empty Response (Likely Safety Block)"}
+            
             try:
                 return {'status': 'success', 'content': json.loads(content, strict=False)}
             except json.JSONDecodeError:
