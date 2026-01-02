@@ -104,7 +104,7 @@ def run_test(model, api_key):
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": [{"type": "text", "text": prompt_text}, {"type": "image_url", "image_url": {"url": uri}}]}],
-            "max_tokens": 4000,
+            "max_tokens": 8192,
             "temperature": 0.0
         }
         
@@ -139,13 +139,20 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"))
     args = parser.parse_args()
     
-    # Cheap Models to Boost
+    # Models to Test
     models = [
-        "amazon/nova-lite-v1",
+        "google/gemini-2.0-flash-001",
         "google/gemini-2.0-flash-lite-001",
-        "google/gemma-3-12b-it",
-        "meta-llama/llama-4-scout",
-        "qwen/qwen3-vl-8b-instruct"
+        "google/gemini-2.5-flash-preview-09-2025",
+        "google/gemini-2.5-flash-image-preview",
+        "google/gemini-3-flash-preview",
+        "amazon/nova-lite-v1",
+        "z-ai/glm-4.6v",
+        "bytedance-seed/seed-1.6",
+        # "qwen/qwen3-vl-8b-instruct",
+        # "google/gemini-pro-1.5",
+        # "anthropic/claude-3-haiku",
+        # "meta-llama/llama-4-scout"
     ]
     
     if not args.api_key:
