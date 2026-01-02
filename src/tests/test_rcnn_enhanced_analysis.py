@@ -40,7 +40,7 @@ def get_enhanced_prompt(rcnn_data):
     
     json_context = json.dumps(detections, indent=None)
 
-    return f"""Analyze this comic page and provide a detailed structured analysis in JSON format. 
+    return f"""Analyze this comic page and provide a detailed structured analysis in JSON format.
 
 GUIDANCE:
 I have pre-detected the following objects using a specialized model (Faster R-CNN):
