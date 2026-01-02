@@ -41,15 +41,25 @@ Return ONLY valid JSON with this structure:
     {
       "panel_number": 1,
       "box_2d": [ymin, xmin, ymax, xmax],
+      "caption": "Panel title/description",
       "description": "Detailed panel description",
       "speakers": [
         {
           "character": "Character name",
-          "dialogue": "What they say"
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
         }
-      ]
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
     }
-  ]
+  ],
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
 }
 """
 
@@ -156,8 +166,14 @@ if __name__ == "__main__":
     models = [
         "google/gemini-2.0-flash-001",
         "google/gemini-2.0-flash-lite-001",
+        "google/gemini-3-flash-preview",
         "amazon/nova-lite-v1",
-        "qwen/qwen3-vl-8b-instruct"
+        "z-ai/glm-4.6v",
+        "bytedance-seed/seed-1.6",
+        # "qwen/qwen3-vl-8b-instruct",
+        # "google/gemini-pro-1.5",
+        # "anthropic/claude-3-haiku",
+        # "meta-llama/llama-4-scout"
     ]
     
     if not args.api_key:
