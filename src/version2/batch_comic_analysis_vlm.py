@@ -97,22 +97,28 @@ def encode_image_to_data_uri(image_path):
 def repair_json(json_str):
     """
     Attempts to repair broken JSON strings using aggressive heuristics.
-    Handles truncated responses, unclosed quotes, and missing delimiters.
+    Handles truncated responses, unclosed quotes, and leading/trailing chatter.
     """
     import re
     json_str = json_str.strip()
     
-    # 1. Basic Markdown Cleanup (in case it wasn't caught earlier)
+    # 1. Basic Markdown Cleanup
     if json_str.startswith('```'):
         json_str = re.sub(r'^```(?:json)?', '', json_str)
         json_str = re.sub(r'```$', '', json_str)
     json_str = json_str.strip()
 
-    # 2. Find the start of the JSON object
+    # 2. Find the start and end of the JSON object
+    # This strips special tokens like <|begin_of_box|> or lead-in text
     start = json_str.find('{')
     if start == -1:
         return json_str
-    json_str = json_str[start:]
+    
+    end = json_str.rfind('}')
+    if end != -1 and end > start:
+        json_str = json_str[start:end+1]
+    else:
+        json_str = json_str[start:]
 
     # 3. Close unclosed quotes accurately
     def is_balanced_quotes(s):
@@ -129,16 +135,11 @@ def repair_json(json_str):
         return count % 2 == 0
 
     if not is_balanced_quotes(json_str):
-        # Truncation often happens at a random spot. 
-        # If we are inside a string, close it.
         json_str += '"'
 
     # 4. Fix missing commas between fields and elements
-    # Case: "key": "val" "key2"
     json_str = re.sub(r'(")\s*\n?\s*(")', r'\1,\n\2', json_str)
-    # Case: } "key"
     json_str = re.sub(r'(\})\s*\n?\s*(")', r'\1,\n\2', json_str)
-    # Case: ] "key"
     json_str = re.sub(r'(\])\s*\n?\s*(")', r'\1,\n\2', json_str)
 
     # 5. Balance Brackets and Braces
@@ -147,18 +148,14 @@ def repair_json(json_str):
     open_brackets = json_str.count('[')
     close_brackets = json_str.count(']')
 
-    # Close open structures in correct order (innermost likely first)
     if open_brackets > close_brackets:
         json_str += ']' * (open_brackets - close_brackets)
     
-    # Re-check braces after adding brackets
-    open_braces = json_str.count('{')
-    close_braces = json_str.count('}')
     if open_braces > close_braces:
         json_str += '}' * (open_braces - close_braces)
 
-    # 6. Final cleanup of common invalid artifacts
-    json_str = json_str.replace("\\'", "'") # Escaped single quotes
+    # 6. Final cleanup
+    json_str = json_str.replace("\\'", "'")
     
     return json_str
 
