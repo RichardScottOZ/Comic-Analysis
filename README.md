@@ -124,6 +124,9 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 *   **Gemini Flash 2.5 Lite:** Good performance, but 8x more expensive than Gemma 4B (which can run locally). Experienced quite a few connection errors with Google. On the hardest 660 samples, had 1/3 errors and 1/5 JSON errors.
 *   **GPT Nano 4.1:** Reported "unsupported image type," indicating lower capability than Google's models.
 *   **Meta Llama 4 Scout:** Much better, with 300/500 success on remaining images, and better cost efficiency (0.08/0.3 vs 0.10/0.40 for Gemini Flash Lite 2.5). However, encountered significant problems with the GMI Cloud provider.
+*   *UPDATE
+*   **GLM 4.6v performanve is in the Gemini Class maybe somewhere between 2.5 and 3 in this error
+*   **Amazon Nova Lite - has some capability but nowhere near Gemini class
 
 ## 10. Embeddings Generation Strategy
 
