@@ -48,22 +48,45 @@ def run_json_prompt_test(model, api_key):
         print(f"Failed to load R-CNN JSON: {e}")
         return
 
-    prompt = f"""Analyze this comic page. 
-I have pre-detected the following objects using a specialized model:
+    prompt = f"""Analyze this comic page and provide a detailed structured analysis in JSON format.
+
+GUIDANCE:
+I have pre-detected the following objects using a specialized model (Faster R-CNN):
 {json_context}
 
-Your task:
-1. Verify these detections. Are the labels correct?
-2. Are there missing objects (especially text bubbles or specific characters)?
-3. Return a REFINED list of objects in JSON format, adding descriptions for each.
+Use these detections to guide your analysis. Focus on:
+1. **Panel Analysis**: Identify and describe each detected panel
+2. **Character Identification**: Note characters, their actions, and dialogue
+3. **Story Elements**: Plot points, setting, mood
+4. **Visual Elements**: Art style, colors, composition
+5. **Text Elements**: Speech bubbles, captions, sound effects
 
-Format:
+Return ONLY valid JSON with this structure:
 {{
-  "objects": [
-    {{"label": "panel|person|text", "box": [x1, y1, x2, y2], "description": "..."}}
-  ]
-}}
-"""
+  "overall_summary": "Brief description of the page",
+  "panels": [
+    {{
+      "panel_number": 1,
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {{
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }}
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
+    }}
+  ],
+  "summary": {{
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }}
+}}"""
     
     _call_api(model, api_key, ORIGINAL_IMAGE, prompt, "json_prompt")
 
@@ -77,20 +100,38 @@ def run_visual_prompt_test(model, api_key):
     prompt = """Analyze this ANNOTATED comic page.
 Bounding boxes have been drawn for Panels (Blue), Characters (Red), and Text (Green).
 
-Your task:
-1. Read the labels and boxes on the image.
-2. Provide a detailed description of the content inside EACH labeled box.
-3. Identify any objects that were MISSED by the boxes (e.g. unboxed characters).
+GUIDANCE:
+Use these visual annotations to guide your analysis.
+1. Read the labels on the image (e.g. 'panel 0.99', 'text 0.99').
+2. Treat each Blue Box as a panel.
+3. Transcribe text inside Green Boxes.
+4. Describe characters inside Red Boxes.
 
-Return JSON:
+Return ONLY valid JSON with this structure:
 {
-  "annotations": [
-    {{"label_on_image": "panel 0.99", "content_description": "..."}},
-    ...
+  "overall_summary": "Brief description of the page",
+  "panels": [
+    {
+      "panel_number": 1,
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
+    }
   ],
-  "missed_objects": [
-    {{"label": "...", "description": "..."}}
-  ]
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
 }
 """
     _call_api(model, api_key, ANNOTATED_IMAGE, prompt, "visual_prompt")
