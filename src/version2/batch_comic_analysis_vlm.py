@@ -212,11 +212,52 @@ Return ONLY valid JSON with this structure:
   }}
 }}"""
 
-def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120, rcnn_json_path=None):
+def get_integrated_prompt():
+    """Integrated prompt for narrative + bounding boxes."""
+    return """Analyze this comic page. Provide a detailed structured analysis in JSON format.
+
+REQUIREMENTS:
+1. Identify every panel. For each panel, provide its BOUNDING BOX [ymin, xmin, ymax, xmax] (0-1000).
+2. Describe the visual content and action.
+3. Transcribe all dialogue and attribute it to characters.
+
+Return ONLY valid JSON with this structure:
+{
+  "overall_summary": "Brief description of the page",
+  "panels": [
+    {
+      "panel_number": 1,
+      "box_2d": [ymin, xmin, ymax, xmax],
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
+    }
+  ],
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
+}
+"""
+
+def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120, rcnn_json_path=None, include_grounding=False, provider=None):
     """Sends image to OpenRouter API (or compatible)."""
     try:
         # Determine prompt strategy
-        prompt_text = create_structured_prompt()
+        if include_grounding:
+            prompt_text = get_integrated_prompt()
+        else:
+            prompt_text = create_structured_prompt()
         
         if rcnn_json_path and os.path.exists(rcnn_json_path):
             try:
@@ -249,6 +290,9 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
         
         if temperature is not None:
             data["temperature"] = temperature
+            
+        if provider:
+            data["provider"] = {"order": [provider], "allow_fallbacks": False}
         
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions", 
@@ -296,7 +340,7 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
 
 def process_single_record(args):
     """Worker function to process one manifest record."""
-    record, output_dir, image_root, model, api_key, temperature, timeout, rcnn_dir = args
+    record, output_dir, image_root, model, api_key, temperature, timeout, rcnn_dir, include_grounding, provider = args
     
     canonical_id = record['canonical_id']
     path_raw = record['absolute_image_path']
@@ -348,7 +392,7 @@ def process_single_record(args):
 
     # 4. Call API
     is_guided = rcnn_json_path is not None and rcnn_json_path.exists()
-    result = analyze_comic_page(local_path, model, api_key, temperature, timeout, rcnn_json_path)
+    result = analyze_comic_page(local_path, model, api_key, temperature, timeout, rcnn_json_path, include_grounding, provider)
     
     # 5. Save Result
     if result['status'] == 'success':
@@ -376,6 +420,8 @@ def main():
     parser.add_argument('--output-dir', required=True, help='Root directory for output JSONs')
     parser.add_argument('--image-root', required=False, help='Local root folder (optional). Required if manifest has S3 URIs.')
     parser.add_argument('--rcnn-dir', required=False, help='Root directory for R-CNN JSONs (optional). If provided, enables Guided Mode.')
+    parser.add_argument('--include-grounding', action='store_true', help='Enable integrated bounding box prompt.')
+    parser.add_argument('--provider', help='Force a specific OpenRouter provider (e.g. "Google AI Studio").')
     parser.add_argument('--model', default='google/gemini-pro-1.5', help='OpenRouter model ID')
     parser.add_argument('--workers', type=int, default=8, help='Parallel workers')
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='API Key')
@@ -404,7 +450,7 @@ def main():
     # 2. Prepare Tasks
     tasks = []
     for rec in records:
-        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.temperature, args.timeout, args.rcnn_dir))
+        tasks.append((rec, args.output_dir, args.image_root, args.model, args.api_key, args.temperature, args.timeout, args.rcnn_dir, args.include_grounding, args.provider))
 
     # 3. Process
     print(f"Starting processing with {args.workers} workers...")
