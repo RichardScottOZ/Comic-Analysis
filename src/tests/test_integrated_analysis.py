@@ -166,6 +166,8 @@ if __name__ == "__main__":
     models = [
         "google/gemini-2.0-flash-001",
         "google/gemini-2.0-flash-lite-001",
+        "google/gemini-2.5-flash-preview-09-2025",
+        "google/gemini-2.5-flash-image-preview",
         "google/gemini-3-flash-preview",
         "amazon/nova-lite-v1",
         "z-ai/glm-4.6v",
