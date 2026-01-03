@@ -105,10 +105,16 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
     
     # Setup worker-specific Zarr part
     worker_id = str(uuid.uuid4())
-    part_path = f"{s3_output}/parts/{worker_id}.zarr"
     
-    s3_fs = s3fs.S3FileSystem()
-    store = s3fs.S3Map(root=part_path, s3=s3_fs, check=False)
+    if s3_output.startswith("s3://"):
+        part_path = f"{s3_output}/parts/{worker_id}.zarr"
+        s3_fs = s3fs.S3FileSystem()
+        store = s3fs.S3Map(root=part_path, s3=s3_fs, check=False)
+    else:
+        # Local filesystem
+        part_path = os.path.join(s3_output, "parts", f"{worker_id}.zarr")
+        store = zarr.DirectoryStore(part_path)
+        
     root = zarr.group(store=store)
     
     # Create arrays
