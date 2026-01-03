@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Test Zhipu AI Native API (GLM-4V-Flash)
+Supports multiple modes: Analysis, Grounding, Full (Integrated).
 """
 
 import os
@@ -9,6 +10,7 @@ import base64
 import requests
 import json
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageDraw
 
 # Paths
@@ -26,9 +28,33 @@ def encode_image(image_path):
 
     return f"data:{mime};base64,{base64.b64encode(content).decode('utf-8')}"
 
-def get_full_grounding_prompt():
-    return """Analyze this comic page. Provide a detailed structured analysis in JSON format.
-Identify the bounding box [xmin, ymin, xmax, ymax] (0-1000) for:
+# --- Prompts ---
+
+def get_analysis_prompt():
+    return """Analyze this comic page and provide a detailed structured analysis in JSON format. Focus on:
+1. Panel Analysis
+2. Character Identification
+3. Story Elements
+4. Visual Elements
+5. Text Elements
+
+Return ONLY valid JSON with this structure:
+{
+  "overall_summary": "...",
+  "panels": [
+    {
+      "panel_number": 1,
+      "caption": "...",
+      "description": "...",
+      "speakers": [...] 
+    }
+  ],
+  "summary": { ... }
+}
+"""
+
+def get_grounding_prompt():
+    return """Identify the bounding box [xmin, ymin, xmax, ymax] (0-1000) for:
 1. Every PANEL (labelled 'panel')
 2. Every CHARACTER (labelled 'person')
 3. Every FACE (labelled 'face')
@@ -36,72 +62,70 @@ Identify the bounding box [xmin, ymin, xmax, ymax] (0-1000) for:
 
 STRICT RULES:
 - Return ONLY ONE label per distinct region. 
-- DO NOT assign multiple labels (e.g., both 'panel' and 'person') to the same or nearly identical coordinates.
-- If a character or text bubble takes up an entire region, prioritize the 'person' or 'text' label over 'panel'.
+- Prioritize specific labels (face/text) over general ones.
 
-Return ONLY valid JSON with this structure:
+Return ONLY valid JSON:
 {
-  "overall_summary": "Brief description of the page",
+  "objects": [
+    {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
+  ]
+}
+"""
+
+def get_full_prompt():
+    return """Analyze this comic page. Provide a detailed structured analysis AND bounding boxes in JSON format.
+
+REQUIREMENTS:
+1. Identify every panel. For each panel, provide its BOUNDING BOX [xmin, ymin, xmax, ymax] (0-1000).
+2. Identify characters, faces, and text bubbles with bounding boxes.
+3. Describe the visual content and action.
+4. Transcribe all dialogue.
+
+Return ONLY valid JSON:
+{
+  "overall_summary": "...",
   "objects": [
     {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
   ],
   "panels": [
     {
       "panel_number": 1,
-      "caption": "...",
       "description": "...",
-      "speakers": [
-        {
-          "character": "...",
-          "dialogue": "...",
-          "speech_type": "..."
-        }
-      ]
+      "speakers": [...] 
     }
-  ],
-  "summary": {
-    "characters": ["..."],
-    "setting": "...",
-    "plot": "...",
-    "dialogue": ["..."]
-  }
+  ]
 }
 """
 
 def draw_zhipu_boxes(image_path, json_path, output_path):
     try:
-        img = Image.open(image_path).convert("RGB")
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
-        
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        # Standard colors
         colors = {'panel': 'blue', 'person': 'red', 'text': 'green', 'face': 'magenta'}
-        
-        # Check both 'objects' and 'panels'
         all_objects = data.get('objects', [])
         
-        # Add panels from the panels list if not in objects
         if 'panels' in data:
             for p in data['panels']:
                 box = p.get('box_2d') or p.get('box')
                 if box:
                     all_objects.append({'label': 'panel', 'box_2d': box})
 
-        print(f"Drawing {len(all_objects)} objects...")
+        if not all_objects:
+            print(f"No objects to draw for {output_path}")
+            return
+
+        img = Image.open(image_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
         
         for obj in all_objects:
             label = obj.get('label', 'obj').lower()
             box = obj.get('box_2d') or obj.get('box')
-            
             if not box or len(box) != 4: continue
             
-            # Zhipu: [xmin, ymin, xmax, ymax]
             xmin, ymin, xmax, ymax = box
             
-            # Normalize
             abs_xmin = (xmin / 1000) * width
             abs_ymin = (ymin / 1000) * height
             abs_xmax = (xmax / 1000) * width
@@ -109,8 +133,6 @@ def draw_zhipu_boxes(image_path, json_path, output_path):
             
             color = colors.get(label, 'yellow')
             draw.rectangle([abs_xmin, abs_ymin, abs_xmax, abs_ymax], outline=color, width=4)
-            
-            # Label
             draw.text((abs_xmin+5, abs_ymin+5), label, fill=color)
 
         img.save(output_path)
@@ -119,9 +141,14 @@ def draw_zhipu_boxes(image_path, json_path, output_path):
     except Exception as e:
         print(f"Vis Error: {e}")
 
-def run_test(model, api_key, temperature=None):
+def run_test(model, api_key, temperature=None, mode='full'):
     temp_str = f"temp-{temperature}" if temperature is not None else "temp-default"
-    print(f"\n--- Testing Zhipu Full Grounding: {model} ({temp_str}) ---")
+    print(f"\n--- Testing Zhipu {mode.upper()}: {model} ({temp_str}) ---")
+    
+    prompt = ""
+    if mode == 'analysis': prompt = get_analysis_prompt()
+    elif mode == 'grounding': prompt = get_grounding_prompt()
+    elif mode == 'full': prompt = get_full_prompt()
     
     try:
         uri = encode_image(ORIGINAL_IMAGE)
@@ -130,7 +157,7 @@ def run_test(model, api_key, temperature=None):
         
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": get_full_grounding_prompt()}, {"type": "image_url", "image_url": {"url": uri}}]}],
+            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": uri}}]}],
             "max_tokens": 4095,
             "thinking": {"type": "enabled"}
         }
@@ -145,13 +172,14 @@ def run_test(model, api_key, temperature=None):
             if '```json' in content:
                 content = content.split('```json')[1].split('```')[0]
             
-            filename = f"experiment_zhipu_full_{model}_{temp_str}.json"
+            filename = f"experiment_zhipu_{mode}_{model}_{temp_str}.json"
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(content)
             print(f"✅ Saved to {filename}")
             
-            out_viz = f"viz_zhipu_full_{model}_{temp_str}.jpg"
-            draw_zhipu_boxes(ORIGINAL_IMAGE, filename, out_viz)
+            if mode in ['grounding', 'full']:
+                out_viz = f"viz_zhipu_{mode}_{model}_{temp_str}.jpg"
+                draw_zhipu_boxes(ORIGINAL_IMAGE, filename, out_viz)
         else:
             print(f"API Error: {response.status_code} - {response.text}")
     except Exception as e:
@@ -159,12 +187,19 @@ def run_test(model, api_key, temperature=None):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--api-key', default=os.environ.get("Z_API_KEY"), help="Zhipu API Key (defaults to Z_API_KEY env var)")
+    parser.add_argument('--api-key', default=os.environ.get("Z_API_KEY"), help="Zhipu API Key")
     parser.add_argument('--model', default="glm-4.6v-flash") 
-    parser.add_argument('--temperature', type=float, default=None, help="Sampling temperature")
+    parser.add_argument('--temperature', type=float, default=None)
+    parser.add_argument('--mode', choices=['analysis', 'grounding', 'full', 'all'], default='full')
     args = parser.parse_args()
     
     if not args.api_key:
-        print("Error: Z_API_KEY environment variable not set and --api-key not provided.")
+        print("Error: Z_API_KEY required.")
     else:
-        run_test(args.model, args.api_key, args.temperature)
+        if args.mode == 'all':
+            modes = ['analysis', 'grounding', 'full']
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                for m in modes:
+                    executor.submit(run_test, args.model, args.api_key, args.temperature, m)
+        else:
+            run_test(args.model, args.api_key, args.temperature, args.mode)
