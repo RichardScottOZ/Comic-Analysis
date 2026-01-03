@@ -32,24 +32,37 @@ def encode_image(image_path):
 
 def get_analysis_prompt():
     return """Analyze this comic page and provide a detailed structured analysis in JSON format. Focus on:
-1. Panel Analysis
-2. Character Identification
-3. Story Elements
-4. Visual Elements
-5. Text Elements
+1. **Panel Analysis**: Identify and describe each panel
+2. **Character Identification**: Note characters, their actions, and dialogue
+3. **Story Elements**: Plot points, setting, mood
+4. **Visual Elements**: Art style, colors, composition
+5. **Text Elements**: Speech bubbles, captions, sound effects
 
 Return ONLY valid JSON with this structure:
 {
-  "overall_summary": "...",
+  "overall_summary": "Brief description of the page",
   "panels": [
     {
       "panel_number": 1,
-      "caption": "...",
-      "description": "...",
-      "speakers": [...] 
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
     }
   ],
-  "summary": { ... }
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
 }
 """
 
@@ -79,21 +92,36 @@ REQUIREMENTS:
 1. Identify every panel. For each panel, provide its BOUNDING BOX [xmin, ymin, xmax, ymax] (0-1000).
 2. Identify characters, faces, and text bubbles with bounding boxes.
 3. Describe the visual content and action.
-4. Transcribe all dialogue.
+4. Transcribe all dialogue and attribute it to characters.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with this structure:
 {
-  "overall_summary": "...",
+  "overall_summary": "Brief description of the page",
   "objects": [
     {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
   ],
   "panels": [
     {
       "panel_number": 1,
-      "description": "...",
-      "speakers": [...] 
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
     }
-  ]
+  ],
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
 }
 """
 
