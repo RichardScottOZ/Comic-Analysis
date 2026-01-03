@@ -130,38 +130,50 @@ def draw_zhipu_boxes(image_path, json_path, output_path):
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        colors = {'panel': 'blue', 'person': 'red', 'text': 'green', 'face': 'magenta'}
+        # Standard colors
+        colors = {
+            'panel': 'blue', 
+            'person': 'red', 
+            'text': 'green', 
+            'face': 'magenta',
+            'car': 'cyan',
+            'building': 'orange'
+        }
+        
+        # Check both 'objects' and 'panels'
         all_objects = data.get('objects', [])
         
+        # Add panels from the panels list if not in objects
         if 'panels' in data:
             for p in data['panels']:
                 box = p.get('box_2d') or p.get('box')
                 if box:
                     all_objects.append({'label': 'panel', 'box_2d': box})
 
-        if not all_objects:
-            print(f"No objects to draw for {output_path}")
-            return
-
-        img = Image.open(image_path).convert("RGB")
-        draw = ImageDraw.Draw(img)
-        width, height = img.size
+        print(f"Drawing {len(all_objects)} objects...")
         
         for obj in all_objects:
-            label = obj.get('label', 'obj').lower()
+            full_label = obj.get('label', 'obj').lower()
+            base_label = full_label.split('|')[0].strip()
+            
             box = obj.get('box_2d') or obj.get('box')
+            
             if not box or len(box) != 4: continue
             
+            # Zhipu: [xmin, ymin, xmax, ymax]
             xmin, ymin, xmax, ymax = box
             
+            # Normalize
             abs_xmin = (xmin / 1000) * width
             abs_ymin = (ymin / 1000) * height
             abs_xmax = (xmax / 1000) * width
             abs_ymax = (ymax / 1000) * height
             
-            color = colors.get(label, 'yellow')
+            color = colors.get(base_label, 'yellow')
             draw.rectangle([abs_xmin, abs_ymin, abs_xmax, abs_ymax], outline=color, width=4)
-            draw.text((abs_xmin+5, abs_ymin+5), label, fill=color)
+            
+            # Label
+            draw.text((abs_xmin+5, abs_ymin+5), full_label, fill=color)
 
         img.save(output_path)
         print(f"✅ Saved viz: {output_path}")
