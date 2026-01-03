@@ -250,7 +250,7 @@ Return ONLY valid JSON with this structure:
 }
 """
 
-def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120, rcnn_json_path=None, include_grounding=False, provider=None):
+def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120, rcnn_json_path=None, include_grounding=False, provider=None, max_tokens=8192):
     """Sends image to OpenRouter API (or compatible)."""
     try:
         # Determine prompt strategy
@@ -285,7 +285,7 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
                     ]
                 }
             ],
-            "max_tokens": 8192,
+            "max_tokens": max_tokens,
             "safetySettings": [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -349,7 +349,7 @@ def analyze_comic_page(image_path, model, api_key, temperature=None, timeout=120
 
 def process_single_record(args):
     """Worker function to process one manifest record."""
-    record, output_dir, image_root, model, api_key, temperature, timeout, rcnn_dir, include_grounding, provider = args
+    record, output_dir, image_root, model, api_key, temperature, timeout, rcnn_dir, include_grounding, provider, max_tokens = args
     
     canonical_id = record['canonical_id']
     path_raw = record['absolute_image_path']
@@ -401,7 +401,7 @@ def process_single_record(args):
 
     # 4. Call API
     is_guided = rcnn_json_path is not None and rcnn_json_path.exists()
-    result = analyze_comic_page(local_path, model, api_key, temperature, timeout, rcnn_json_path, include_grounding, provider)
+    result = analyze_comic_page(local_path, model, api_key, temperature, timeout, rcnn_json_path, include_grounding, provider, max_tokens)
     
     # 5. Save Result
     if result['status'] == 'success':
