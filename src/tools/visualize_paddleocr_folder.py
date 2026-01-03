@@ -18,6 +18,7 @@ def draw_paddle_boxes(image_path, json_path, output_path):
     try:
         img = Image.open(image_path).convert("RGB")
         draw = ImageDraw.Draw(img)
+        width, height = img.size
         
         try:
             font = ImageFont.truetype("arial.ttf", 14)
@@ -27,20 +28,34 @@ def draw_paddle_boxes(image_path, json_path, output_path):
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        results = data.get('paddleocr_results', [])
+        # Support both 'paddleocr_results' and 'OCRResult -> text_regions'
+        results = data.get('paddleocr_results')
         if not results:
+            results = data.get('OCRResult', {}).get('text_regions', [])
+            
+        if not results:
+            print(f"[NO TEXT] {Path(json_path).name}")
             return
 
         for res in results:
-            poly = res.get('bbox') 
             text = res.get('text', '')
             
-            if not poly: continue
+            # 1. Try Polygon (Best for rotated text)
+            poly = res.get('polygon')
+            if poly:
+                points = [(p[0], p[1]) for p in poly]
+                draw.polygon(points, outline='red', width=3)
+                txt_x, txt_y = points[0]
+            else:
+                # 2. Try BBox [xmin, ymin, xmax, ymax]
+                bbox = res.get('bbox')
+                if bbox and len(bbox) == 4:
+                    xmin, ymin, xmax, ymax = bbox
+                    draw.rectangle([xmin, ymin, xmax, ymax], outline='red', width=3)
+                    txt_x, txt_y = xmin, ymin
+                else:
+                    continue
             
-            points = [(p[0], p[1]) for p in poly]
-            draw.polygon(points, outline='red', width=3)
-            
-            txt_x, txt_y = points[0]
             label = text
             
             # Background box for text
@@ -54,9 +69,10 @@ def draw_paddle_boxes(image_path, json_path, output_path):
             draw.text((txt_x + 2, txt_y - h - 2), label, fill='white', font=font)
 
         img.save(output_path)
+        print(f"✅ Saved {output_path.name}")
         
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[DRAW ERROR] {e}")
 
 def load_local_lookup(local_manifest_path):
     print(f"Loading local manifest: {local_manifest_path}")
