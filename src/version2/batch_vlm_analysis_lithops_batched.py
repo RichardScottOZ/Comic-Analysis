@@ -8,7 +8,7 @@ Features:
 - Memory Escalation: Retries OOM/failed tasks with higher memory
 - S3 skip logic (checks existing results)
 - Robust JSON repair for VLM outputs (Aggressive Mode)
-- Adjustable Temperature
+- Integrated Grounding support (--include-grounding)
 """
 
 import os
@@ -31,9 +31,13 @@ logger = logging.getLogger(__name__)
 
 # --- VLM Prompt & Logic (Runs inside Lambda) ---
 
-def create_structured_prompt():
+def create_structured_prompt(include_grounding=False):
     """Your standard structured prompt for comic analysis."""
-    return """Analyze this comic page and provide a detailed structured analysis in JSON format. Focus on:
+    grounding_instr = ""
+    if include_grounding:
+        grounding_instr = "For each panel, identify its BOUNDING BOX [ymin, xmin, ymax, xmax] (0-1000) and include it as 'box_2d'."
+
+    return f"""Analyze this comic page and provide a detailed structured analysis in JSON format. {grounding_instr} Focus on:
 
 1. **Panel Analysis**: Identify and describe each panel
 2. **Character Identification**: Note characters, their actions, and dialogue
@@ -42,36 +46,37 @@ def create_structured_prompt():
 5. **Text Elements**: Speech bubbles, captions, sound effects
 
 Return ONLY valid JSON with this structure:
-{
+{{
   "overall_summary": "Brief description of the page",
   "panels": [
-    {
+    {{
       "panel_number": 1,
+      "box_2d": [ymin, xmin, ymax, xmax],
       "caption": "Panel title/description",
       "description": "Detailed panel description",
       "speakers": [
-        {
+        {{
           "character": "Character name",
           "dialogue": "What they say",
           "speech_type": "dialogue|thought|narration"
-        }
+        }}
       ],
       "key_elements": ["element1", "element2"],
       "actions": ["action1", "action2"]
-    }
+    }}
   ],
-  "summary": {
+  "summary": {{
     "characters": ["Character1", "Character2"],
     "setting": "Setting description",
     "plot": "Plot summary",
     "dialogue": ["Line1", "Line2"]
-  }
-}"""
+  }}
+"""
 
 def repair_json(json_str):
     """
     Attempts to repair broken JSON strings using aggressive heuristics.
-    Handles truncated responses, unclosed quotes, and missing delimiters.
+    Handles truncated responses, unclosed quotes, and leading/trailing chatter.
     """
     import re
     json_str = json_str.strip()
@@ -82,11 +87,16 @@ def repair_json(json_str):
         json_str = re.sub(r'```$', '', json_str)
     json_str = json_str.strip()
 
-    # 2. Find the start of the JSON object
+    # 2. Find the start and end of the JSON object
     start = json_str.find('{')
     if start == -1:
         return json_str
-    json_str = json_str[start:]
+    
+    end = json_str.rfind('}')
+    if end != -1 and end > start:
+        json_str = json_str[start:end+1]
+    else:
+        json_str = json_str[start:]
 
     # 3. Close unclosed quotes accurately
     def is_balanced_quotes(s):
@@ -105,7 +115,7 @@ def repair_json(json_str):
     if not is_balanced_quotes(json_str):
         json_str += '"'
 
-    # 4. Fix missing commas between fields
+    # 4. Fix missing commas between fields and elements
     json_str = re.sub(r'(")\s*\n?\s*(")', r'\1,\n\2', json_str)
     json_str = re.sub(r'(\})\s*\n?\s*(")', r'\1,\n\2', json_str)
     json_str = re.sub(r'(\])\s*\n?\s*(")', r'\1,\n\2', json_str)
@@ -119,14 +129,11 @@ def repair_json(json_str):
     if open_brackets > close_brackets:
         json_str += ']' * (open_brackets - close_brackets)
     
-    # Re-check braces after adding brackets
-    open_braces = json_str.count('{')
-    close_braces = json_str.count('}')
     if open_braces > close_braces:
         json_str += '}' * (open_braces - close_braces)
 
     # 6. Final cleanup
-    json_str = json_str.replace("\'", "'")
+    json_str = json_str.replace("\'", "'"")
     
     return json_str
 
@@ -149,7 +156,8 @@ def process_page_vlm(task_data):
     model = task_data['model']
     api_key = task_data['api_key']
     timeout = task_data.get('timeout', 120)
-    temperature = task_data.get('temperature', 0.0)
+    temperature = task_data.get('temperature', None)
+    include_grounding = task_data.get('include_grounding', False)
     
     s3_client = boto3.client('s3')
     
@@ -192,12 +200,12 @@ def process_page_vlm(task_data):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": create_structured_prompt()},
+                        {"type": "text", "text": create_structured_prompt(include_grounding)},
                         {"type": "image_url", "image_url": {"url": image_data_uri}}
                     ]
                 }
             ],
-            "max_tokens": 8192
+            "max_tokens": task_data.get('max_tokens', 8192)
         }
         
         if temperature is not None:
@@ -223,27 +231,21 @@ def process_page_vlm(task_data):
         except (KeyError, IndexError, json.JSONDecodeError):
              return {'status': 'error', 'canonical_id': canonical_id, 'error': f"Invalid API Response: {api_res.text[:200]}"}
 
-        # Clean Markdown
-        if '```json' in content:
-            content = content.split('```json')[1].split('```')[0]
-        elif '```' in content:
-            content = content.split('```')[1].split('```')[0]
+        # Clean Markdown and repair
         content = content.strip()
+        repaired = repair_json(content)
         
-        # Parse and potentially repair
         try:
-            out_data = json.loads(content, strict=False)
+            out_data = json.loads(repaired, strict=False)
         except json.JSONDecodeError:
-            try:
-                repaired = repair_json(content)
-                out_data = json.loads(repaired, strict=False)
-            except:
-                return {'status': 'error', 'canonical_id': canonical_id, 'error': f"JSON Parse Failure | Raw: {content[:200]}"}
+            return {'status': 'error', 'canonical_id': canonical_id, 'error': f"JSON Parse Failure | Raw: {content[:200]}"}
         
         # 4. Save to S3
         out_data['canonical_id'] = canonical_id
         out_data['model'] = model
         out_data['processed_at'] = time.time()
+        if include_grounding:
+            out_data['has_grounding'] = True
         
         out_key = f"{output_prefix}/{canonical_id}.json"
         s3_client.put_object(
@@ -260,7 +262,7 @@ def process_page_vlm(task_data):
 
 # --- Orchestrator Logic ---
 
-def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False, temperature=0.0):
+def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model, workers, batch_size, limit, api_key, backend='aws_lambda', use_default_runtime=False, temperature=None, include_grounding=False, max_tokens=8192):
     # Memory Escalation Levels (MB)
     MEMORY_LEVELS = [128, 192, 256, 384, 512, 640, 768, 896, 1024]
     if backend == 'localhost':
@@ -288,8 +290,6 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         for obj in page.get('Contents', []):
             key = obj['Key']
             if key.endswith('.json'):
-                # Robustly extract ID: remove prefix and .json
-                # key: vlm_results/Folder/Image.json -> Folder/Image
                 relative_path = key[len(prefix):-5] 
                 existing_ids.add(relative_path)
             
@@ -311,13 +311,12 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
     # Configure Runtime
     runtime = 'comic-vlm-lite'
     if use_default_runtime:
-        runtime = None # Lithops picks default
+        runtime = None 
         logger.info("Using default Lithops runtime.")
     elif backend == 'localhost':
         runtime = None
         if workers > 16:
             workers = 8
-            logger.warning("Clamping localhost workers to 8")
 
     logger.info(f"Starting Batched Processing: {total_batches} batches of ~{batch_size} items")
     logger.info(f"Memory Escalation Strategy: {MEMORY_LEVELS} MB")
@@ -337,7 +336,9 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
                 'output_prefix': output_prefix,
                 'model': model,
                 'api_key': api_key,
-                'temperature': temperature
+                'temperature': temperature,
+                'include_grounding': include_grounding,
+                'max_tokens': max_tokens
             }
             current_tasks.append({'task_data': data})
 
@@ -446,7 +447,9 @@ if __name__ == "__main__":
     parser.add_argument('--api-key', default=os.environ.get("OPENROUTER_API_KEY"), help='OpenRouter API Key')
     parser.add_argument('--backend', default='aws_lambda', help='Lithops backend')
     parser.add_argument('--use-default-runtime', action='store_true', help='Use default Lithops runtime')
-    parser.add_argument('--temperature', type=float, default=None, help='Sampling temperature (omit for model default, 0.0 for deterministic)')
+    parser.add_argument('--temperature', type=float, default=None, help='Sampling temperature')
+    parser.add_argument('--include-grounding', action='store_true', help='Request bounding boxes in output')
+    parser.add_argument('--max-tokens', type=int, default=8192, help='Max output tokens')
     
     args = parser.parse_args()
     
@@ -464,5 +467,7 @@ if __name__ == "__main__":
             api_key=args.api_key,
             backend=args.backend,
             use_default_runtime=args.use_default_runtime,
-            temperature=args.temperature
+            temperature=args.temperature,
+            include_grounding=args.include_grounding,
+            max_tokens=args.max_tokens
         )
