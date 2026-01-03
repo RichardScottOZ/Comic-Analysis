@@ -25,6 +25,9 @@ from datetime import datetime
 import boto3
 import lithops
 
+# Silence connection pool warnings
+logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
+
 # --- Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -279,20 +282,40 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         all_records = all_records[:limit]
         logger.info(f"Limited to {limit} records.")
 
-    # 2. FAST Skip check
-    logger.info(f"Checking S3 for existing results in s3://{output_bucket}/{output_prefix}/...")
-    s3_client = boto3.client('s3')
+    # 2. Parallel Skip check
+    logger.info(f"Checking S3 for existing results (Parallel HEAD)...")
+    from botocore.config import Config
+    s3_config = Config(max_pool_connections=500)
+    s3_client = boto3.client('s3', config=s3_config)
     existing_ids = set()
-    paginator = s3_client.get_paginator('list_objects_v2')
     
-    prefix = output_prefix.rstrip('/') + '/'
-    for page in paginator.paginate(Bucket=output_bucket, Prefix=prefix):
-        for obj in page.get('Contents', []):
-            key = obj['Key']
-            if key.endswith('.json'):
-                relative_path = key[len(prefix):-5] 
-                existing_ids.add(relative_path)
-            
+    # Prefix handling
+    # Expected S3 Key: output_prefix / canonical_id + .json
+    
+    def check_exists(rec):
+        cid = rec['canonical_id']
+        key = f"{output_prefix}/{cid}.json"
+        try:
+            s3_client.head_object(Bucket=output_bucket, Key=key)
+            return cid
+        except:
+            return None
+
+    # Use ThreadPool to check existence
+    from concurrent.futures import ThreadPoolExecutor
+    
+    with ThreadPoolExecutor(max_workers=500) as executor:
+        # Submit all checks
+        futures = executor.map(check_exists, all_records)
+        
+        count = 0
+        for res in futures:
+            if res:
+                existing_ids.add(res)
+            count += 1
+            if count % 10000 == 0:
+                logger.info(f"  Checked {count}/{len(all_records)}...")
+
     to_process = [r for r in all_records if r['canonical_id'] not in existing_ids]
     skipped = len(all_records) - len(to_process)
     logger.info(f"Skipped {skipped} existing results. To process: {len(to_process)}")
@@ -429,7 +452,7 @@ def run_vlm_analysis_batched(manifest_path, output_bucket, output_prefix, model,
         total_failed += batch_failed_count
         
         logger.info(f"Batch {i+1} Summary: Success={batch_success_count}, Fail={batch_failed_count}")
-        logger.info(f"Overall Progress: {total_success + total_failed}/{len(to_process)}")
+        logger.info(f"Overall Progress: {total_success + total_failed}/{len(to_process)} (Cumulative Success: {total_success}, Cumulative Fail: {total_failed})")
 
     logger.info(f"\nProcessing Complete. Success: {total_success}, Failed: {total_failed}")
     if total_failed > 0:
