@@ -212,7 +212,34 @@ def main():
     all_data = df.to_dict('records')
     
     # Run locally (single chunk)
-    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size)
+    result_msg = process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size)
+    print(result_msg)
+
+    # Immediate verification for test runs
+    if args.limit:
+        print("\n--- Automatic Test Verification ---")
+        # Extract worker_id/path from result_msg or search parts dir
+        parts_dir = Path(args.s3_output) / "parts"
+        if parts_dir.exists():
+            parts = list(parts_dir.glob("*.zarr"))
+            if parts:
+                # Get the most recent part
+                latest_part = max(parts, key=os.path.getmtime)
+                print(f"Inspecting latest part: {latest_part}")
+                z = zarr.open(str(latest_part), mode='r')
+                print(repr(z))
+                for k in ['visual', 'text', 'ids']:
+                    if k in z:
+                        print(f"  {k}: {z[k].shape} ({z[k].dtype})")
+            else:
+                print("No Zarr parts found for verification.")
+        else:
+            # Maybe it's not a parts structure (if we changed it)
+            if os.path.exists(args.s3_output):
+                 try:
+                    z = zarr.open(args.s3_output, mode='r')
+                    print(repr(z))
+                 except: pass
 
 if __name__ == "__main__":
     main()
