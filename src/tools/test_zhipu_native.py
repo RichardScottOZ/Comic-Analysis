@@ -33,19 +33,37 @@ Identify the bounding box [xmin, ymin, xmax, ymax] (0-1000) for:
 3. Every FACE (labelled 'face')
 4. Every SPEECH BUBBLE (labelled 'text')
 
+STRICT RULES:
+- Return ONLY ONE label per distinct region. 
+- DO NOT assign multiple labels (e.g., both 'panel' and 'person') to the same or nearly identical coordinates.
+- If a character or text bubble takes up an entire region, prioritize the 'person' or 'text' label over 'panel'.
+
 Return ONLY valid JSON with this structure:
 {
-  "overall_summary": "...",
+  "overall_summary": "Brief description of the page",
   "objects": [
     {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
   ],
   "panels": [
     {
       "panel_number": 1,
+      "caption": "...",
       "description": "...",
-      "speakers": [...]
+      "speakers": [
+        {
+          "character": "...",
+          "dialogue": "...",
+          "speech_type": "..."
+        }
+      ]
     }
-  ]
+  ],
+  "summary": {
+    "characters": ["..."],
+    "setting": "...",
+    "plot": "...",
+    "dialogue": ["..."]
+  }
 }
 """
 
