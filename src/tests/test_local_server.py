@@ -136,39 +136,47 @@ def draw_local_boxes(image_path, json_path, output_path):
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        colors = {'panel': 'blue', 'person': 'red', 'text': 'green', 'face': 'magenta'}
-        all_objects = data.get('objects', [])
+                    colors = {
+                        'panel': 'blue', 
+                        'person': 'red', 
+                        'text': 'green', 
+                        'face': 'magenta',
+                        'car': 'cyan',
+                        'building': 'orange'
+                    }
+                    all_objects = data.get('objects', [])
+                    
+                    # Add panels from the panels list if not in objects
+                    if 'panels' in data:
+                        for p in data['panels']:
+                            box = p.get('box_2d') or p.get('box')
+                            if box:
+                                all_objects.append({'label': 'panel', 'box_2d': box})
         
-        # Add panels from the panels list if not in objects
-        if 'panels' in data:
-            for p in data['panels']:
-                box = p.get('box_2d') or p.get('box')
-                if box:
-                    all_objects.append({'label': 'panel', 'box_2d': box})
-
-        if not all_objects:
-            print(f"No objects to draw for {output_path}")
-            return
-
-        print(f"Drawing {len(all_objects)} objects...")
+                    if not all_objects:
+                        print(f"No objects to draw for {output_path}")
+                        return
         
-        for obj in all_objects:
-            label = obj.get('label', 'obj').lower()
-            box = obj.get('box_2d') or obj.get('box')
-            if not box or len(box) != 4: continue
-            
-            # Local GLM GGUF (like Zhipu) usually does [xmin, ymin, xmax, ymax]
-            xmin, ymin, xmax, ymax = box
-            
-            abs_xmin = (xmin / 1000) * width
-            abs_ymin = (ymin / 1000) * height
-            abs_xmax = (xmax / 1000) * width
-            abs_ymax = (ymax / 1000) * height
-            
-            color = colors.get(label, 'yellow')
-            draw.rectangle([abs_xmin, abs_ymin, abs_xmax, abs_ymax], outline=color, width=4)
-            draw.text((abs_xmin+5, abs_ymin+5), label, fill=color)
-
+                    print(f"Drawing {len(all_objects)} objects...")
+                    
+                    for obj in all_objects:
+                        full_label = obj.get('label', 'obj').lower()
+                        # Handle piped labels like 'panel|1' or 'person|Protagonist'
+                        base_label = full_label.split('|')[0].strip()
+                        
+                        box = obj.get('box_2d') or obj.get('box')
+                        if not box or len(box) != 4: continue
+                        
+                        xmin, ymin, xmax, ymax = box
+                        
+                        abs_xmin = (xmin / 1000) * width
+                        abs_ymin = (ymin / 1000) * height
+                        abs_xmax = (xmax / 1000) * width
+                        abs_ymax = (ymax / 1000) * height
+                        
+                        color = colors.get(base_label, 'yellow')
+                        draw.rectangle([abs_xmin, abs_ymin, abs_xmax, abs_ymax], outline=color, width=4)
+                        draw.text((abs_xmin+5, abs_ymin+5), full_label, fill=color)
         img.save(output_path)
         print(f"✅ Saved viz: {output_path}")
         
