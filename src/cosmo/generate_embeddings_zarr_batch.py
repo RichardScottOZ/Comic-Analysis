@@ -24,7 +24,7 @@ from PIL import Image
 from tqdm import tqdm
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
-from transformers import AutoProcessor, AutoModel, AutoTokenizer
+from transformers import AutoProcessor, SiglipVisionModel
 from sentence_transformers import SentenceTransformer
 
 # --- Configuration ---
@@ -34,40 +34,21 @@ VISUAL_DIM = 1152
 TEXT_DIM = 1024 # Qwen 0.6B
 BATCH_SIZE = 32
 
-class ComicDataset(Dataset):
-    def __init__(self, manifest_path, processed_ids):
-        self.data = []
-        print(f"Loading manifest: {manifest_path}")
-        
-        # Load manifest using pandas for speed
-        df = pd.read_csv(manifest_path)
-        
-        # Filter processed
-        if processed_ids:
-            initial_len = len(df)
-            df = df[~df['canonical_id'].isin(processed_ids)]
-            print(f"Skipped {initial_len - len(df)} processed pages.")
-            
-        self.data = df.to_dict('records')
-        print(f"Remaining pages to process: {len(self.data)}")
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        row = self.data[idx]
-        return {
-            'id': row['canonical_id'],
-            'image_path': row['absolute_image_path'],
-        }
+def filter_boxes(data):
+    """Recursively removes keys related to bounding boxes/coordinates."""
+    if isinstance(data, dict):
+        junk_keys = {'box_2d', 'box', 'polygon', 'detections', 'coordinates', 'bbox'}
+        return {k: filter_boxes(v) for k, v in data.items() if k.lower() not in junk_keys}
+    elif isinstance(data, list):
+        return [filter_boxes(i) for i in data]
+    else:
+        return data
 
 def get_models(device):
     print("Loading models...")
-    # Visual
     vis_processor = AutoProcessor.from_pretrained(VISUAL_MODEL)
-    vis_model = AutoModel.from_pretrained(VISUAL_MODEL).to(device).eval()
+    vis_model = SiglipVisionModel.from_pretrained(VISUAL_MODEL).to(device).eval()
     
-    # Text (SentenceTransformer)
     print(f"Loading SentenceTransformer: {TEXT_MODEL}")
     txt_model = SentenceTransformer(TEXT_MODEL, device=str(device))
     
@@ -75,22 +56,30 @@ def get_models(device):
 
 def get_text_content(s3_client, bucket, prefix, canonical_id):
     """
-    Fetches the VLM analysis JSON from S3 to get the text for embedding.
+    Fetches the VLM analysis JSON from S3 and prepares a cleaned JSON string for embedding.
+    Matches the training 'Serialized JSON' paradigm but filters coordinates.
     """
     key = f"{prefix}/{canonical_id}.json"
     try:
         obj = s3_client.get_object(Bucket=bucket, Key=key)
         data = json.loads(obj['Body'].read().decode('utf-8'))
         
-        # Strategy: Embed the "Overall Summary" + "Panel Descriptions"
-        text = data.get('overall_summary', '')
+        # Strip metadata
+        data.pop('canonical_id', None)
+        data.pop('processed_at', None)
+        data.pop('model', None)
+        data.pop('guided_by_rcnn', None)
         
-        if 'panels' in data:
-            for p in data['panels']:
-                desc = p.get('description', '')
-                if desc: text += " " + desc
-                
-        return text.strip()
+        # Unwrap OCRResult if present (Training data format)
+        if 'OCRResult' in data:
+            data = data['OCRResult']
+        
+        # Recursively filter coordinates
+        cleaned_data = filter_boxes(data)
+        
+        # Serialize to compact JSON string
+        return json.dumps(cleaned_data, separators=(',', ':'))
+        
     except Exception:
         return "" # Empty text if not found
 
@@ -104,6 +93,7 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
     import s3fs
     import numpy as np
     import uuid
+    import boto3
     from PIL import Image
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -117,8 +107,8 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
     worker_id = str(uuid.uuid4())
     part_path = f"{s3_output}/parts/{worker_id}.zarr"
     
-    s3 = s3fs.S3FileSystem()
-    store = s3fs.S3Map(root=part_path, s3=s3, check=False)
+    s3_fs = s3fs.S3FileSystem()
+    store = s3fs.S3Map(root=part_path, s3=s3_fs, check=False)
     root = zarr.group(store=store)
     
     # Create arrays
@@ -130,7 +120,6 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
     txt_buffer = []
     id_buffer = []
     
-    # Process Loop
     for i in range(0, len(chunk_data), batch_size):
         batch = chunk_data[i:i+batch_size]
         
@@ -142,14 +131,22 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
             path = item['absolute_image_path']
             cid = item['canonical_id']
             try:
-                bucket, key = path.replace("s3://", "").split("/", 1)
-                response = s3_client.get_object(Bucket=bucket, Key=key)
-                img = Image.open(response['Body']).convert('RGB')
+                # Handle s3://
+                if path.startswith('s3://'):
+                    bucket, key = path[5:].split("/", 1)
+                    response = s3_client.get_object(Bucket=bucket, Key=key)
+                    image_data = response['Body'].read()
+                else:
+                    with open(path, "rb") as f:
+                        image_data = f.read()
+                        
+                img = Image.open(BytesIO(image_data) if 'image_data' in locals() else path).convert('RGB')
                 images.append(img)
                 valid_indices.append(j)
                 ids_batch.append(cid)
             except Exception as e:
-                print(f"Failed {cid}: {e}")
+                # print(f"Failed {cid}: {e}")
+                pass
         
         if not images: continue
         
@@ -158,10 +155,7 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
             # Visual
             inputs = vis_proc(images=images, return_tensors="pt").to(device)
             vis_out = vis_model(**inputs)
-            if hasattr(vis_out, 'pooler_output'):
-                vis_embeds = vis_out.pooler_output
-            else:
-                vis_embeds = vis_out.last_hidden_state.mean(dim=1)
+            vis_embeds = vis_out.pooler_output
             
             # Text
             texts = []
@@ -170,11 +164,10 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
                 texts.append(txt)
             
             txt_embeds = txt_model.encode(texts, batch_size=len(texts), convert_to_numpy=True, show_progress_bar=False)
-            txt_embeds = torch.from_numpy(txt_embeds)
 
         # Buffer
         vis_buffer.extend(vis_embeds.cpu().numpy().astype('float16'))
-        txt_buffer.extend(txt_embeds.numpy().astype('float16'))
+        txt_buffer.extend(txt_embeds.astype('float16'))
         id_buffer.extend(ids_batch)
         
         # Flush
