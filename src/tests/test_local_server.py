@@ -69,6 +69,47 @@ Return ONLY valid JSON with this structure:
   }
 }
 """
+from PIL import Image, ImageDraw
+
+def draw_integrated_boxes(image_path, json_path, output_path):
+    try:
+        img = Image.open(image_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        panels = data.get('panels', [])
+        print(f"Drawing {len(panels)} panels...")
+        
+        for p in panels:
+            box = p.get('box_2d') or p.get('box')
+            if not box or len(box) != 4: continue
+            
+            # Local GLM GGUF (like Zhipu) usually does [xmin, ymin, xmax, ymax]
+            # Let's detect based on which dimension is bigger, or just use [xmin, ymin...]
+            xmin, ymin, xmax, ymax = box
+            
+            # Normalize 0-1000 -> Pixels
+            abs_xmin = (xmin / 1000) * width
+            abs_ymin = (ymin / 1000) * height
+            abs_xmax = (xmax / 1000) * width
+            abs_ymax = (ymax / 1000) * height
+            
+            # Draw Blue Box
+            draw.rectangle([abs_xmin, abs_ymin, abs_xmax, abs_ymax], outline='blue', width=5)
+            
+            # Label
+            label = f"P{p.get('panel_number', '?')}"
+            draw.text((abs_xmin+5, abs_ymin+5), label, fill='white')
+
+        img.save(output_path)
+        print(f"✅ Saved viz: {output_path}")
+        
+    except Exception as e:
+        print(f"Vis Error: {e}")
+
 def run_test(image_path):
     print(f"Connecting to local server: {SERVER_URL}")
     print(f"Processing image: {image_path}")
@@ -97,12 +138,25 @@ def run_test(image_path):
         
         if response.status_code == 200:
             content = response.json()['choices'][0]['message']['content']
+            
+            # Clean JSON
+            if '```json' in content:
+                content = content.split('```json')[1].split('```')[0]
+            elif '```' in content:
+                content = content.split('```')[1].split('```')[0]
+            
             print("\n--- Model Output ---")
             print(content)
             
-            with open("experiment_local_server_output.json", "w", encoding="utf-8") as f:
+            out_json = "experiment_local_server_output.json"
+            with open(out_json, "w", encoding="utf-8") as f:
                 f.write(content)
-            print("\nSaved to experiment_local_server_output.json")
+            print(f"\n✅ Saved to {out_json}")
+            
+            # Visualize
+            out_viz = "viz_local_server.jpg"
+            draw_integrated_boxes(image_path, out_json, out_viz)
+            
         else:
             print(f"Server Error: {response.status_code} - {response.text}")
 
