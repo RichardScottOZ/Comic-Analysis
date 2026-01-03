@@ -119,8 +119,9 @@ def draw_zhipu_boxes(image_path, json_path, output_path):
     except Exception as e:
         print(f"Vis Error: {e}")
 
-def run_test(model, api_key):
-    print(f"\n--- Testing Zhipu Full Grounding: {model} ---")
+def run_test(model, api_key, temperature=None):
+    temp_str = f"temp-{temperature}" if temperature is not None else "temp-default"
+    print(f"\n--- Testing Zhipu Full Grounding: {model} ({temp_str}) ---")
     
     try:
         uri = encode_image(ORIGINAL_IMAGE)
@@ -131,9 +132,11 @@ def run_test(model, api_key):
             "model": model,
             "messages": [{"role": "user", "content": [{"type": "text", "text": get_full_grounding_prompt()}, {"type": "image_url", "image_url": {"url": uri}}]}],
             "max_tokens": 4095,
-            "temperature": 0.1,
             "thinking": {"type": "enabled"}
         }
+        
+        if temperature is not None:
+            payload["temperature"] = temperature
         
         response = requests.post(url, headers=headers, json=payload, timeout=180)
         
@@ -142,12 +145,12 @@ def run_test(model, api_key):
             if '```json' in content:
                 content = content.split('```json')[1].split('```')[0]
             
-            filename = f"experiment_zhipu_full_{model}.json"
+            filename = f"experiment_zhipu_full_{model}_{temp_str}.json"
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(content)
             print(f"✅ Saved to {filename}")
             
-            out_viz = f"viz_zhipu_full_{model}.jpg"
+            out_viz = f"viz_zhipu_full_{model}_{temp_str}.jpg"
             draw_zhipu_boxes(ORIGINAL_IMAGE, filename, out_viz)
         else:
             print(f"API Error: {response.status_code} - {response.text}")
@@ -158,9 +161,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--api-key', default=os.environ.get("Z_API_KEY"), help="Zhipu API Key (defaults to Z_API_KEY env var)")
     parser.add_argument('--model', default="glm-4.6v-flash") 
+    parser.add_argument('--temperature', type=float, default=None, help="Sampling temperature")
     args = parser.parse_args()
     
     if not args.api_key:
         print("Error: Z_API_KEY environment variable not set and --api-key not provided.")
     else:
-        run_test(args.model, args.api_key)
+        run_test(args.model, args.api_key, args.temperature)
