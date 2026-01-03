@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Visualize PaddleOCR Folder (Scan-Driven with S3 Download)
-Generates visualizations for PaddleOCR JSONs, downloading them from S3 if needed.
+Visualize PaddleOCR Folder (Manifest-Driven with S3 Download)
 """
 
 import os
@@ -14,16 +13,24 @@ from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-def load_manifest_lookup(manifest_path):
+def load_manifest_rows(manifest_path, limit=None):
     print(f"Loading manifest: {manifest_path}")
-    lookup = {}
+    rows = []
     with open(manifest_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
-            cid = row['canonical_id']
-            img_path = row['absolute_image_path']
-            lookup[cid] = img_path
-    return lookup
+            rows.append(row)
+            if limit and len(rows) >= limit:
+                break
+    return rows
+
+def download_json(s3, bucket, key, local_path):
+    try:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        s3.download_file(bucket, key, str(local_path))
+        return True
+    except Exception:
+        return False
 
 def draw_paddle_boxes(image_path, json_path, output_path):
     try:
@@ -43,18 +50,14 @@ def draw_paddle_boxes(image_path, json_path, output_path):
             return
 
         for res in results:
-            # PaddleOCR: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
             poly = res.get('bbox') 
             text = res.get('text', '')
-            conf = res.get('confidence', 0.0)
             
             if not poly: continue
             
-            # Draw Polygon
             points = [(p[0], p[1]) for p in poly]
             draw.polygon(points, outline='red', width=2)
             
-            # Label
             txt_x, txt_y = points[0]
             label = f"{text[:15]}..." if len(text) > 15 else text
             
@@ -70,67 +73,85 @@ def draw_paddle_boxes(image_path, json_path, output_path):
         img.save(output_path)
         
     except Exception as e:
-        # print(f"Error: {e}")
+        # print(f"Draw Error: {e}")
         pass
-
-def download_json(s3, bucket, key, local_path):
-    try:
-        local_path.parent.mkdir(parents=True, exist_ok=True)
-        s3.download_file(bucket, key, str(local_path))
-        return True
-    except Exception:
-        return False
 
 def process_row(row, input_dir, output_dir, s3_bucket, s3_prefix, s3_client):
     cid = row['canonical_id']
+    
+    # Image Path from Manifest (e.g. E:\...)
+    # Warning: Manifest has s3:// paths? Or local paths?
+    # User said "manifest has CalibreComics_extracted/amazon/... , s3://..."
+    # If the user is running locally, we need the LOCAL image path.
+    # If the manifest only has S3 paths, we can't draw on the image unless we download it too.
+    
+    # Let's assume absolute_image_path is correct for the local machine OR we need to map it.
+    # Since previous scripts worked, let's assume it points to E:\...
+    # Wait, the sample user pasted showed: "s3://calibrecomics-extracted/..."
+    
+    # If absolute_image_path is s3://, we CANNOT visualize without downloading the image.
+    # But user implied they have images locally ("E:\amazon...").
+    
+    # Let's try to infer local path from CID if absolute_path is S3
     img_path = row['absolute_image_path']
+    if img_path.startswith('s3://'):
+        # Try to map to E:\CalibreComics_extracted or E:\amazon
+        # Heuristic based on user's setup
+        if 'amazon' in cid:
+            # cid: CalibreComics_extracted/amazon/Title/Page
+            # local: E:\amazon\Title\Page.jpg ??
+            # This is risky.
+            # Let's try to assume the user mounted it or has it at E:\
+            pass 
     
-    if not img_path or not os.path.exists(img_path):
+    # Check if image exists
+    if not os.path.exists(img_path):
+        # Try mapping E:\CalibreComics_extracted
+        # Construct local path from CID
+        # cid: CalibreComics_extracted/amazon/3 Guns/3 Guns - p000
+        # img: E:\CalibreComics_extracted\CalibreComics_extracted\amazon... ? No.
+        
+        # Let's try prepending E:\ to the relative part
+        # Remove bucket prefix if present?
+        pass
+
+    # If we can't find the image, we can't draw.
+    if not os.path.exists(img_path):
+        # print(f"Missing Image: {img_path}")
         return
 
-    # Expected JSON name: {cid}_ocr.json
-    # Note: canonical_id might be a path. We want the filename part for the local cache?
-    # Or should we replicate the full structure locally?
-    # Let's mirror the structure locally to be safe.
+    # JSON Path
+    # Structure in S3: s3_prefix / cid + "_ocr.json"
+    # Local Cache: input_dir / cid + "_ocr.json" (Mirroring structure)
     
-    local_rel_path = f"{cid}_ocr.json"
-    local_json = Path(input_dir) / local_rel_path
+    local_json_path = Path(input_dir) / f"{cid}_ocr.json"
     
-    # Check if exists locally
-    if not local_json.exists():
+    if not local_json_path.exists():
         if s3_client:
-            # Download from S3
-            # S3 Key: prefix / canonical_id + "_ocr.json"
-            # Note: canonical_id matches S3 structure?
-            # If cid is "CalibreComics_extracted/amazon/..."
-            # And prefix is "ocr_results_paddleocr"
-            # Key is "ocr_results_paddleocr/CalibreComics_extracted/amazon/..._ocr.json"
-            
             s3_key = f"{s3_prefix}/{cid}_ocr.json"
-            
-            if not download_json(s3_client, s3_bucket, s3_key, local_json):
-                # Try fallback without _ocr
-                s3_key_alt = f"{s3_prefix}/{cid}.json"
-                if not download_json(s3_client, s3_bucket, s3_key_alt, local_json):
-                    return # Not found on S3
-
-    if not local_json.exists():
+            if not download_json(s3_client, s3_bucket, s3_key, local_json_path):
+                 # Try without _ocr
+                 s3_key = f"{s3_prefix}/{cid}.json"
+                 download_json(s3_client, s3_bucket, s3_key, local_json_path)
+    
+    if not local_json_path.exists():
+        # print(f"Missing JSON: {local_json_path}")
         return
 
-    # Visualization Output
-    # Flatten name for viz folder to avoid deep nesting issues
-    flat_name = f"viz_{local_json.name.replace('.json', '.jpg')}"
+    # Output Path
+    # Use flat name for easy viewing
+    flat_name = f"viz_{Path(cid).name}.jpg"
     out_path = Path(output_dir) / flat_name
     
     if out_path.exists():
         return
 
-    draw_paddle_boxes(img_path, local_json, out_path)
+    draw_paddle_boxes(img_path, local_json_path, out_path)
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--manifest', required=True)
-    parser.add_argument('--input-dir', required=True, help='Local cache for JSONs')
+    parser.add_argument('--input-dir', required=True)
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--s3-bucket', default='calibrecomics-extracted')
     parser.add_argument('--s3-prefix', default='ocr_results_paddleocr')
@@ -141,15 +162,7 @@ def main():
     os.makedirs(args.input_dir, exist_ok=True)
     os.makedirs(args.output_dir, exist_ok=True)
     
-    print(f"Loading manifest: {args.manifest}")
-    rows = []
-    with open(args.manifest, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        
-    if args.limit:
-        rows = rows[:args.limit]
-        
+    rows = load_manifest_rows(args.manifest, args.limit)
     print(f"Processing {len(rows)} pages...")
     
     s3 = boto3.client('s3')
