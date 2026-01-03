@@ -127,10 +127,16 @@ Return ONLY valid JSON with this structure:
 
 def draw_zhipu_boxes(image_path, json_path, output_path):
     try:
+        # 1. Load Image first to get dimensions
+        img = Image.open(image_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+        width, height = img.size
+        
+        # 2. Load JSON
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
             
-        # Standard colors
+        # 3. Setup Colors
         colors = {
             'panel': 'blue', 
             'person': 'red', 
@@ -140,18 +146,21 @@ def draw_zhipu_boxes(image_path, json_path, output_path):
             'building': 'orange'
         }
         
-        # Check both 'objects' and 'panels'
+        # 4. Collect Objects
         all_objects = data.get('objects', [])
-        
-        # Add panels from the panels list if not in objects
         if 'panels' in data:
             for p in data['panels']:
                 box = p.get('box_2d') or p.get('box')
                 if box:
                     all_objects.append({'label': 'panel', 'box_2d': box})
 
+        if not all_objects:
+            print(f"No objects to draw for {output_path}")
+            return
+
         print(f"Drawing {len(all_objects)} objects...")
         
+        # 5. Draw
         for obj in all_objects:
             full_label = obj.get('label', 'obj').lower()
             base_label = full_label.split('|')[0].strip()
