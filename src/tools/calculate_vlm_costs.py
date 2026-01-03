@@ -8,7 +8,7 @@ import csv
 import argparse
 from collections import defaultdict
 
-def parse_activity_log(csv_path, target_pages=1220000):
+def parse_activity_log(csv_path, target_pages):
     stats = defaultdict(lambda: {'requests': 0, 'cost': 0.0, 'prompt_tokens': 0, 'completion_tokens': 0})
     
     with open(csv_path, 'r', encoding='utf-8') as f:
@@ -32,10 +32,10 @@ def parse_activity_log(csv_path, target_pages=1220000):
     print(f"Generating Cost Report for {target_pages:,} pages based on {csv_path}...")
     
     report_lines = []
-    report_lines.append(f"# VLM Cost Projection for {target_pages/1e6:.2f}M Pages")
+    report_lines.append(f"# VLM Cost Projection for {target_pages:,} Pages")
     report_lines.append(f"**Source Data:** `{csv_path}`\n")
     
-    headers = ["Model", "Sample Size", "Avg Input Tok", "Avg Output Tok", "Cost/1k Pages", "Total Cost (1.22M)"]
+    headers = ["Model", "Sample Size", "Avg Input Tok", "Avg Output Tok", "Cost/1k Pages", f"Total Cost ({target_pages/1e3:.0f}K)"]
     report_lines.append("| " + " | ".join(headers) + " |")
     report_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
     
@@ -77,6 +77,7 @@ def parse_activity_log(csv_path, target_pages=1220000):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--csv', default='openrouter-activity-20260102-001729.csv')
+    parser.add_argument('--target-pages', type=int, default=1220000, help="Number of pages to project costs for")
     args = parser.parse_args()
     
-    parse_activity_log(args.csv)
+    parse_activity_log(args.csv, args.target_pages)
