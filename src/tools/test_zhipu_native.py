@@ -9,6 +9,7 @@ import base64
 import requests
 import json
 from pathlib import Path
+from PIL import Image, ImageDraw
 
 # Paths
 ORIGINAL_IMAGE = "E:\\amazon\\#Guardian 001\\#Guardian 001 - p003.jpg"
