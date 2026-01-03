@@ -127,20 +127,21 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
         valid_indices = []
         ids_batch = []
         
+        from io import BytesIO
+        
         for j, item in enumerate(batch):
             path = item['absolute_image_path']
             cid = item['canonical_id']
             try:
-                # Handle s3://
                 if path.startswith('s3://'):
                     bucket, key = path[5:].split("/", 1)
                     response = s3_client.get_object(Bucket=bucket, Key=key)
-                    image_data = response['Body'].read()
+                    image_bytes = response['Body'].read()
                 else:
                     with open(path, "rb") as f:
-                        image_data = f.read()
+                        image_bytes = f.read()
                         
-                img = Image.open(BytesIO(image_data) if 'image_data' in locals() else path).convert('RGB')
+                img = Image.open(BytesIO(image_bytes)).convert('RGB')
                 images.append(img)
                 valid_indices.append(j)
                 ids_batch.append(cid)
@@ -192,10 +193,16 @@ def main():
     parser.add_argument('--vlm-bucket', default='calibrecomics-extracted')
     parser.add_argument('--vlm-prefix', default='vlm_analysis')
     parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--limit', type=int, default=None, help='Limit number of pages for testing')
     args = parser.parse_args()
     
-    # Load all data
+    # Load data
+    print(f"Loading manifest: {args.manifest}")
     df = pd.read_csv(args.manifest)
+    if args.limit:
+        df = df.head(args.limit)
+        print(f"Limiting to first {args.limit} rows.")
+        
     all_data = df.to_dict('records')
     
     # Run locally (single chunk)
