@@ -133,7 +133,7 @@ def repair_json(json_str):
         json_str += '}' * (open_braces - close_braces)
 
     # 6. Final cleanup
-    json_str = json_str.replace("\'", "'"")
+    json_str = json_str.replace("\\'", "'")
     
     return json_str
 
