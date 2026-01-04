@@ -114,7 +114,7 @@ def draw_vlm_boxes(image_path, json_path, output_path):
         # print(f"Error drawing {json_path}: {e}")
         pass
 
-def process_file(json_file, manifest_lookup, output_dir):
+def process_file(json_file, manifest_lookup, output_dir, input_root):
     stem = json_file.stem
     
     # Try multiple ways to find the image
@@ -135,13 +135,19 @@ def process_file(json_file, manifest_lookup, output_dir):
     if not img_path or not os.path.exists(img_path):
         return
 
-    # Use flat output filename to avoid nested folders
-    # e.g. "Guardian_001_p003.jpg"
-    flat_name = f"viz_{json_file.name.replace('.json', '.jpg')}"
-    out_path = Path(output_dir) / flat_name
+    # Mirror directory structure
+    try:
+        rel_path = json_file.relative_to(input_root)
+        out_subpath = rel_path.with_suffix('.jpg')
+        out_path = Path(output_dir) / out_subpath
+    except ValueError:
+        # Fallback if path relation fails
+        out_path = Path(output_dir) / json_file.name.replace('.json', '.jpg')
     
     if out_path.exists():
         return
+        
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     draw_vlm_boxes(img_path, json_file, out_path)
 
@@ -155,6 +161,7 @@ def main():
     args = parser.parse_args()
     
     os.makedirs(args.output_dir, exist_ok=True)
+    input_root = Path(args.input_dir)
     
     # 1. Load Manifest
     lookup = load_manifest_lookup(args.manifest)
@@ -162,7 +169,7 @@ def main():
     
     # 2. Find JSONs
     print(f"Scanning JSONs in {args.input_dir}...")
-    json_files = list(Path(args.input_dir).rglob("*.json"))
+    json_files = list(input_root.rglob("*.json"))
     
     if args.limit:
         json_files = json_files[:args.limit]
@@ -171,7 +178,7 @@ def main():
     
     # 3. Process
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = [executor.submit(process_file, f, lookup, args.output_dir) for f in json_files]
+        futures = [executor.submit(process_file, f, lookup, args.output_dir, input_root) for f in json_files]
         for _ in tqdm(as_completed(futures), total=len(json_files)):
             pass
             
