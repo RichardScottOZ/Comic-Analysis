@@ -158,9 +158,22 @@ def main():
     parser.add_argument('--limit', type=int, default=10)
     args = parser.parse_args()
     
-    df = pd.read_csv(args.manifest, nrows=args.limit)
+    # Load data
+    print(f"Loading manifest: {args.manifest}")
+    df = pd.read_csv(args.manifest)
+    if args.limit:
+        df = df.head(args.limit)
+        print(f"Limiting to first {args.limit} rows.")
+        
+    all_data = df.to_dict('records')
     
-    # Pre-allocate if missing
+    # Pre-allocate logic (Local Test Mode)
+    import shutil
+    if args.limit and not args.s3_output.startswith("s3://"):
+        if os.path.exists(args.s3_output):
+            print(f"Cleaning up existing test output: {args.s3_output}")
+            shutil.rmtree(args.s3_output)
+            
     if not os.path.exists(args.s3_output):
         print(f"Creating skeleton: {args.s3_output}")
         # Call preallocate logic (simplified for local)
@@ -180,7 +193,8 @@ def main():
         )
         ds.to_zarr(args.s3_output, compute=False, mode='w')
 
-    process_chunk(df.to_dict('records'), args.s3_output, batch_size=args.batch_size, start_index=0)
+    # Run locally (single chunk)
+    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, start_index=0)
     
     print("\n--- Xarray Verification ---")
     ds = xr.open_zarr(args.s3_output)
