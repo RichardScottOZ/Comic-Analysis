@@ -65,192 +65,39 @@ def clean_series_name(name: str) -> str:
     return cleaned.lower()
 
 def extract_metadata(path: str, cid: str):
-
     parts = Path(path).parts
-
     filename = parts[-1] if parts else ""
-
     meta = {'series': 'unknown', 'volume': 'unknown', 'issue': '000', 'page': 'p000', 'source': 'unknown'}
-
     
-
     if 'amazon' in path.lower(): meta['source'] = 'amazon'
-
     elif 'calibre' in path.lower(): meta['source'] = 'calibre'
-
     elif 'neonichiban' in path.lower(): meta['source'] = 'neonichiban'
-
     elif 'humble' in path.lower(): meta['source'] = 'humble_bundle'
-
     
-
     page_match = re.search(r'p(\d{3,4})', filename)
-
     if page_match: meta['page'] = f"p{page_match.group(1)}"
-
     
-
     issue_match = re.search(r'(\d{3})', filename)
-
     if issue_match: meta['issue'] = issue_match.group(1)
-
     
-
     if len(parts) >= 2:
-
         parent = parts[-2]
-
-        
-
-        # Heuristic: Check for junk parent folders
-
         if parent.lower() in ['jpg4cbz', 'working_files'] and len(parts) >= 3:
-
-            # Use Grandparent
-
             series_folder = parts[-3]
-
         else:
-
             series_folder = parent
-
             
-
         meta['series'] = clean_series_name(series_folder)
-
         
-
-                                # Improved volume regex: matches v03, vol3, _vol3, Vol. 1, Volume 1, Vol._1, (2000), etc.
-
-        
-
-                
-
-        
-
-                                vol_pattern = r'[ _\s\-\(](v\d+|vol\.?\s?_?\d+|volume\s?\d+|\d{4}-\d{4}|\d{4})[_\s\-\)]'
-
-        
-
-                
-
-        
-
-                                vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                if not vol_match and series_folder != parent:
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                     vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                     
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                # Fallback for end of string
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                if not vol_match:
-
-        
-
-                
-
-        
-
-                        
-
-        
-
-                
-
-        
-
-                                     vol_match = re.search(r'[ _\s](v\d+|vol\.?\s?_?\d+|volume\s?\d+)$', parent, re.IGNORECASE):
-             vol_match = re.search(r'[_\s](v\d+|vol\d+)$', parent, re.IGNORECASE)
-             meta['volume'] = vol_match.group(1)
+        # Improved volume regex
+        vol_pattern = r'[ _\s\-\](v\d+|vol\.?\s?_?\d+|volume\s?\d+|\d{4}-\d{4}|\d{4})[ _\s\-\)]'
+        vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
+        if not vol_match and series_folder != parent:
+             vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
+        if not vol_match:
+             vol_match = re.search(r'[ _\s](v\d+|vol\.?\s?_?\d+|volume\s?\d+)$', series_folder, re.IGNORECASE)
+             
+        if vol_match: meta['volume'] = vol_match.group(1)
              
     return meta
 
@@ -322,9 +169,7 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
         if "CalibreComics_extracted" not in target_id:
              candidates.append(os.path.join(local_vlm_root, "CalibreComics_extracted", target_id.replace('/', os.sep) + ".json"))
         for p in candidates:
-            if verbose: print(f"  [CHECK] {p}")
             if os.path.exists(p):
-                if verbose: print(f"  [FOUND] {p}")
                 try:
                     with open(p, 'r', encoding='utf-8') as f: data = json.load(f)
                     if 'OCRResult' in data: data = data['OCRResult']
@@ -357,13 +202,10 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
     dataset = ComicEmbeddingDataset(chunk_data)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
     current_idx = start_index
-    
     for valid_batch, error_batch in tqdm(loader, desc=f"Worker {start_index}"):
         if not valid_batch and not error_batch: continue
         actual_batch_size = len(valid_batch) + len(error_batch)
-        
         if valid_batch:
-            if verbose: print(f"[Worker {start_index}] Batch starting: {valid_batch[0]['id']}")
             images = [item['image'] for item in valid_batch]
             ids = [item['id'] for item in valid_batch]
             paths = [item['path'] for item in valid_batch]
@@ -378,7 +220,6 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
                 txt_embeds = txt_model.encode(texts, batch_size=len(texts), show_progress_bar=False)
 
             meta_batch = [extract_metadata(p, cid) for p, cid in zip(paths, ids)]
-
             ds_batch = xr.Dataset(
                 data_vars={
                     'visual': (['page_id', 'visual_dim'], vis_embeds.cpu().numpy().astype('float32')),
@@ -393,7 +234,6 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
                 coords={'page_id': np.arange(current_idx, current_idx + len(ids))}
             )
             ds_batch.to_zarr(store, region={'page_id': slice(current_idx, current_idx + len(ids))})
-
         current_idx += actual_batch_size
     return f"Finished chunk starting at {start_index}"
 
@@ -412,20 +252,16 @@ def main():
     parser.add_argument('--limit', type=int, default=None)
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
-    
     if args.s3_manifest: load_s3_lookup(args.s3_manifest)
     df = pd.read_csv(args.manifest)
     if args.limit: df = df.head(args.limit)
     all_data = df.to_dict('records')
     total_len = len(all_data)
-    
     import shutil
     if args.limit and not args.s3_output.startswith("s3://"):
         if os.path.exists(args.s3_output): shutil.rmtree(args.s3_output)
-            
     if not os.path.exists(args.s3_output) and not args.s3_output.startswith("s3://"):
         print(f"Creating skeleton: {args.s3_output}")
-        from numcodecs import Blosc
         compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
         coords = {'page_id': np.arange(total_len), 'visual_dim': np.arange(VISUAL_DIM), 'text_dim': np.arange(TEXT_DIM)}
         ds = xr.Dataset(
@@ -443,9 +279,7 @@ def main():
         )
         encoding = {v: {'compressor': compressor} for v in ds.data_vars}
         ds.to_zarr(args.s3_output, compute=False, mode='w', encoding=encoding)
-
     process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, 0, args.workers, args.local_vlm_root, args.verbose)
-    
     elapsed = time.time() - start_time
     print(f"\nTotal Runtime: {elapsed:.2f} seconds")
     if args.limit: print(f"Estimated time for 1.22M pages: {(elapsed/args.limit * 1220000 / 3600):.2f} hours")
@@ -453,21 +287,14 @@ def main():
     try:
         ds_verify = xr.open_zarr(args.s3_output)
         print(ds_verify)
-        
         print("\n--- Data Sample ---")
         for var in ds_verify.data_vars:
             arr = ds_verify[var].values
             print(f"\nVariable: {var}")
             if np.issubdtype(arr.dtype, np.floating):
-                print(f"  Mean: {np.nanmean(arr):.4f}")
-                print(f"  Min:  {np.nanmin(arr):.4f}")
-                print(f"  Max:  {np.nanmax(arr):.4f}")
-            else:
-                # Text/String data
-                print(f"  First 10 values: {arr[:10]}")
-                
-    except Exception as e:
-        print(f"Verification failed: {e}")
+                print(f"  Mean: {np.nanmean(arr):.4f} | Min: {np.nanmin(arr):.4f} | Max: {np.nanmax(arr):.4f}")
+            else: print(f"  First 10 values: {arr[:10]}")
+    except: pass
 
 if __name__ == "__main__":
     main()
