@@ -40,7 +40,12 @@ def extract_metadata(path: str, cid: str):
     return meta
 
 def check_manifest():
-    # ... (existing setup) ...
+    print(f"Reading {MANIFEST}...")
+    df = pd.read_csv(MANIFEST)
+    
+    max_lens = {'series': 0, 'volume': 0, 'issue': 0, 'page': 0, 'source': 0}
+    samples = []
+    
     calibre_audit_data = []
     seen_calibre_keys = set()
 
