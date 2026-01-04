@@ -159,6 +159,27 @@ def main():
     args = parser.parse_args()
     
     df = pd.read_csv(args.manifest, nrows=args.limit)
+    
+    # Pre-allocate if missing
+    if not os.path.exists(args.s3_output):
+        print(f"Creating skeleton: {args.s3_output}")
+        # Call preallocate logic (simplified for local)
+        coords = {'page_id': np.arange(args.limit), 'visual_dim': np.arange(VISUAL_DIM), 'text_dim': np.arange(TEXT_DIM)}
+        ds = xr.Dataset(
+            data_vars={
+                'visual': (['page_id', 'visual_dim'], np.zeros((args.limit, VISUAL_DIM), dtype='float16')),
+                'text': (['page_id', 'text_dim'], np.zeros((args.limit, TEXT_DIM), dtype='float16')),
+                'ids': (['page_id'], np.full(args.limit, '', dtype='<U128')),
+                'series': (['page_id'], np.full(args.limit, '', dtype='<U128')),
+                'volume': (['page_id'], np.full(args.limit, '', dtype='<U32')),
+                'issue': (['page_id'], np.full(args.limit, '', dtype='<U16')),
+                'page_num': (['page_id'], np.full(args.limit, '', dtype='<U16')),
+                'source': (['page_id'], np.full(args.limit, '', dtype='<U16'))
+            },
+            coords=coords
+        )
+        ds.to_zarr(args.s3_output, compute=False, mode='w')
+
     process_chunk(df.to_dict('records'), args.s3_output, batch_size=args.batch_size, start_index=0)
     
     print("\n--- Xarray Verification ---")
