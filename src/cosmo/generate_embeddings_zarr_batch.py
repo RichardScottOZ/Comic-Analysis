@@ -154,11 +154,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--manifest', required=True)
     parser.add_argument('--s3-output', required=True)
+    parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--limit', type=int, default=10)
     args = parser.parse_args()
     
     df = pd.read_csv(args.manifest, nrows=args.limit)
-    process_chunk(df.to_dict('records'), args.s3_output, start_index=0)
+    process_chunk(df.to_dict('records'), args.s3_output, batch_size=args.batch_size, start_index=0)
     
     print("\n--- Xarray Verification ---")
     ds = xr.open_zarr(args.s3_output)
