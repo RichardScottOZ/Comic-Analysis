@@ -154,6 +154,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--manifest', required=True)
     parser.add_argument('--s3-output', required=True)
+    parser.add_argument('--vlm-bucket', default='calibrecomics-extracted')
+    parser.add_argument('--vlm-prefix', default='vlm_analysis')
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--limit', type=int, default=10)
     args = parser.parse_args()
