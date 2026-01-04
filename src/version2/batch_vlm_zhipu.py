@@ -71,7 +71,7 @@ Return ONLY valid JSON with this structure:
 }"""
 
 def get_integrated_prompt():
-    return """Analyze this comic page. Provide a detailed structured analysis AND bounding boxes in JSON format.
+    return """Analyze this comic page. Provide a detailed structured analysis in JSON format.
 
 REQUIREMENTS:
 1. Identify every panel. For each panel, provide its BOUNDING BOX [xmin, ymin, xmax, ymax] (0-1000).
@@ -81,12 +81,10 @@ REQUIREMENTS:
 Return ONLY valid JSON with this structure:
 {
   "overall_summary": "Brief description of the page",
-  "objects": [
-    {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
-  ],
   "panels": [
     {
       "panel_number": 1,
+      "box_2d": [xmin, ymin, xmax, ymax],
       "caption": "Panel title/description",
       "description": "Detailed panel description",
       "speakers": [
@@ -106,7 +104,8 @@ Return ONLY valid JSON with this structure:
     "plot": "Plot summary",
     "dialogue": ["Line1", "Line2"]
   }
-}"""
+}
+"""
 
 def get_enhanced_prompt(rcnn_data):
     detections = []
