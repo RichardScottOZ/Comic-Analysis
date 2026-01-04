@@ -120,27 +120,43 @@ def extract_metadata(path: str, cid: str):
 
         
 
-        # Improved volume regex: matches v03, vol3, _vol3, (2000), etc.
-
-        # Try series folder first, then parent if different
-
-        vol_pattern = r'[ _\s\-\(](v\d+|vol\d+|\d{4}-\d{4}|\d{4})[_\s\-\)]'
-
-        vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
+                # Improved volume regex: matches v03, vol3, _vol3, Vol. 1, Vol._1, (2000), etc.
 
         
 
-        if not vol_match and series_folder != parent:
+                vol_pattern = r'[ _\s\-\(](v\d+|vol\.?\s?_?\d+|\d{4}-\d{4}|\d{4})[_\s\-\)]'
 
-             vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
+        
 
-             
+                vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
 
-        # Fallback for end of string
+        
 
-        if not vol_match:
+                
 
-             vol_match = re.search(r'[ _\s](v\d+|vol\d+)$', parent, re.IGNORECASE):
+        
+
+                if not vol_match and series_folder != parent:
+
+        
+
+                     vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
+
+        
+
+                     
+
+        
+
+                # Fallback for end of string
+
+        
+
+                if not vol_match:
+
+        
+
+                     vol_match = re.search(r'[ _\s](v\d+|vol\.?\s?_?\d+)$', parent, re.IGNORECASE):
              vol_match = re.search(r'[_\s](v\d+|vol\d+)$', parent, re.IGNORECASE)
              meta['volume'] = vol_match.group(1)
              
