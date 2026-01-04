@@ -44,15 +44,15 @@ def extract_metadata(path: str, cid: str):
         meta['series'] = clean_series_name(series_folder)
         
         # Volume extraction (Improved pattern)
-        # Matches: v03, vol3, Vol. 1, Vol._1, (2000), etc.
-        vol_pattern = r'[_\s\-\(](v\d+|vol\.?\s?_?\d+|\d{4}-\d{4}|\d{4})[_\s\-\)]'
+        # Matches: v03, vol3, Vol. 1, Volume 1, Vol._1, (2000), etc.
+        vol_pattern = r'[_\s\-\(](v\d+|vol\.?\s?_?\d+|volume\s?\d+|\d{4}-\d{4}|\d{4})[_\s\-\)]'
         vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
         if not vol_match and series_folder != parent:
              vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
              
         # Fallback for end of string
         if not vol_match:
-             vol_match = re.search(r'[_\s](v\d+|vol\.?\s?_?\d+)$', series_folder, re.IGNORECASE)
+             vol_match = re.search(r'[_\s](v\d+|vol\.?\s?_?\d+|volume\s?\d+)$', series_folder, re.IGNORECASE)
              
         if vol_match: meta['volume'] = vol_match.group(1)
         
