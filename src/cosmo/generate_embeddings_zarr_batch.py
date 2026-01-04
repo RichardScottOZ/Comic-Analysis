@@ -449,10 +449,25 @@ def main():
     elapsed = time.time() - start_time
     print(f"\nTotal Runtime: {elapsed:.2f} seconds")
     if args.limit: print(f"Estimated time for 1.22M pages: {(elapsed/args.limit * 1220000 / 3600):.2f} hours")
+    print("\n--- Xarray Verification ---")
     try:
         ds_verify = xr.open_zarr(args.s3_output)
         print(ds_verify)
-    except: pass
+        
+        print("\n--- Data Sample ---")
+        for var in ds_verify.data_vars:
+            arr = ds_verify[var].values
+            print(f"\nVariable: {var}")
+            if np.issubdtype(arr.dtype, np.floating):
+                print(f"  Mean: {np.nanmean(arr):.4f}")
+                print(f"  Min:  {np.nanmin(arr):.4f}")
+                print(f"  Max:  {np.nanmax(arr):.4f}")
+            else:
+                # Text/String data
+                print(f"  First 10 values: {arr[:10]}")
+                
+    except Exception as e:
+        print(f"Verification failed: {e}")
 
 if __name__ == "__main__":
     main()
