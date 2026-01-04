@@ -162,16 +162,19 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
     compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
     
     # Create arrays
-    root.create_dataset('visual', shape=(0, VISUAL_DIM), chunks=(1000, VISUAL_DIM), dtype='float16', compressor=compressor)
-    root.create_dataset('text', shape=(0, TEXT_DIM), chunks=(1000, TEXT_DIM), dtype='float16', compressor=compressor)
-    root.create_dataset('ids', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    v_arr = root.create_dataset('visual', shape=(0, VISUAL_DIM), chunks=(1000, VISUAL_DIM), dtype='float16', compressor=compressor)
+    v_arr.attrs['_ARRAY_DIMENSIONS'] = ['page_id', 'visual_dim']
+    
+    t_arr = root.create_dataset('text', shape=(0, TEXT_DIM), chunks=(1000, TEXT_DIM), dtype='float16', compressor=compressor)
+    t_arr.attrs['_ARRAY_DIMENSIONS'] = ['page_id', 'text_dim']
+    
+    i_arr = root.create_dataset('ids', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    i_arr.attrs['_ARRAY_DIMENSIONS'] = ['page_id']
     
     # Metadata Arrays
-    root.create_dataset('series', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
-    root.create_dataset('volume', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
-    root.create_dataset('issue', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
-    root.create_dataset('page_num', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
-    root.create_dataset('source', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    for k in ['series', 'volume', 'issue', 'page_num', 'source']:
+        m_arr = root.create_dataset(k, shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+        m_arr.attrs['_ARRAY_DIMENSIONS'] = ['page_id']
     
     vis_buffer = []
     txt_buffer = []
@@ -289,20 +292,33 @@ def main():
 
     # Immediate verification for test runs
     if args.limit:
-        print("\n--- Automatic Test Verification ---")
+        print("\n--- Automatic Xarray/Zarr Test Verification ---")
         parts_dir = Path(args.s3_output) / "parts"
         if parts_dir.exists():
             parts = list(parts_dir.glob("*.zarr"))
             if parts:
                 latest_part = max(parts, key=os.path.getmtime)
                 print(f"Inspecting latest part: {latest_part}")
-                z = zarr.open(str(latest_part), mode='r')
-                print(f"Zarr Group: {list(z.array_keys())}")
-                for k in ['visual', 'text', 'ids']:
-                    if k in z:
-                        print(f"  {k}: {z[k].shape} ({z[k].dtype})")
-                        if k == 'ids' and len(z[k]) > 0:
-                            print(f"    Sample ID: {z[k][0]}")
+                
+                # 1. Try Xarray Loading
+                import xarray as xr
+                try:
+                    ds = xr.open_zarr(str(latest_part))
+                    print("\n--- Xarray Dataset ---")
+                    print(ds)
+                    # Print specific dims for check
+                    print(f"\nDimensions: {dict(ds.dims)}")
+                except Exception as xr_err:
+                    print(f"⚠️ Xarray load failed: {xr_err}. Falling back to raw Zarr.")
+                    
+                    # 2. Raw Zarr Fallback
+                    z = zarr.open(str(latest_part), mode='r')
+                    print(f"Zarr Group: {list(z.array_keys())}")
+                    for k in ['visual', 'text', 'ids', 'series', 'issue']:
+                        if k in z:
+                            print(f"  {k}: {z[k].shape} ({z[k].dtype})")
+                            if k == 'ids' and len(z[k]) > 0:
+                                print(f"    Sample ID: {z[k][0]}")
             else:
                 print("No Zarr parts found for verification.")
 
