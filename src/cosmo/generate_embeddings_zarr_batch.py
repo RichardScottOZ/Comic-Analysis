@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 """
-Generate PSS Embeddings to Zarr (Optimized for Local & Cloud)
-Features:
-- Xarray Region-Writes
-- Multi-threaded Image Loading (DataLoader)
-- Metadata extraction
-- Local VLM root with S3 fallback + Manifest Lookup
-- Runtime tracking
-- Verbose logging for path debugging
+Generate PSS Embeddings to Zarr (Aligned with CoSMo v4 Training)
+Optimized for high-throughput local GPU and cloud distributed runs.
 """
 
 import os
@@ -27,17 +21,17 @@ from PIL import Image
 from tqdm import tqdm
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
-from transformers import AutoProcessor, SiglipVisionModel
+from transformers import AutoModel, AutoProcessor, SiglipImageProcessor, SiglipVisionModel
 from sentence_transformers import SentenceTransformer
 from io import BytesIO
 
-# --- Configuration ---
+# --- Configuration (Matching CoSMo v4) ---
 VISUAL_MODEL = "google/siglip-so400m-patch14-384"
 TEXT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 VISUAL_DIM = 1152
 TEXT_DIM = 1024
 
-# Global Lookup
+# Global Lookup for ID mapping
 S3_LOOKUP = {}
 
 def load_s3_lookup(manifest_path):
@@ -47,14 +41,11 @@ def load_s3_lookup(manifest_path):
         reader = csv.DictReader(f)
         for row in reader:
             cid = row['canonical_id']
-            # Store the full ID
-            # Also store suffix parts to handle partial matches from local manifest
             parts = cid.split('/')
             for i in range(len(parts)):
                 suffix = "/".join(parts[i:])
                 if suffix not in S3_LOOKUP:
                     S3_LOOKUP[suffix] = cid
-            # Always ensure filename is keyed
             S3_LOOKUP[Path(cid).name] = cid
 
 # --- Metadata Extraction ---
@@ -82,6 +73,7 @@ def extract_metadata(path: str, cid: str):
     return meta
 
 def filter_boxes(data):
+    """Recursively removes geometric keys to prevent coordinate pollution in embeddings."""
     if isinstance(data, dict):
         junk_keys = {'box_2d', 'box', 'polygon', 'detections', 'coordinates', 'bbox'}
         return {k: filter_boxes(v) for k, v in data.items() if k.lower() not in junk_keys}
@@ -103,7 +95,6 @@ class ComicEmbeddingDataset(Dataset):
         rec = self.records[idx]
         path = rec['absolute_image_path']
         cid = rec['canonical_id']
-        
         try:
             if path.startswith('s3://'):
                 if self.s3_client is None: self.s3_client = boto3.client('s3')
@@ -112,7 +103,6 @@ class ComicEmbeddingDataset(Dataset):
                 image_bytes = res['Body'].read()
             else:
                 with open(path, "rb") as f: image_bytes = f.read()
-            
             img = Image.open(BytesIO(image_bytes)).convert('RGB')
             return {'image': img, 'id': cid, 'path': path, 'status': 'success'}
         except Exception as e:
@@ -125,63 +115,40 @@ def collate_fn(batch):
 
 # --- Models ---
 def get_models(device):
-    print("Loading models...")
-    vis_processor = AutoProcessor.from_pretrained(VISUAL_MODEL)
-    vis_model = SiglipVisionModel.from_pretrained(VISUAL_MODEL).to(device).eval()
+    print(f"Loading visual backbone {VISUAL_MODEL} in float16")
+    vis_processor = SiglipImageProcessor.from_pretrained(VISUAL_MODEL)
+    # Use SiglipVisionModel specifically to avoid multimodal input_ids requirement
+    vis_model = SiglipVisionModel.from_pretrained(VISUAL_MODEL, torch_dtype=torch.float16).to(device).eval()
+    
+    print(f"Loading text embedding model {TEXT_MODEL}")
     txt_model = SentenceTransformer(TEXT_MODEL, device=str(device))
     return vis_processor, vis_model, txt_model
 
 def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=None, verbose=False):
-    """
-    Fetches VLM analysis JSON from local cache or S3.
-    """
-    # Resolve ID
     target_id = canonical_id
     if S3_LOOKUP:
-        if canonical_id in S3_LOOKUP:
-            target_id = S3_LOOKUP[canonical_id]
-        elif Path(canonical_id).name in S3_LOOKUP:
-            target_id = S3_LOOKUP[Path(canonical_id).name]
+        if canonical_id in S3_LOOKUP: target_id = S3_LOOKUP[canonical_id]
+        elif Path(canonical_id).name in S3_LOOKUP: target_id = S3_LOOKUP[Path(canonical_id).name]
         elif 'amazon' in canonical_id:
              idx = canonical_id.find('amazon')
              short = canonical_id[idx:]
              if short in S3_LOOKUP: target_id = S3_LOOKUP[short]
              
-    if verbose:
-        print(f"[LOOKUP] '{canonical_id}' -> '{target_id}'")
-
-    # 1. Try Local First
     if local_vlm_root:
-        # Standard candidates
-        candidates = [
-            os.path.join(local_vlm_root, target_id.replace('/', os.sep) + ".json"),
-            os.path.join(local_vlm_root, f"{Path(target_id).name}.json"),
-        ]
-        
-        # Try prepending CalibreComics_extracted if missing
+        p_nested = os.path.join(local_vlm_root, target_id.replace('/', os.sep) + ".json")
+        p_flat = os.path.join(local_vlm_root, f"{Path(target_id).name}.json")
+        candidates = [p_nested, p_flat]
         if "CalibreComics_extracted" not in target_id:
              candidates.append(os.path.join(local_vlm_root, "CalibreComics_extracted", target_id.replace('/', os.sep) + ".json"))
-
         for p in candidates:
-            if verbose: print(f"  [CHECK] {p}")
             if os.path.exists(p):
-                if verbose: print(f"  [FOUND] {p}")
                 try:
-                    with open(p, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    
+                    with open(p, 'r', encoding='utf-8') as f: data = json.load(f)
                     if 'OCRResult' in data: data = data['OCRResult']
                     cleaned = filter_boxes(data)
                     return json.dumps(cleaned, separators=(',', ':'))
-                except Exception as e:
-                    if verbose: print(f"  [ERROR] Read failed: {e}")
-                    pass
-        
-        # If we reach here, local lookup FAILED.
-        if verbose: print(f"  [MISSING] Could not find {target_id} locally.")
+                except: pass
         return "" 
-
-    # 2. Pure Cloud Mode (only if local root NOT provided)
     if s3_client:
         key = f"{prefix}/{target_id}.json"
         try:
@@ -190,31 +157,19 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
             if 'OCRResult' in data: data = data['OCRResult']
             cleaned = filter_boxes(data)
             return json.dumps(cleaned, separators=(',', ':'))
-        except Exception:
-            pass
-    
+        except: pass
     return ""
 
 # --- Main Worker ---
 def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', vlm_prefix='vlm_analysis', batch_size=32, start_index=0, num_workers=4, local_vlm_root=None, verbose=False):
-    import torch
-    import xarray as xr
-    import numpy as np
-    import s3fs
-    import boto3
-    from PIL import Image
-    from io import BytesIO
-    
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     vis_proc, vis_model, txt_model = get_models(device)
     s3_client = boto3.client('s3')
     
-    # Initialize S3 Store
     if s3_output.startswith("s3://"):
         s3_fs = s3fs.S3FileSystem()
         store = s3fs.S3Map(root=s3_output, s3=s3_fs, check=False)
-    else:
-        store = s3_output
+    else: store = s3_output
 
     dataset = ComicEmbeddingDataset(chunk_data)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
@@ -226,25 +181,23 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
         
         actual_batch_size = len(valid_batch) + len(error_batch)
         
-        # 1. Process Valid Items
         if valid_batch:
             images = [item['image'] for item in valid_batch]
             ids = [item['id'] for item in valid_batch]
             paths = [item['path'] for item in valid_batch]
             
-            with torch.no_grad():
-                # Visual
+            # Matched Inference Logic from precompute_embeddings.py
+            with torch.inference_mode(), torch.cuda.amp.autocast(device_type='cuda', dtype=torch.float16):
                 inputs = vis_proc(images=images, return_tensors="pt").to(device)
-                vis_embeds = vis_model(**inputs).pooler_output
+                inputs = {k: v.to(torch.float16) if v.is_floating_point() else v for k, v in inputs.items()}
+                out = vis_model(**inputs)
+                vis_embeds = out.pooler_output if hasattr(out, "pooler_output") else out.last_hidden_state[:,0,:]
                 
-                # Text
                 texts = [get_text_content(s3_client, vlm_bucket, vlm_prefix, cid, local_vlm_root, verbose) for cid in ids]
                 txt_embeds = txt_model.encode(texts, batch_size=len(texts), show_progress_bar=False)
 
-            # Metadata
             meta_batch = [extract_metadata(p, cid) for p, cid in zip(paths, ids)]
 
-            # Construct Dataset
             ds_batch = xr.Dataset(
                 data_vars={
                     'visual': (['page_id', 'visual_dim'], vis_embeds.cpu().numpy().astype('float16')),
@@ -258,10 +211,8 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
                 },
                 coords={'page_id': np.arange(current_idx, current_idx + len(ids))}
             )
-            
             ds_batch.to_zarr(store, region={'page_id': slice(current_idx, current_idx + len(ids))})
 
-        # Update global offset
         current_idx += actual_batch_size
 
     return f"Finished chunk starting at {start_index}"
@@ -269,7 +220,6 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
 def main():
     import time
     start_time = time.time()
-    
     parser = argparse.ArgumentParser()
     parser.add_argument('--manifest', required=True)
     parser.add_argument('--s3-output', required=True)
@@ -278,28 +228,20 @@ def main():
     parser.add_argument('--vlm-prefix', default='vlm_analysis')
     parser.add_argument('--local-vlm-root', default=None)
     parser.add_argument('--batch-size', type=int, default=32)
-    parser.add_argument('--workers', type=int, default=4, help="Image loading threads")
+    parser.add_argument('--workers', type=int, default=4)
     parser.add_argument('--limit', type=int, default=None)
-    parser.add_argument('--verbose', action='store_true', help='Enable debug logging for file lookup')
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
     
-    if args.s3_manifest:
-        load_s3_lookup(args.s3_manifest)
-        
-    print(f"Loading manifest: {args.manifest}")
+    if args.s3_manifest: load_s3_lookup(args.s3_manifest)
     df = pd.read_csv(args.manifest)
-    if args.limit:
-        df = df.head(args.limit)
-        print(f"Limiting to first {args.limit} rows.")
-        
+    if args.limit: df = df.head(args.limit)
     all_data = df.to_dict('records')
     total_len = len(all_data)
     
-    # Pre-allocate logic
     import shutil
     if args.limit and not args.s3_output.startswith("s3://"):
-        if os.path.exists(args.s3_output):
-            shutil.rmtree(args.s3_output)
+        if os.path.exists(args.s3_output): shutil.rmtree(args.s3_output)
             
     if not os.path.exists(args.s3_output) and not args.s3_output.startswith("s3://"):
         print(f"Creating skeleton: {args.s3_output}")
@@ -319,19 +261,16 @@ def main():
         )
         ds.to_zarr(args.s3_output, compute=False, mode='w')
 
-    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, start_index=0, num_workers=args.workers, local_vlm_root=args.local_vlm_root, verbose=args.verbose)
+    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, 0, args.workers, args.local_vlm_root, args.verbose)
     
     elapsed = time.time() - start_time
     print(f"\nTotal Runtime: {elapsed:.2f} seconds")
     if args.limit:
         print(f"Estimated time for 1.22M pages: {(elapsed/args.limit * 1220000 / 3600):.2f} hours")
-
-    print("\n--- Xarray Verification ---")
     try:
         ds_verify = xr.open_zarr(args.s3_output)
         print(ds_verify)
-    except Exception as e:
-        print(f"Verification failed: {e}")
+    except: pass
 
 if __name__ == "__main__":
     main()
