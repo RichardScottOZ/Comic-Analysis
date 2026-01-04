@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-Generate PSS Embeddings to Zarr (Aligned with CoSMo v4 Training)
-Optimized for high-throughput local GPU and cloud distributed runs.
+Generate PSS Embeddings to Zarr (Optimized for Local & Cloud)
+Features:
+- Xarray Region-Writes
+- Multi-threaded Image Loading (DataLoader)
+- Metadata extraction
+- Local VLM root with S3 fallback + Manifest Lookup
+- Runtime tracking
+- VRAM Optimized (FP16 + Inference Mode)
+- Correct Text serialization for PSS Classifier
 """
 
 import os
@@ -21,17 +28,17 @@ from PIL import Image
 from tqdm import tqdm
 from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
-from transformers import AutoModel, AutoProcessor, SiglipImageProcessor, SiglipVisionModel
+from transformers import AutoProcessor, SiglipVisionModel
 from sentence_transformers import SentenceTransformer
 from io import BytesIO
 
-# --- Configuration (Matching CoSMo v4) ---
+# --- Configuration ---
 VISUAL_MODEL = "google/siglip-so400m-patch14-384"
 TEXT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
 VISUAL_DIM = 1152
 TEXT_DIM = 1024
 
-# Global Lookup for ID mapping
+# Global Lookup
 S3_LOOKUP = {}
 
 def load_s3_lookup(manifest_path):
@@ -73,7 +80,6 @@ def extract_metadata(path: str, cid: str):
     return meta
 
 def filter_boxes(data):
-    """Recursively removes geometric keys to prevent coordinate pollution in embeddings."""
     if isinstance(data, dict):
         junk_keys = {'box_2d', 'box', 'polygon', 'detections', 'coordinates', 'bbox'}
         return {k: filter_boxes(v) for k, v in data.items() if k.lower() not in junk_keys}
@@ -95,6 +101,7 @@ class ComicEmbeddingDataset(Dataset):
         rec = self.records[idx]
         path = rec['absolute_image_path']
         cid = rec['canonical_id']
+        
         try:
             if path.startswith('s3://'):
                 if self.s3_client is None: self.s3_client = boto3.client('s3')
@@ -103,6 +110,7 @@ class ComicEmbeddingDataset(Dataset):
                 image_bytes = res['Body'].read()
             else:
                 with open(path, "rb") as f: image_bytes = f.read()
+            
             img = Image.open(BytesIO(image_bytes)).convert('RGB')
             return {'image': img, 'id': cid, 'path': path, 'status': 'success'}
         except Exception as e:
@@ -115,13 +123,12 @@ def collate_fn(batch):
 
 # --- Models ---
 def get_models(device):
-    print(f"Loading visual backbone {VISUAL_MODEL} in float16")
-    vis_processor = SiglipImageProcessor.from_pretrained(VISUAL_MODEL)
-    # Use SiglipVisionModel specifically to avoid multimodal input_ids requirement
+    print("Loading models in float16...")
+    vis_processor = AutoProcessor.from_pretrained(VISUAL_MODEL)
+    # Use 'torch_dtype' instead of deprecated 'dtype' if needed, but 'torch_dtype' is standard
     vis_model = SiglipVisionModel.from_pretrained(VISUAL_MODEL, torch_dtype=torch.float16).to(device).eval()
-    
-    print(f"Loading text embedding model {TEXT_MODEL}")
     txt_model = SentenceTransformer(TEXT_MODEL, device=str(device))
+    txt_model.half()
     return vis_processor, vis_model, txt_model
 
 def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=None, verbose=False):
@@ -133,7 +140,7 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
              idx = canonical_id.find('amazon')
              short = canonical_id[idx:]
              if short in S3_LOOKUP: target_id = S3_LOOKUP[short]
-             
+    if verbose: print(f"[LOOKUP] '{canonical_id}' -> '{target_id}'")
     if local_vlm_root:
         p_nested = os.path.join(local_vlm_root, target_id.replace('/', os.sep) + ".json")
         p_flat = os.path.join(local_vlm_root, f"{Path(target_id).name}.json")
@@ -141,13 +148,16 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
         if "CalibreComics_extracted" not in target_id:
              candidates.append(os.path.join(local_vlm_root, "CalibreComics_extracted", target_id.replace('/', os.sep) + ".json"))
         for p in candidates:
+            if verbose: print(f"  [CHECK] {p}")
             if os.path.exists(p):
+                if verbose: print(f"  [FOUND] {p}")
                 try:
                     with open(p, 'r', encoding='utf-8') as f: data = json.load(f)
                     if 'OCRResult' in data: data = data['OCRResult']
                     cleaned = filter_boxes(data)
                     return json.dumps(cleaned, separators=(',', ':'))
                 except: pass
+        if verbose: print(f"  [MISSING] Could not find {target_id} locally.")
         return "" 
     if s3_client:
         key = f"{prefix}/{target_id}.json"
@@ -160,7 +170,6 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
         except: pass
     return ""
 
-# --- Main Worker ---
 def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', vlm_prefix='vlm_analysis', batch_size=32, start_index=0, num_workers=4, local_vlm_root=None, verbose=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     vis_proc, vis_model, txt_model = get_models(device)
@@ -170,24 +179,20 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
         s3_fs = s3fs.S3FileSystem()
         store = s3fs.S3Map(root=s3_output, s3=s3_fs, check=False)
     else: store = s3_output
-
     dataset = ComicEmbeddingDataset(chunk_data)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
-
     current_idx = start_index
-    
     for valid_batch, error_batch in tqdm(loader, desc=f"Worker {start_index}"):
         if not valid_batch and not error_batch: continue
-        
         actual_batch_size = len(valid_batch) + len(error_batch)
-        
         if valid_batch:
+            if verbose: print(f"[Worker {start_index}] Batch starting: {valid_batch[0]['id']}")
             images = [item['image'] for item in valid_batch]
             ids = [item['id'] for item in valid_batch]
             paths = [item['path'] for item in valid_batch]
             
-            # Matched Inference Logic from precompute_embeddings.py
-            with torch.inference_mode(), torch.cuda.amp.autocast(device_type='cuda', dtype=torch.float16):
+            # MODERN AUTOCAST SYNTAX
+            with torch.inference_mode(), torch.amp.autocast('cuda', dtype=torch.float16):
                 inputs = vis_proc(images=images, return_tensors="pt").to(device)
                 inputs = {k: v.to(torch.float16) if v.is_floating_point() else v for k, v in inputs.items()}
                 out = vis_model(**inputs)
@@ -200,8 +205,8 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
 
             ds_batch = xr.Dataset(
                 data_vars={
-                    'visual': (['page_id', 'visual_dim'], vis_embeds.cpu().numpy().astype('float16')),
-                    'text': (['page_id', 'text_dim'], txt_embeds.astype('float16')),
+                    'visual': (['page_id', 'visual_dim'], vis_embeds.cpu().numpy().astype('float32')),
+                    'text': (['page_id', 'text_dim'], txt_embeds.astype('float32')),
                     'ids': (['page_id'], np.array(ids, dtype='<U128')),
                     'series': (['page_id'], np.array([m['series'] for m in meta_batch], dtype='<U128')),
                     'volume': (['page_id'], np.array([m['volume'] for m in meta_batch], dtype='<U32')),
@@ -214,7 +219,6 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
             ds_batch.to_zarr(store, region={'page_id': slice(current_idx, current_idx + len(ids))})
 
         current_idx += actual_batch_size
-
     return f"Finished chunk starting at {start_index}"
 
 def main():
@@ -245,11 +249,13 @@ def main():
             
     if not os.path.exists(args.s3_output) and not args.s3_output.startswith("s3://"):
         print(f"Creating skeleton: {args.s3_output}")
+        from numcodecs import Blosc
+        compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
         coords = {'page_id': np.arange(total_len), 'visual_dim': np.arange(VISUAL_DIM), 'text_dim': np.arange(TEXT_DIM)}
         ds = xr.Dataset(
             data_vars={
-                'visual': (['page_id', 'visual_dim'], np.zeros((total_len, VISUAL_DIM), dtype='float16')),
-                'text': (['page_id', 'text_dim'], np.zeros((total_len, TEXT_DIM), dtype='float16')),
+                'visual': (['page_id', 'visual_dim'], np.zeros((total_len, VISUAL_DIM), dtype='float32')),
+                'text': (['page_id', 'text_dim'], np.zeros((total_len, TEXT_DIM), dtype='float32')),
                 'ids': (['page_id'], np.full(total_len, '', dtype='<U128')),
                 'series': (['page_id'], np.full(total_len, '', dtype='<U128')),
                 'volume': (['page_id'], np.full(total_len, '', dtype='<U32')),
@@ -259,14 +265,15 @@ def main():
             },
             coords=coords
         )
-        ds.to_zarr(args.s3_output, compute=False, mode='w')
+        # Apply encoding
+        encoding = {v: {'compressor': compressor} for v in ds.data_vars}
+        ds.to_zarr(args.s3_output, compute=False, mode='w', encoding=encoding)
 
     process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, 0, args.workers, args.local_vlm_root, args.verbose)
     
     elapsed = time.time() - start_time
     print(f"\nTotal Runtime: {elapsed:.2f} seconds")
-    if args.limit:
-        print(f"Estimated time for 1.22M pages: {(elapsed/args.limit * 1220000 / 3600):.2f} hours")
+    if args.limit: print(f"Estimated time for 1.22M pages: {(elapsed/args.limit * 1220000 / 3600):.2f} hours")
     try:
         ds_verify = xr.open_zarr(args.s3_output)
         print(ds_verify)
