@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
 Manifest-driven Zhipu AI (GLM-4V-Flash) Batch Processing
-Uses Z.ai API to analyze comic pages. Supports Analysis and Grounding modes.
+Enhanced version with Guided Mode (R-CNN), Integrated Grounding, and JSON Repair.
 
-Usage:
-    python src/version2/batch_vlm_zhipu.py \
-        --manifest manifests/calibrecomics-extracted_manifest.csv \
-        --output-dir E:/Comic_Analysis_Results_v2/zhipu_results \
-        --api-key YOUR_KEY \
-        --workers 3
+Supports:
+- Structured Analysis (Characters, Dialogue, Plot)
+- Integrated Grounding (Bounding Boxes for Panels/Text)
+- Guided Mode (Feeding Faster R-CNN boxes into the VLM)
+- WSL/Windows path interoperability
 """
 
 import os
@@ -18,9 +17,12 @@ import json
 import base64
 import requests
 import time
+import re
 from pathlib import Path
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# --- Path Interoperability ---
 
 def convert_to_wsl_path(path_str):
     """Convert Windows path to WSL path if running on Linux."""
@@ -32,53 +34,117 @@ def convert_to_wsl_path(path_str):
     return Path(path_str)
 
 # --- Prompts ---
-def get_prompt(mode):
-    if mode == 'grounding':
-        return """Identify the bounding box [xmin, ymin, xmax, ymax] (0-1000) for:
-1. Every PANEL (labelled 'panel')
-2. Every CHARACTER (labelled 'person')
-3. Every FACE (labelled 'face')
-4. Every SPEECH BUBBLE (labelled 'text')
 
-STRICT RULES:
-- Return ONLY ONE label per distinct region. 
-- Prioritize specific labels (face/text) over general ones.
+def create_structured_prompt():
+    return """Analyze this comic page and provide a detailed structured analysis in JSON format. Focus on:
+1. **Panel Analysis**: Identify and describe each panel
+2. **Character Identification**: Note characters, their actions, and dialogue
+3. **Story Elements**: Plot points, setting, mood
+4. **Visual Elements**: Art style, colors, composition
+5. **Text Elements**: Speech bubbles, captions, sound effects
 
-Return ONLY valid JSON:
-{
-  "objects": [
-    {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
-  ]
-}
-"""
-    elif mode == 'analysis':
-        return """Analyze this comic page. Return ONLY valid JSON with this structure:
+Return ONLY valid JSON with this structure:
 {
   "overall_summary": "Brief description of the page",
   "panels": [
     {
       "panel_number": 1,
-      "description": "Visual description",
-      "speakers": [{"character": "Name", "dialogue": "Text"}],
-      "actions": ["Action1"]
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
     }
-  ]
-}
-"""
-    else: # Full / Integrated
-        return """Analyze this comic page. Provide structured analysis AND bounding boxes.
+  ],
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
+}"""
+
+def get_integrated_prompt():
+    return """Analyze this comic page. Provide a detailed structured analysis AND bounding boxes in JSON format.
 
 REQUIREMENTS:
-1. Identify every panel with BOUNDING BOX [xmin, ymin, xmax, ymax] (0-1000).
-2. Identify characters, faces, and text bubbles with bounding boxes.
-3. Transcribe dialogue.
+1. Identify every panel. For each panel, provide its BOUNDING BOX [xmin, ymin, xmax, ymax] (0-1000).
+2. Describe the visual content and action.
+3. Transcribe all dialogue and attribute it to characters.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON with this structure:
 {
-  "objects": [{"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}],
-  "panels": [{"panel_number": 1, "description": "...", "speakers": [...]}]
-}
-"""
+  "overall_summary": "Brief description of the page",
+  "objects": [
+    {"label": "panel|person|face|text", "box_2d": [xmin, ymin, xmax, ymax]}
+  ],
+  "panels": [
+    {
+      "panel_number": 1,
+      "caption": "Panel title/description",
+      "description": "Detailed panel description",
+      "speakers": [
+        {
+          "character": "Character name",
+          "dialogue": "What they say",
+          "speech_type": "dialogue|thought|narration"
+        }
+      ],
+      "key_elements": ["element1", "element2"],
+      "actions": ["action1", "action2"]
+    }
+  ],
+  "summary": {
+    "characters": ["Character1", "Character2"],
+    "setting": "Setting description",
+    "plot": "Plot summary",
+    "dialogue": ["Line1", "Line2"]
+  }
+}"""
+
+def get_enhanced_prompt(rcnn_data):
+    detections = []
+    if rcnn_data and 'detections' in rcnn_data:
+        for d in rcnn_data['detections']:
+            if d['score'] > 0.5:
+                detections.append({"label": d['label'], "box": [int(x) for x in d['box_xyxy']]})
+    
+    json_context = json.dumps(detections, indent=None)
+    return f"""Analyze this comic page and provide a detailed structured analysis in JSON format.
+
+GUIDANCE:
+I have pre-detected the following objects using a specialized model (Faster R-CNN):
+{json_context}
+
+Use these detections to guide your analysis. Return ONLY valid JSON with the standard structure (panels, summary, overall_summary)."""
+
+# --- JSON Repair ---
+
+def repair_json(json_str):
+    json_str = json_str.strip()
+    if json_str.startswith('```'):
+        json_str = re.sub(r'^```(?:json)?', '', json_str)
+        json_str = re.sub(r'```$', '', json_str)
+    json_str = json_str.strip()
+    start = json_str.find('{')
+    if start == -1: return json_str
+    end = json_str.rfind('}')
+    if end != -1 and end > start: json_str = json_str[start:end+1]
+    else: json_str = json_str[start:]
+    
+    # Simple balancing
+    if json_str.count('"') % 2 != 0: json_str += '"'
+    if json_str.count('[') > json_str.count(']'): json_str += ']'
+    if json_str.count('{') > json_str.count('}'): json_str += '}'
+    return json_str
+
+# --- API Interaction ---
 
 def encode_image(image_path):
     try:
@@ -86,55 +152,45 @@ def encode_image(image_path):
             header = image_file.read(12)
             image_file.seek(0)
             content = image_file.read()
-            
-        if header.startswith(b'\x89PNG\r\n\x1a\n'): mime = 'image/png'
-        elif header.startswith(b'\xff\xd8\xff'): mime = 'image/jpeg'
-        else: mime = 'image/jpeg'
-
+        mime = 'image/png' if header.startswith(b'\x89PNG\r\n\x1a\n') else 'image/jpeg'
         return f"data:{mime};base64,{base64.b64encode(content).decode('utf-8')}"
-    except Exception as e:
-        return None
+    except: return None
 
 def process_single_image(args, row):
     canonical_id = row['canonical_id']
     image_path_raw = row['absolute_image_path']
-    local_path = None
-
-    # Resolve Path
-    if args.image_root:
-        if image_path_raw.startswith('s3://'):
-            try:
-                relative_path = image_path_raw.split('/', 3)[3]
-                root = convert_to_wsl_path(args.image_root)
-                local_path = root / relative_path
-            except:
-                return {'canonical_id': canonical_id, 'status': 'error', 'error': 'Invalid S3 URI'}
-        else:
-            root = convert_to_wsl_path(args.image_root)
-            local_path = root / image_path_raw
-    else:
-        local_path = convert_to_wsl_path(image_path_raw)
-
+    
+    # 1. Resolve Local Path
+    local_path = convert_to_wsl_path(args.image_root) / image_path_raw if args.image_root else convert_to_wsl_path(image_path_raw)
     out_dir = convert_to_wsl_path(args.output_dir)
     out_path = out_dir / f"{canonical_id}.json"
     
-    # Check if exists (Skip)
-    if out_path.exists():
-        return {'canonical_id': canonical_id, 'status': 'skipped'}
+    if out_path.exists(): return {'canonical_id': canonical_id, 'status': 'skipped'}
+    if not local_path.exists(): return {'canonical_id': canonical_id, 'status': 'error', 'error': f'Not found: {local_path}'}
 
-    if not local_path.exists():
-        return {'canonical_id': canonical_id, 'status': 'error', 'error': f'Image not found: {local_path}'}
+    # 2. Resolve R-CNN JSON (Guided Mode)
+    rcnn_prompt = None
+    if args.rcnn_dir:
+        rcnn_root = convert_to_wsl_path(args.rcnn_dir)
+        p_exact = rcnn_root / f"{canonical_id}.json"
+        p_no_ext = rcnn_root / f"{canonical_id.rsplit('.', 1)[0]}.json"
+        p_final = p_exact if p_exact.exists() else (p_no_ext if p_no_ext.exists() else None)
+        if p_final:
+            try:
+                with open(p_final, 'r', encoding='utf-8') as f:
+                    rcnn_prompt = get_enhanced_prompt(json.load(f))
+            except: pass
 
-    # API Call
+    # 3. Select Prompt
+    if rcnn_prompt: prompt = rcnn_prompt
+    elif args.include_grounding: prompt = get_integrated_prompt()
+    else: prompt = create_structured_prompt()
+
+    # 4. API Call
     try:
         uri = encode_image(local_path)
-        if not uri: return {'canonical_id': canonical_id, 'status': 'error', 'error': 'Encoding failed'}
-        
         url = "https://api.z.ai/api/paas/v4/chat/completions"
         headers = {"Authorization": f"Bearer {args.api_key}", "Content-Type": "application/json"}
-        
-        prompt = get_prompt(args.mode)
-        
         payload = {
             "model": args.model,
             "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": uri}}]}],
@@ -142,65 +198,61 @@ def process_single_image(args, row):
             "temperature": 0.1
         }
         
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response = requests.post(url, headers=headers, json=payload, timeout=args.timeout)
         
         if response.status_code == 200:
             content = response.json()['choices'][0]['message']['content']
-            if '```json' in content:
-                content = content.split('```json')[1].split('```')[0]
-            elif '```' in content:
-                content = content.split('```')[1].split('```')[0]
-            
             try:
-                json_content = json.loads(content)
+                # Attempt to parse
+                clean_content = repair_json(content)
+                json_content = json.loads(clean_content, strict=False)
+                
+                # Metadata
                 json_content['canonical_id'] = canonical_id
                 json_content['model'] = args.model
                 json_content['processed_at'] = time.time()
+                if rcnn_prompt: json_content['guided_by_rcnn'] = True
                 
                 out_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(out_path, 'w', encoding='utf-8') as f:
                     json.dump(json_content, f, indent=2)
-                
-                return {'canonical_id': canonical_id, 'status': 'success'}
-            except json.JSONDecodeError:
-                 return {'canonical_id': canonical_id, 'status': 'error', 'error': 'Invalid JSON response'}
+                return {'canonical_id': canonical_id, 'status': 'success', 'guided': bool(rcnn_prompt)}
+            except Exception as e:
+                 return {'canonical_id': canonical_id, 'status': 'error', 'error': f"JSON Error: {str(e)} | Content: {content[:100]}..."}
         else:
-            return {'canonical_id': canonical_id, 'status': 'error', 'error': f"API {response.status_code}: {response.text}"}
-
+            return {'canonical_id': canonical_id, 'status': 'error', 'error': f"API {response.status_code}: {response.text[:200]}"}
     except Exception as e:
         return {'canonical_id': canonical_id, 'status': 'error', 'error': str(e)}
 
 def main():
-    parser = argparse.ArgumentParser(description='Batch Zhipu AI Processing')
+    parser = argparse.ArgumentParser(description='Enhanced Batch Zhipu AI Processing')
     parser.add_argument('--manifest', required=True)
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--image-root', required=False)
+    parser.add_argument('--rcnn-dir', required=False, help='Path to R-CNN JSONs for Guided Mode')
+    parser.add_argument('--include-grounding', action='store_true', help='Include bounding box grounding prompt')
     parser.add_argument('--api-key', default=os.environ.get("Z_API_KEY"))
     parser.add_argument('--model', default="glm-4.6v-flash") 
-    parser.add_argument('--mode', choices=['analysis', 'grounding', 'full'], default='full')
-    parser.add_argument('--max-tokens', type=int, default=4095)
+    parser.add_argument('--max-tokens', type=int, default=8192)
     parser.add_argument('--workers', type=int, default=3)
+    parser.add_argument('--timeout', type=int, default=120)
     parser.add_argument('--limit', type=int, default=None)
     args = parser.parse_args()
 
     if not args.api_key:
-        print("Error: API Key required via --api-key or Z_API_KEY env var.")
+        print("Error: API Key required.")
         return
 
-    rows = []
     with open(args.manifest, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            rows.append(row)
-    
-    if args.limit:
-        rows = rows[:args.limit]
+        rows = list(csv.DictReader(f))
+    if args.limit: rows = rows[:args.limit]
         
     print(f"Loaded {len(rows)} items. Starting {args.workers} threads...")
     
     success = 0
     errors = 0
     skipped = 0
+    guided = 0
     
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         future_to_row = {executor.submit(process_single_image, args, row): row for row in rows}
@@ -209,19 +261,16 @@ def main():
             result = future.result()
             if result['status'] == 'success':
                 success += 1
+                if result.get('guided'): guided += 1
             elif result['status'] == 'skipped':
                 skipped += 1
             else:
                 errors += 1
-                if errors <= 5:
-                    print(f"\n[ERROR] {result['canonical_id']}: {result.get('error')}")
+                if errors <= 5: print(f"\n[ERROR] {result['canonical_id']}: {result.get('error')}")
             
-            pbar.set_description(f"Success: {success} | Skipped: {skipped} | Errors: {errors}")
+            pbar.set_description(f"Succ: {success} | Guided: {guided} | Skip: {skipped} | Err: {errors}")
 
-    print(f"\n--- Complete ---")
-    print(f"Success: {success}")
-    print(f"Skipped: {skipped}")
-    print(f"Errors:  {errors}")
+    print(f"\n--- Complete ---\nSuccess: {success} (Guided: {guided})\nSkipped: {skipped}\nErrors:  {errors}")
 
 if __name__ == "__main__":
     main()
