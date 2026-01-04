@@ -33,8 +33,21 @@ def extract_metadata(path: str, cid: str):
     
     if len(parts) >= 2:
         parent = parts[-2]
-        meta['series'] = clean_series_name(parent)
-        vol_match = re.search(r'(v\d+|\(\d{4}-\d{4}\)|\d{4})', parent)
+        
+        # Heuristic: Check for junk parent folders
+        if parent.lower() in ['jpg4cbz', 'working_files'] and len(parts) >= 3:
+            # Use Grandparent
+            series_folder = parts[-3]
+        else:
+            series_folder = parent
+            
+        meta['series'] = clean_series_name(series_folder)
+        
+        # Volume extraction (try series folder first, then parent if different)
+        vol_match = re.search(r'(v\d+|\(\d{4}-\d{4}\)|\d{4})', series_folder)
+        if not vol_match and series_folder != parent:
+             vol_match = re.search(r'(v\d+|\(\d{4}-\d{4}\)|\d{4})', parent)
+             
         if vol_match: meta['volume'] = vol_match.group(1)
         
     return meta
