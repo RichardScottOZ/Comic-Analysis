@@ -100,11 +100,16 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
 
     total_in_chunk = len(chunk_data)
     
-    for i in range(0, total_in_chunk, batch_size):
-        batch = chunk_data[i : i+batch_size]
-        actual_batch_size = len(batch)
+    for i in range(0, len(chunk_data), batch_size):
+        batch = chunk_data[i:i+batch_size]
         
-        images, ids_batch, meta_batch = [], [], []
+        # Log progress
+        if len(batch) > 0:
+            print(f"[Worker {start_index}] Batch {i//batch_size}: {batch[0]['canonical_id']} ... ({len(batch)} items)")
+        
+        images = []
+        valid_indices = []
+        ids_batch = []
         for item in batch:
             path = item['absolute_image_path']
             cid = item['canonical_id']
