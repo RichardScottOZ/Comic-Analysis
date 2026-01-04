@@ -7,6 +7,7 @@ Features:
 - Metadata extraction
 - Local VLM root with S3 fallback + Manifest Lookup
 - Runtime tracking
+- Verbose logging for path debugging
 """
 
 import os
@@ -46,10 +47,14 @@ def load_s3_lookup(manifest_path):
         reader = csv.DictReader(f)
         for row in reader:
             cid = row['canonical_id']
-            # Key by the suffix part (e.g. amazon/Title/Page)
-            if 'amazon/' in cid:
-                short_id = cid[cid.find('amazon/'):]
-                S3_LOOKUP[short_id] = cid
+            # Store the full ID
+            # Also store suffix parts to handle partial matches from local manifest
+            parts = cid.split('/')
+            for i in range(len(parts)):
+                suffix = "/".join(parts[i:])
+                if suffix not in S3_LOOKUP:
+                    S3_LOOKUP[suffix] = cid
+            # Always ensure filename is keyed
             S3_LOOKUP[Path(cid).name] = cid
 
 # --- Metadata Extraction ---
@@ -126,10 +131,9 @@ def get_models(device):
     txt_model = SentenceTransformer(TEXT_MODEL, device=str(device))
     return vis_processor, vis_model, txt_model
 
-def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=None):
+def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=None, verbose=False):
     """
     Fetches VLM analysis JSON from local cache or S3.
-    Strictly enforced local if root provided.
     """
     # Resolve ID
     target_id = canonical_id
@@ -142,31 +146,39 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
              idx = canonical_id.find('amazon')
              short = canonical_id[idx:]
              if short in S3_LOOKUP: target_id = S3_LOOKUP[short]
+             
+    if verbose:
+        print(f"[LOOKUP] '{canonical_id}' -> '{target_id}'")
 
-    # 1. Strict Local Mode
+    # 1. Try Local First
     if local_vlm_root:
-        # standard candidates
-        p_nested = os.path.join(local_vlm_root, target_id.replace('/', os.sep) + ".json")
-        p_flat = os.path.join(local_vlm_root, f"{Path(target_id).name}.json")
+        # Standard candidates
+        candidates = [
+            os.path.join(local_vlm_root, target_id.replace('/', os.sep) + ".json"),
+            os.path.join(local_vlm_root, f"{Path(target_id).name}.json"),
+        ]
         
-        # Try prepending CalibreComics_extracted just in case
-        candidates = [p_nested, p_flat]
+        # Try prepending CalibreComics_extracted if missing
         if "CalibreComics_extracted" not in target_id:
              candidates.append(os.path.join(local_vlm_root, "CalibreComics_extracted", target_id.replace('/', os.sep) + ".json"))
 
         for p in candidates:
+            if verbose: print(f"  [CHECK] {p}")
             if os.path.exists(p):
+                if verbose: print(f"  [FOUND] {p}")
                 try:
                     with open(p, 'r', encoding='utf-8') as f:
                         data = json.load(f)
+                    
                     if 'OCRResult' in data: data = data['OCRResult']
                     cleaned = filter_boxes(data)
                     return json.dumps(cleaned, separators=(',', ':'))
-                except Exception:
+                except Exception as e:
+                    if verbose: print(f"  [ERROR] Read failed: {e}")
                     pass
         
         # If we reach here, local lookup FAILED.
-        # print(f"[MAPPING MISS] {target_id}")
+        if verbose: print(f"  [MISSING] Could not find {target_id} locally.")
         return "" 
 
     # 2. Pure Cloud Mode (only if local root NOT provided)
@@ -184,7 +196,7 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
     return ""
 
 # --- Main Worker ---
-def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', vlm_prefix='vlm_analysis', batch_size=32, start_index=0, num_workers=4, local_vlm_root=None):
+def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', vlm_prefix='vlm_analysis', batch_size=32, start_index=0, num_workers=4, local_vlm_root=None, verbose=False):
     import torch
     import xarray as xr
     import numpy as np
@@ -226,7 +238,7 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
                 vis_embeds = vis_model(**inputs).pooler_output
                 
                 # Text
-                texts = [get_text_content(s3_client, vlm_bucket, vlm_prefix, cid, local_vlm_root) for cid in ids]
+                texts = [get_text_content(s3_client, vlm_bucket, vlm_prefix, cid, local_vlm_root, verbose) for cid in ids]
                 txt_embeds = txt_model.encode(texts, batch_size=len(texts), show_progress_bar=False)
 
             # Metadata
@@ -268,6 +280,7 @@ def main():
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--workers', type=int, default=4, help="Image loading threads")
     parser.add_argument('--limit', type=int, default=None)
+    parser.add_argument('--verbose', action='store_true', help='Enable debug logging for file lookup')
     args = parser.parse_args()
     
     if args.s3_manifest:
@@ -282,7 +295,7 @@ def main():
     all_data = df.to_dict('records')
     total_len = len(all_data)
     
-    # Pre-allocate logic (Local Test Mode)
+    # Pre-allocate logic
     import shutil
     if args.limit and not args.s3_output.startswith("s3://"):
         if os.path.exists(args.s3_output):
@@ -306,7 +319,7 @@ def main():
         )
         ds.to_zarr(args.s3_output, compute=False, mode='w')
 
-    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, start_index=0, num_workers=args.workers, local_vlm_root=args.local_vlm_root)
+    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, start_index=0, num_workers=args.workers, local_vlm_root=args.local_vlm_root, verbose=args.verbose)
     
     elapsed = time.time() - start_time
     print(f"\nTotal Runtime: {elapsed:.2f} seconds")
