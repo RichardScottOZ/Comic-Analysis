@@ -40,18 +40,36 @@ def extract_metadata(path: str, cid: str):
     return meta
 
 def check_manifest():
-    print(f"Reading {MANIFEST}...")
-    df = pd.read_csv(MANIFEST)
-    
-    max_lens = {'series': 0, 'volume': 0, 'issue': 0, 'page': 0, 'source': 0}
-    samples = []
-    
+    # ... (existing setup) ...
+    calibre_audit_data = []
+    seen_calibre_keys = set()
+
     print("Parsing metadata...")
     for idx, row in tqdm(df.iterrows(), total=len(df)):
         path = row['absolute_image_path']
         cid = row['canonical_id']
         meta = extract_metadata(path, cid)
         
+        # Collect Calibre Audit Data
+        if meta.get('source') == 'calibre':
+            parts = Path(path).parts
+            raw_parent = parts[-2] if len(parts) >= 2 else ""
+            raw_grandparent = parts[-3] if len(parts) >= 3 else ""
+            
+            # Key by folder structure to avoid 300k rows
+            audit_key = (raw_parent, raw_grandparent)
+            
+            if audit_key not in seen_calibre_keys:
+                seen_calibre_keys.add(audit_key)
+                calibre_audit_data.append({
+                    'canonical_id': cid,
+                    'extracted_series': meta['series'],
+                    'extracted_volume': meta['volume'],
+                    'raw_parent': raw_parent,
+                    'raw_grandparent': raw_grandparent,
+                    'full_path': path
+                })
+
         for k, v in meta.items():
             if len(v) > max_lens[k]:
                 max_lens[k] = len(v)
@@ -62,6 +80,11 @@ def check_manifest():
     print("\n--- Max Lengths ---")
     for k, v in max_lens.items():
         print(f"{k}: {v}")
+
+    # Save Calibre Audit
+    if calibre_audit_data:
+        print(f"\nSaving {len(calibre_audit_data)} unique Calibre folder patterns to calibre_metadata_audit.csv...")
+        pd.DataFrame(calibre_audit_data).to_csv("calibre_metadata_audit.csv", index=False)
 
     print("\n--- Samples ---")
     for s in samples:
