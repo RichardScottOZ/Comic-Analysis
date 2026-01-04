@@ -164,7 +164,7 @@ def classify_zarr(zarr_path, checkpoint_path):
 
     # 4. Report
     print("\n--- Predictions (First 20) ---")
-    for i in range(min(20, len(preds))):
+    for i in range(min(25, len(preds))):
         label_idx = preds[i]
         label = CLASS_NAMES[label_idx] if label_idx < len(CLASS_NAMES) else f"Class {label_idx}"
         print(f"{str(ids_full[i])[:60]:<60} | {label:<15}")
