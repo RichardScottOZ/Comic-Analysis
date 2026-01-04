@@ -90,12 +90,13 @@ def extract_metadata(path: str, cid: str):
         meta['series'] = clean_series_name(series_folder)
         
         # Improved volume regex
-        vol_pattern = r'[ _\s\-\](v\d+|vol\.?\s?_?\d+|volume\s?\d+|\d{4}-\d{4}|\d{4})[ _\s\-\)]'
+        # Move hyphen to end of character class to avoid range issues
+        vol_pattern = r'[_\s\(-](v\d+|vol\.?\s?_?\d+|\d{4}\-\d{4}|\d{4})[_\s\)-]'
         vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
         if not vol_match and series_folder != parent:
              vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
         if not vol_match:
-             vol_match = re.search(r'[ _\s](v\d+|vol\.?\s?_?\d+|volume\s?\d+)$', series_folder, re.IGNORECASE)
+             vol_match = re.search(r'[_\s](v\d+|vol\.?\s?_?\d+|volume\s?\d+)$', series_folder, re.IGNORECASE)
              
         if vol_match: meta['volume'] = vol_match.group(1)
              
