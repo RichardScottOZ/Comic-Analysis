@@ -4,11 +4,12 @@ Generate PSS Embeddings to Zarr (Optimized for Local & Cloud)
 Features:
 - Xarray Region-Writes
 - Multi-threaded Image Loading (DataLoader)
-- Metadata extraction
+- Metadata extraction (Regex improved)
 - Local VLM root with S3 fallback + Manifest Lookup
 - Runtime tracking
 - VRAM Optimized (FP16 + Inference Mode)
 - Correct Text serialization for PSS Classifier
+- Float32 Output for Training Consistency
 """
 
 import os
@@ -31,6 +32,7 @@ from torch.utils.data import Dataset, DataLoader
 from transformers import AutoProcessor, SiglipVisionModel
 from sentence_transformers import SentenceTransformer
 from io import BytesIO
+from numcodecs import Blosc
 
 # --- Configuration ---
 VISUAL_MODEL = "google/siglip-so400m-patch14-384"
@@ -63,20 +65,85 @@ def clean_series_name(name: str) -> str:
     return cleaned.lower()
 
 def extract_metadata(path: str, cid: str):
+
     parts = Path(path).parts
+
     filename = parts[-1] if parts else ""
+
     meta = {'series': 'unknown', 'volume': 'unknown', 'issue': '000', 'page': 'p000', 'source': 'unknown'}
+
+    
+
     if 'amazon' in path.lower(): meta['source'] = 'amazon'
+
     elif 'calibre' in path.lower(): meta['source'] = 'calibre'
+
+    elif 'neonichiban' in path.lower(): meta['source'] = 'neonichiban'
+
+    elif 'humble' in path.lower(): meta['source'] = 'humble_bundle'
+
+    
+
     page_match = re.search(r'p(\d{3,4})', filename)
+
     if page_match: meta['page'] = f"p{page_match.group(1)}"
+
+    
+
     issue_match = re.search(r'(\d{3})', filename)
+
     if issue_match: meta['issue'] = issue_match.group(1)
+
+    
+
     if len(parts) >= 2:
+
         parent = parts[-2]
-        meta['series'] = clean_series_name(parent)
-        vol_match = re.search(r'(v\d+|\(\d{4}-\d{4}\)|\d{4})', parent)
-        if vol_match: meta['volume'] = vol_match.group(1)
+
+        
+
+        # Heuristic: Check for junk parent folders
+
+        if parent.lower() in ['jpg4cbz', 'working_files'] and len(parts) >= 3:
+
+            # Use Grandparent
+
+            series_folder = parts[-3]
+
+        else:
+
+            series_folder = parent
+
+            
+
+        meta['series'] = clean_series_name(series_folder)
+
+        
+
+        # Improved volume regex: matches v03, vol3, _vol3, (2000), etc.
+
+        # Try series folder first, then parent if different
+
+        vol_pattern = r'[ _\s\-\(](v\d+|vol\d+|\d{4}-\d{4}|\d{4})[_\s\-\)]'
+
+        vol_match = re.search(vol_pattern, series_folder, re.IGNORECASE)
+
+        
+
+        if not vol_match and series_folder != parent:
+
+             vol_match = re.search(vol_pattern, parent, re.IGNORECASE)
+
+             
+
+        # Fallback for end of string
+
+        if not vol_match:
+
+             vol_match = re.search(r'[ _\s](v\d+|vol\d+)$', parent, re.IGNORECASE):
+             vol_match = re.search(r'[_\s](v\d+|vol\d+)$', parent, re.IGNORECASE)
+             meta['volume'] = vol_match.group(1)
+             
     return meta
 
 def filter_boxes(data):
@@ -101,7 +168,6 @@ class ComicEmbeddingDataset(Dataset):
         rec = self.records[idx]
         path = rec['absolute_image_path']
         cid = rec['canonical_id']
-        
         try:
             if path.startswith('s3://'):
                 if self.s3_client is None: self.s3_client = boto3.client('s3')
@@ -110,7 +176,6 @@ class ComicEmbeddingDataset(Dataset):
                 image_bytes = res['Body'].read()
             else:
                 with open(path, "rb") as f: image_bytes = f.read()
-            
             img = Image.open(BytesIO(image_bytes)).convert('RGB')
             return {'image': img, 'id': cid, 'path': path, 'status': 'success'}
         except Exception as e:
@@ -125,7 +190,6 @@ def collate_fn(batch):
 def get_models(device):
     print("Loading models in float16...")
     vis_processor = AutoProcessor.from_pretrained(VISUAL_MODEL)
-    # Use 'torch_dtype' instead of deprecated 'dtype' if needed, but 'torch_dtype' is standard
     vis_model = SiglipVisionModel.from_pretrained(VISUAL_MODEL, torch_dtype=torch.float16).to(device).eval()
     txt_model = SentenceTransformer(TEXT_MODEL, device=str(device))
     txt_model.half()
@@ -140,7 +204,9 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
              idx = canonical_id.find('amazon')
              short = canonical_id[idx:]
              if short in S3_LOOKUP: target_id = S3_LOOKUP[short]
+    
     if verbose: print(f"[LOOKUP] '{canonical_id}' -> '{target_id}'")
+    
     if local_vlm_root:
         p_nested = os.path.join(local_vlm_root, target_id.replace('/', os.sep) + ".json")
         p_flat = os.path.join(local_vlm_root, f"{Path(target_id).name}.json")
@@ -159,6 +225,7 @@ def get_text_content(s3_client, bucket, prefix, canonical_id, local_vlm_root=Non
                 except: pass
         if verbose: print(f"  [MISSING] Could not find {target_id} locally.")
         return "" 
+    
     if s3_client:
         key = f"{prefix}/{target_id}.json"
         try:
@@ -182,16 +249,17 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
     dataset = ComicEmbeddingDataset(chunk_data)
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
     current_idx = start_index
+    
     for valid_batch, error_batch in tqdm(loader, desc=f"Worker {start_index}"):
         if not valid_batch and not error_batch: continue
         actual_batch_size = len(valid_batch) + len(error_batch)
+        
         if valid_batch:
             if verbose: print(f"[Worker {start_index}] Batch starting: {valid_batch[0]['id']}")
             images = [item['image'] for item in valid_batch]
             ids = [item['id'] for item in valid_batch]
             paths = [item['path'] for item in valid_batch]
             
-            # MODERN AUTOCAST SYNTAX
             with torch.inference_mode(), torch.amp.autocast('cuda', dtype=torch.float16):
                 inputs = vis_proc(images=images, return_tensors="pt").to(device)
                 inputs = {k: v.to(torch.float16) if v.is_floating_point() else v for k, v in inputs.items()}
@@ -207,11 +275,11 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
                 data_vars={
                     'visual': (['page_id', 'visual_dim'], vis_embeds.cpu().numpy().astype('float32')),
                     'text': (['page_id', 'text_dim'], txt_embeds.astype('float32')),
-                    'ids': (['page_id'], np.array(ids, dtype='<U128')),
-                    'series': (['page_id'], np.array([m['series'] for m in meta_batch], dtype='<U128')),
-                    'volume': (['page_id'], np.array([m['volume'] for m in meta_batch], dtype='<U32')),
-                    'issue': (['page_id'], np.array([m['issue'] for m in meta_batch], dtype='<U16')),
-                    'page_num': (['page_id'], np.array([m['page'] for m in meta_batch], dtype='<U16')),
+                    'ids': (['page_id'], np.array(ids, dtype='<U512')),
+                    'series': (['page_id'], np.array([m['series'] for m in meta_batch], dtype='<U256')),
+                    'volume': (['page_id'], np.array([m['volume'] for m in meta_batch], dtype='<U64')),
+                    'issue': (['page_id'], np.array([m['issue'] for m in meta_batch], dtype='<U32')),
+                    'page_num': (['page_id'], np.array([m['page'] for m in meta_batch], dtype='<U6')),
                     'source': (['page_id'], np.array([m['source'] for m in meta_batch], dtype='<U16'))
                 },
                 coords={'page_id': np.arange(current_idx, current_idx + len(ids))}
@@ -256,16 +324,15 @@ def main():
             data_vars={
                 'visual': (['page_id', 'visual_dim'], np.zeros((total_len, VISUAL_DIM), dtype='float32')),
                 'text': (['page_id', 'text_dim'], np.zeros((total_len, TEXT_DIM), dtype='float32')),
-                'ids': (['page_id'], np.full(total_len, '', dtype='<U128')),
-                'series': (['page_id'], np.full(total_len, '', dtype='<U128')),
-                'volume': (['page_id'], np.full(total_len, '', dtype='<U32')),
-                'issue': (['page_id'], np.full(total_len, '', dtype='<U16')),
-                'page_num': (['page_id'], np.full(total_len, '', dtype='<U16')),
+                'ids': (['page_id'], np.full(total_len, '', dtype='<U512')),
+                'series': (['page_id'], np.full(total_len, '', dtype='<U256')),
+                'volume': (['page_id'], np.full(total_len, '', dtype='<U64')),
+                'issue': (['page_id'], np.full(total_len, '', dtype='<U32')),
+                'page_num': (['page_id'], np.full(total_len, '', dtype='<U6')),
                 'source': (['page_id'], np.full(total_len, '', dtype='<U16'))
             },
             coords=coords
         )
-        # Apply encoding
         encoding = {v: {'compressor': compressor} for v in ds.data_vars}
         ds.to_zarr(args.s3_output, compute=False, mode='w', encoding=encoding)
 
