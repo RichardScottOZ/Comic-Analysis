@@ -225,6 +225,7 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
                 data_vars={
                     'visual': (['page_id', 'visual_dim'], vis_embeds.cpu().numpy().astype('float32')),
                     'text': (['page_id', 'text_dim'], txt_embeds.astype('float32')),
+                    'prediction': (['page_id'], np.full(len(ids), -1, dtype='int8')),
                     'ids': (['page_id'], np.array(ids, dtype='<U512')),
                     'series': (['page_id'], np.array([m['series'] for m in meta_batch], dtype='<U256')),
                     'volume': (['page_id'], np.array([m['volume'] for m in meta_batch], dtype='<U64')),
@@ -258,9 +259,23 @@ def main():
     if args.limit: df = df.head(args.limit)
     all_data = df.to_dict('records')
     total_len = len(all_data)
-    import shutil
-    if args.limit and not args.s3_output.startswith("s3://"):
-        if os.path.exists(args.s3_output): shutil.rmtree(args.s3_output)
+    # Skeleton / Resume Logic
+    resume_index = 0
+    if os.path.exists(args.s3_output) and not args.s3_output.startswith("s3://"):
+        try:
+            ds_existing = xr.open_zarr(args.s3_output)
+            # Find first index where 'ids' is empty
+            ids_val = ds_existing['ids'].values
+            filled_indices = np.where(ids_val != '')[0]
+            if len(filled_indices) > 0:
+                resume_index = int(filled_indices.max()) + 1
+                print(f"Found existing data. Resuming from index {resume_index}")
+            if resume_index >= total_len:
+                print("Dataset already fully processed. Exiting.")
+                return
+        except Exception as e:
+            print(f"Could not open existing Zarr for resume: {e}. Starting fresh.")
+
     if not os.path.exists(args.s3_output) and not args.s3_output.startswith("s3://"):
         print(f"Creating skeleton: {args.s3_output}")
         compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
@@ -269,6 +284,7 @@ def main():
             data_vars={
                 'visual': (['page_id', 'visual_dim'], np.zeros((total_len, VISUAL_DIM), dtype='float32')),
                 'text': (['page_id', 'text_dim'], np.zeros((total_len, TEXT_DIM), dtype='float32')),
+                'prediction': (['page_id'], np.full(total_len, -1, dtype='int8')),
                 'ids': (['page_id'], np.full(total_len, '', dtype='<U512')),
                 'series': (['page_id'], np.full(total_len, '', dtype='<U256')),
                 'volume': (['page_id'], np.full(total_len, '', dtype='<U64')),
@@ -280,7 +296,12 @@ def main():
         )
         encoding = {v: {'compressor': compressor} for v in ds.data_vars}
         ds.to_zarr(args.s3_output, compute=False, mode='w', encoding=encoding)
-    process_chunk(all_data, args.s3_output, args.vlm_bucket, args.vlm_prefix, args.batch_size, 0, args.workers, args.local_vlm_root, args.verbose)
+
+    # Process remaining data
+    if resume_index < total_len:
+        process_chunk(all_data[resume_index:], args.s3_output, args.vlm_bucket, args.vlm_prefix, 
+                      args.batch_size, resume_index, args.workers, args.local_vlm_root, args.verbose)
+    
     elapsed = time.time() - start_time
     print(f"\nTotal Runtime: {elapsed:.2f} seconds")
     if args.limit: print(f"Estimated time for 1.22M pages: {(elapsed/args.limit * 1220000 / 3600):.2f} hours")
