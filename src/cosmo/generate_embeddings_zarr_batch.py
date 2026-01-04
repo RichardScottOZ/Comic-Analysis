@@ -110,6 +110,9 @@ def process_chunk(chunk_data, s3_output, vlm_bucket='calibrecomics-extracted', v
         images = []
         valid_indices = []
         ids_batch = []
+        meta_batch = []
+        
+        from io import BytesIO
         for item in batch:
             path = item['absolute_image_path']
             cid = item['canonical_id']
