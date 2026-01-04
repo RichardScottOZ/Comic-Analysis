@@ -26,6 +26,7 @@ from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoProcessor, SiglipVisionModel
 from sentence_transformers import SentenceTransformer
+from io import BytesIO
 
 # --- Configuration ---
 VISUAL_MODEL = "google/siglip-so400m-patch14-384"
@@ -83,11 +84,50 @@ def get_text_content(s3_client, bucket, prefix, canonical_id):
     except Exception:
         return "" # Empty text if not found
 
+import re
+from numcodecs import Blosc
+
+# --- Metadata Extraction ---
+def clean_series_name(name: str) -> str:
+    name_no_volume = re.sub(r'\s+(v\d+|\(\d{4}-\d{4}\)|\d{4})', '', name)
+    cleaned = re.sub(r'[^\w\s]', '', name_no_volume)
+    cleaned = re.sub(r'\s+', '_', cleaned.strip())
+    return cleaned.lower()
+
+def extract_metadata(path: str, cid: str):
+    """Extracts metadata from path/CID."""
+    # Heuristic: Amazon paths usually have Series/Issue structure
+    # Calibre paths vary. 
+    # Best effort extraction from path parts.
+    parts = Path(path).parts
+    filename = parts[-1]
+    
+    # Defaults
+    meta = {'series': 'unknown', 'volume': 'unknown', 'issue': '000', 'page': 'p000', 'source': 'unknown'}
+    
+    # Source
+    if 'amazon' in path.lower(): meta['source'] = 'amazon'
+    elif 'calibre' in path.lower(): meta['source'] = 'calibre'
+    
+    # Page
+    page_match = re.search(r'p(\d{3,4})', filename)
+    if page_match: meta['page'] = f"p{page_match.group(1)}"
+    
+    # Issue
+    issue_match = re.search(r'(\d{3})', filename)
+    if issue_match: meta['issue'] = issue_match.group(1)
+    
+    # Series/Volume (from parent folder if available)
+    if len(parts) >= 2:
+        parent = parts[-2]
+        meta['series'] = clean_series_name(parent)
+        vol_match = re.search(r'(v\d+|\(\d{4}-\d{4}\)|\d{4})', parent)
+        if vol_match: meta['volume'] = vol_match.group(1)
+        
+    return meta
+
 def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
-    """
-    Worker function for Lithops.
-    chunk_data: List of dicts [{'canonical_id':..., 'absolute_image_path':...}, ...]
-    """
+    # ... imports ...
     import torch
     import zarr
     import s3fs
@@ -95,6 +135,8 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
     import uuid
     import boto3
     from PIL import Image
+    from io import BytesIO
+    from numcodecs import Blosc
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Worker processing {len(chunk_data)} items on {device}")
@@ -111,20 +153,32 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
         s3_fs = s3fs.S3FileSystem()
         store = s3fs.S3Map(root=part_path, s3=s3_fs, check=False)
     else:
-        # Local filesystem
         part_path = os.path.join(s3_output, "parts", f"{worker_id}.zarr")
         store = zarr.DirectoryStore(part_path)
         
     root = zarr.group(store=store)
     
+    # Compressor
+    compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
+    
     # Create arrays
-    root.create_dataset('visual', shape=(0, VISUAL_DIM), chunks=(1000, VISUAL_DIM), dtype='float16')
-    root.create_dataset('text', shape=(0, TEXT_DIM), chunks=(1000, TEXT_DIM), dtype='float16')
-    root.create_dataset('ids', shape=(0,), chunks=(1000,), dtype='str')
+    root.create_dataset('visual', shape=(0, VISUAL_DIM), chunks=(1000, VISUAL_DIM), dtype='float16', compressor=compressor)
+    root.create_dataset('text', shape=(0, TEXT_DIM), chunks=(1000, TEXT_DIM), dtype='float16', compressor=compressor)
+    root.create_dataset('ids', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    
+    # Metadata Arrays
+    root.create_dataset('series', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    root.create_dataset('volume', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    root.create_dataset('issue', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    root.create_dataset('page_num', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
+    root.create_dataset('source', shape=(0,), chunks=(1000,), dtype='str', compressor=compressor)
     
     vis_buffer = []
     txt_buffer = []
     id_buffer = []
+    
+    # Meta buffers
+    meta_buffers = {k: [] for k in ['series', 'volume', 'issue', 'page', 'source']}
     
     for i in range(0, len(chunk_data), batch_size):
         batch = chunk_data[i:i+batch_size]
@@ -132,8 +186,7 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
         images = []
         valid_indices = []
         ids_batch = []
-        
-        from io import BytesIO
+        meta_batch = []
         
         for j, item in enumerate(batch):
             path = item['absolute_image_path']
@@ -142,29 +195,27 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
                 if path.startswith('s3://'):
                     bucket, key = path[5:].split("/", 1)
                     response = s3_client.get_object(Bucket=bucket, Key=key)
-                    image_bytes = response['Body'].read()
+                    image_data = response['Body'].read()
                 else:
                     with open(path, "rb") as f:
-                        image_bytes = f.read()
+                        image_data = f.read()
                         
-                img = Image.open(BytesIO(image_bytes)).convert('RGB')
+                img = Image.open(BytesIO(image_data)).convert('RGB')
                 images.append(img)
                 valid_indices.append(j)
                 ids_batch.append(cid)
+                meta_batch.append(extract_metadata(path, cid))
             except Exception as e:
-                # print(f"Failed {cid}: {e}")
                 pass
         
         if not images: continue
         
         # Inference
         with torch.no_grad():
-            # Visual
             inputs = vis_proc(images=images, return_tensors="pt").to(device)
             vis_out = vis_model(**inputs)
             vis_embeds = vis_out.pooler_output
             
-            # Text
             texts = []
             for j in valid_indices:
                 txt = get_text_content(s3_client, vlm_bucket, vlm_prefix, ids_batch[j])
@@ -177,18 +228,39 @@ def process_chunk(chunk_data, s3_output, vlm_bucket, vlm_prefix, batch_size=32):
         txt_buffer.extend(txt_embeds.astype('float16'))
         id_buffer.extend(ids_batch)
         
+        for m in meta_batch:
+            meta_buffers['series'].append(m['series'])
+            meta_buffers['volume'].append(m['volume'])
+            meta_buffers['issue'].append(m['issue'])
+            meta_buffers['page'].append(m['page'])
+            meta_buffers['source'].append(m['source'])
+        
         # Flush
         if len(id_buffer) >= 1000:
             root['visual'].append(np.array(vis_buffer))
             root['text'].append(np.array(txt_buffer))
             root['ids'].append(np.array(id_buffer))
+            
+            root['series'].append(np.array(meta_buffers['series']))
+            root['volume'].append(np.array(meta_buffers['volume']))
+            root['issue'].append(np.array(meta_buffers['issue']))
+            root['page_num'].append(np.array(meta_buffers['page']))
+            root['source'].append(np.array(meta_buffers['source']))
+            
             vis_buffer, txt_buffer, id_buffer = [], [], []
+            for k in meta_buffers: meta_buffers[k] = []
 
     # Final Flush
     if id_buffer:
         root['visual'].append(np.array(vis_buffer))
         root['text'].append(np.array(txt_buffer))
         root['ids'].append(np.array(id_buffer))
+        
+        root['series'].append(np.array(meta_buffers['series']))
+        root['volume'].append(np.array(meta_buffers['volume']))
+        root['issue'].append(np.array(meta_buffers['issue']))
+        root['page_num'].append(np.array(meta_buffers['page']))
+        root['source'].append(np.array(meta_buffers['source']))
         
     return f"Finished part {worker_id}"
 
@@ -218,28 +290,21 @@ def main():
     # Immediate verification for test runs
     if args.limit:
         print("\n--- Automatic Test Verification ---")
-        # Extract worker_id/path from result_msg or search parts dir
         parts_dir = Path(args.s3_output) / "parts"
         if parts_dir.exists():
             parts = list(parts_dir.glob("*.zarr"))
             if parts:
-                # Get the most recent part
                 latest_part = max(parts, key=os.path.getmtime)
                 print(f"Inspecting latest part: {latest_part}")
                 z = zarr.open(str(latest_part), mode='r')
-                print(repr(z))
+                print(f"Zarr Group: {list(z.array_keys())}")
                 for k in ['visual', 'text', 'ids']:
                     if k in z:
                         print(f"  {k}: {z[k].shape} ({z[k].dtype})")
+                        if k == 'ids' and len(z[k]) > 0:
+                            print(f"    Sample ID: {z[k][0]}")
             else:
                 print("No Zarr parts found for verification.")
-        else:
-            # Maybe it's not a parts structure (if we changed it)
-            if os.path.exists(args.s3_output):
-                 try:
-                    z = zarr.open(args.s3_output, mode='r')
-                    print(repr(z))
-                 except: pass
 
 if __name__ == "__main__":
     main()
