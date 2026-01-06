@@ -34,6 +34,9 @@ from sentence_transformers import SentenceTransformer
 from io import BytesIO
 from numcodecs import Blosc
 
+# --- PIL Settings ---
+Image.MAX_IMAGE_PIXELS = None
+
 # --- Configuration ---
 VISUAL_MODEL = "google/siglip-so400m-patch14-384"
 TEXT_MODEL = "Qwen/Qwen3-Embedding-0.6B"
