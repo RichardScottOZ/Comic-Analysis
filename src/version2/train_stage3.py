@@ -1,1 +1,115 @@
-"Training Script for Stage 3: Domain-Adapted Panel Feature Extraction (Manifest-Driven)\n\nThis script trains the Stage 3 model with contrastive and reconstruction objectives.\nIt uses a manifest CSV to locate images across distributed storage.\n\nTraining objectives:\n1. Contrastive learning: Panels from same page should be similar\n2. Panel reconstruction: Predict masked panel features\n3. Modality alignment: Align visual, text, and compositional representations\n"\nimport os\nimport argparse\nimport json\nimport torch\nimport torch.nn as nn\nimport torch.nn.functional as F\nfrom torch.utils.data import DataLoader\nfrom torch.optim import AdamW\nfrom torch.optim.lr_scheduler import CosineAnnealingLR\nimport wandb\nfrom tqdm import tqdm\nfrom pathlib import Path\n\nfrom stage3_panel_features_framework import PanelFeatureExtractor\nfrom stage3_dataset import Stage3PanelDataset, collate_stage3\n\n\n# =============================================================================\n# TRAINING OBJECTIVES\n# ============================================================================\n\nclass Stage3TrainingObjectives(nn.Module):\n    def __init__(self, feature_dim=512, temperature=0.07):\n        super().__init__()\n        self.feature_dim = feature_dim\n        self.temperature = temperature\n        \n        self.reconstruction_head = nn.Sequential(\n            nn.Linear(feature_dim, feature_dim * 2),\n            nn.GELU(),\n            nn.Dropout(0.1),\n            nn.Linear(feature_dim * 2, feature_dim)\n        )\n    \n    def contrastive_loss(self, panel_embeddings, panel_mask):\n        B, N, D = panel_embeddings.shape\n        embeddings_norm = F.normalize(panel_embeddings, dim=-1)\n        losses = []\n        for b in range(B):\n            valid_mask = panel_mask[b]\n            valid_panels = embeddings_norm[b][valid_mask]\n            n_valid = valid_panels.shape[0]\n            if n_valid < 2: continue\n            \n            sim_matrix = torch.mm(valid_panels, valid_panels.t()) / self.temperature\n            pos_mask = ~torch.eye(n_valid, device=sim_matrix.device, dtype=torch.bool)\n            pos_sims = sim_matrix[pos_mask].view(n_valid, n_valid - 1)\n            loss = -pos_sims.mean()\n            losses.append(loss)\n        \n        if len(losses) == 0:\n            return torch.tensor(0.0, device=panel_embeddings.device)\n        return torch.stack(losses).mean()\n    \n    def reconstruction_loss(self, panel_embeddings, panel_mask):\n        B, N, D = panel_embeddings.shape\n        losses = []\n        for b in range(B):\n            valid_mask = panel_mask[b]\n            valid_panels = panel_embeddings[b][valid_mask]\n            n_valid = valid_panels.shape[0]\n            if n_valid < 2: continue\n            \n            mask_idx = torch.randint(0, n_valid, (1,)).item()\n            context_mask = torch.ones(n_valid, dtype=torch.bool, device=valid_panels.device)\n            context_mask[mask_idx] = False\n            context = valid_panels[context_mask].mean(dim=0)\n            \n            predicted = self.reconstruction_head(context)\n            target = valid_panels[mask_idx]\n            losses.append(F.mse_loss(predicted, target))\n        \n        if len(losses) == 0:\n            return torch.tensor(0.0, device=panel_embeddings.device)\n        return torch.stack(losses).mean()\n    \n    def modality_alignment_loss(self, model, batch):\n        B, N = batch['panel_mask'].shape\n        device = batch['images'].device\n        \n        images = batch['images'].view(B*N, 3, batch['images'].shape[-2], batch['images'].shape[-1])\n        input_ids = batch['input_ids'].view(B*N, -1)\n        attention_mask = batch['attention_mask'].view(B*N, -1)\n        panel_mask_flat = batch['panel_mask'].view(B*N)\n        modality_mask_flat = batch['modality_mask'].view(B*N, 3)\n        \n        # Only align if both image and text exist\n        valid_mask = panel_mask_flat & (modality_mask_flat[:, 0] > 0) & (modality_mask_flat[:, 1] > 0)\n        \n        if valid_mask.sum() < 2:\n            return torch.tensor(0.0, device=device)\n        \n        vision_emb = F.normalize(model.encode_image_only(images[valid_mask]), dim=-1)\n        text_emb = F.normalize(model.encode_text_only(input_ids[valid_mask], attention_mask[valid_mask]), dim=-1)\n        \n        logits = torch.mm(vision_emb, text_emb.t()) / self.temperature\n        labels = torch.arange(vision_emb.shape[0], device=device)\n        return F.cross_entropy(logits, labels)\n\n\n# =============================================================================\n# TRAINING LOOP\n# ============================================================================\n\ndef train_epoch(model, objectives, dataloader, optimizer, device, epoch):\n    model.train()\n    objectives.train()\n    \n    total_loss = 0\n    total_contrastive = 0\n    total_reconstruction = 0\n    total_alignment = 0\n    \n    pbar = tqdm(dataloader, desc=f"Epoch {epoch}")\n    \n    for batch in pbar:\n        batch = {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}\n        B, N = batch['panel_mask'].shape\n        \n        model_batch = {\n            'images': batch['images'].view(B*N, 3, batch['images'].shape[-2], batch['images'].shape[-1]),\n            'input_ids': batch['input_ids'].view(B*N, -1),\n            'attention_mask': batch['attention_mask'].view(B*N, -1),\n            'comp_feats': batch['comp_feats'].view(B*N, -1),\n            'modality_mask': batch['modality_mask'].view(B*N, 3)\n        }\n        \n        panel_embeddings = model(model_batch).view(B, N, -1)\n        \n        loss_contrastive = objectives.contrastive_loss(panel_embeddings, batch['panel_mask'])\n        loss_reconstruction = objectives.reconstruction_loss(panel_embeddings, batch['panel_mask'])\n        loss_alignment = objectives.modality_alignment_loss(model, batch)\n        \n        loss = 1.0 * loss_contrastive + 0.5 * loss_reconstruction + 0.3 * loss_alignment\n        \n        optimizer.zero_grad()\n        loss.backward()\n        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)\n        optimizer.step()\n        \n        total_loss += loss.item()\n        total_contrastive += loss_contrastive.item()\n        total_reconstruction += loss_reconstruction.item()\n        total_alignment += loss_alignment.item()\n        \n        pbar.set_postfix({'loss': f"{loss.item():.4f}"})\n    \n    n = len(dataloader)\n    return {\n        'loss': total_loss / n,\n        'contrastive': total_contrastive / n,\n        'reconstruction': total_reconstruction / n,\n        'alignment': total_alignment / n\n    }\n\n@torch.no_grad()\ndef validate(model, objectives, dataloader, device):\n    model.eval()\n    total_loss = 0\n    \n    for batch in tqdm(dataloader, desc="Validation"):\n        batch = {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}\n        B, N = batch['panel_mask'].shape\n        \n        model_batch = {\n            'images': batch['images'].view(B*N, 3, batch['images'].shape[-2], batch['images'].shape[-1]),\n            'input_ids': batch['input_ids'].view(B*N, -1),\n            'attention_mask': batch['attention_mask'].view(B*N, -1),\n            'comp_feats': batch['comp_feats'].view(B*N, -1),\n            'modality_mask': batch['modality_mask'].view(B*N, 3)\n        }\n        \n        panel_embeddings = model(model_batch).view(B, N, -1)\n        \n        l_con = objectives.contrastive_loss(panel_embeddings, batch['panel_mask'])\n        l_rec = objectives.reconstruction_loss(panel_embeddings, batch['panel_mask'])\n        l_aln = objectives.modality_alignment_loss(model, batch)\n        \n        loss = l_con + 0.5 * l_rec + 0.3 * l_aln\n        total_loss += loss.item()\n    \n    return {'loss': total_loss / len(dataloader)}\n\ndef main(args):\n    device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")\n    print(f"Using device: {device}")\n    \n    if args.use_wandb:\n        wandb.init(project="comic-analysis-stage3", name=args.run_name, config=vars(args))\n    \n    train_dataset = Stage3PanelDataset(\n        manifest_path=args.manifest,\n        json_root=args.json_root,\n        pss_labels_path=args.train_pss_labels,\n        image_size=args.image_size,\n        max_panels_per_page=args.max_panels\n    )\n    \n    # Optional: Use same dataset for val if not specified separately (for testing)\n    val_labels = args.val_pss_labels if args.val_pss_labels else args.train_pss_labels\n    val_dataset = Stage3PanelDataset(\n        manifest_path=args.manifest,\n        json_root=args.json_root,\n        pss_labels_path=val_labels,\n        image_size=args.image_size,\n        max_panels_per_page=args.max_panels\n    )\n    \n    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=collate_stage3, pin_memory=True)\n    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=collate_stage3, pin_memory=True)\n    \n    model = PanelFeatureExtractor(\n        visual_backbone=args.visual_backbone,\n        visual_fusion=args.visual_fusion,\n        feature_dim=args.feature_dim,\n        freeze_backbones=args.freeze_backbones\n    ).to(device)\n    \n    objectives = Stage3TrainingObjectives(feature_dim=args.feature_dim).to(device)\n    optimizer = AdamW(list(model.parameters()) + list(objectives.parameters()), lr=args.lr, weight_decay=args.weight_decay)\n    scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 0.01)\n    \n    Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)\n    \n    best_val_loss = float('inf')\n    for epoch in range(1, args.epochs + 1):\n        print(f"\nEpoch {epoch}/{args.epochs}")\n        train_metrics = train_epoch(model, objectives, train_loader, optimizer, device, epoch)\n        val_metrics = validate(model, objectives, val_loader, device)\n        scheduler.step()\n        \n        print(f"Train Loss: {train_metrics['loss']:.4f} | Val Loss: {val_metrics['loss']:.4f}")\n        \n        if args.use_wandb:\n            wandb.log({'train_loss': train_metrics['loss'], 'val_loss': val_metrics['loss'], 'epoch': epoch})\n        \n        if val_metrics['loss'] < best_val_loss:\n            best_val_loss = val_metrics['loss']\n            torch.save(model.state_dict(), Path(args.checkpoint_dir) / 'best_model.pt')\n            print("Saved best model.")\n\nif __name__ == "__main__":\n    parser = argparse.ArgumentParser()\n    # Manifest-Driven Args\n    parser.add_argument('--manifest', type=str, required=True, help='Path to Master Manifest')\n    parser.add_argument('--json_root', type=str, required=True, help='Root of Stage 3 JSONs')\n    parser.add_argument('--train_pss_labels', type=str, required=True, help='Path to PSS Labels JSON')\n    parser.add_argument('--val_pss_labels', type=str, help='Optional validation labels')\n    \n    # Model/Train Args\n    parser.add_argument('--batch_size', type=int, default=4)\n    parser.add_argument('--epochs', type=int, default=20)\n    parser.add_argument('--lr', type=float, default=1e-4)\n    parser.add_argument('--weight_decay', type=float, default=0.01)\n    parser.add_argument('--visual_backbone', type=str, default='both', choices=['siglip', 'resnet', 'both'])\n    parser.add_argument('--visual_fusion', type=str, default='attention')\n    parser.add_argument('--feature_dim', type=int, default=512)\n    parser.add_argument('--freeze_backbones', action='store_true')\n    parser.add_argument('--gpu', type=int, default=0)\n    parser.add_argument('--num_workers', type=int, default=4)\n    parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/stage3')\n    parser.add_argument('--use_wandb', action='store_true')\n    parser.add_argument('--run_name', type=str, default='stage3_run')\n    parser.add_argument('--image_size', type=int, default=224)\n    parser.add_argument('--max_panels', type=int, default=16)\n    \n    args = parser.parse_args()\n    main(args)
+"Training Script for Stage 3: Domain-Adapted Panel Feature Extraction (Manifest-Driven)\n\nThis script trains the Stage 3 model with contrastive and reconstruction objectives.\nIt uses a manifest CSV to locate images across distributed storage.\n\nTraining objectives:\n1. Contrastive learning: Panels from same page should be similar\n2. Panel reconstruction: Predict masked panel features\n3. Modality alignment: Align visual, text, and compositional representations\n"
+import os
+import argparse
+import json
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import CosineAnnealingLR
+import wandb
+from tqdm import tqdm
+from pathlib import Path
+
+from stage3_panel_features_framework import PanelFeatureExtractor
+from stage3_dataset import Stage3PanelDataset, collate_stage3
+
+
+# =============================================================================
+# TRAINING OBJECTIVES
+# ============================================================================
+
+class Stage3TrainingObjectives(nn.Module):
+    def __init__(self, feature_dim=512, temperature=0.07):
+        super().__init__()
+        self.feature_dim = feature_dim
+        self.temperature = temperature
+        
+        self.reconstruction_head = nn.Sequential(
+            nn.Linear(feature_dim, feature_dim * 2),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(feature_dim * 2, feature_dim)
+        )
+    
+    def contrastive_loss(self, panel_embeddings, panel_mask):
+        B, N, D = panel_embeddings.shape
+        embeddings_norm = F.normalize(panel_embeddings, dim=-1)
+        losses = []
+        for b in range(B):
+            valid_mask = panel_mask[b]
+            valid_panels = embeddings_norm[b][valid_mask]
+            n_valid = valid_panels.shape[0]
+            if n_valid < 2: continue
+            
+            sim_matrix = torch.mm(valid_panels, valid_panels.t()) / self.temperature
+            pos_mask = ~torch.eye(n_valid, device=sim_matrix.device, dtype=torch.bool)
+            pos_sims = sim_matrix[pos_mask].view(n_valid, n_valid - 1)
+            loss = -pos_sims.mean()
+            losses.append(loss)
+        
+        if len(losses) == 0:
+            return torch.tensor(0.0, device=panel_embeddings.device)
+        return torch.stack(losses).mean()
+    
+    def reconstruction_loss(self, panel_embeddings, panel_mask):
+        B, N, D = panel_embeddings.shape
+        losses = []
+        for b in range(B):
+            valid_mask = panel_mask[b]
+            valid_panels = panel_embeddings[b][valid_mask]
+            n_valid = valid_panels.shape[0]
+            if n_valid < 2: continue
+            
+            mask_idx = torch.randint(0, n_valid, (1,)).item()
+            context_mask = torch.ones(n_valid, dtype=torch.bool, device=valid_panels.device)
+            context_mask[mask_idx] = False
+            context = valid_panels[context_mask].mean(dim=0)
+            
+            predicted = self.reconstruction_head(context)
+            target = valid_panels[mask_idx]
+            losses.append(F.mse_loss(predicted, target))
+        
+        if len(losses) == 0:
+            return torch.tensor(0.0, device=panel_embeddings.device)
+        return torch.stack(losses).mean()
+    
+    def modality_alignment_loss(self, model, batch):
+        B, N = batch['panel_mask'].shape
+        device = batch['images'].device
+        
+        images = batch['images'].view(B*N, 3, batch['images'].shape[-2], batch['images'].shape[-1])
+        input_ids = batch['input_ids'].view(B*N, -1)
+        attention_mask = batch['attention_mask'].view(B*N, -1)
+        panel_mask_flat = batch['panel_mask'].view(B*N)
+        modality_mask_flat = batch['modality_mask'].view(B*N, 3)
+        
+        # Only align if both image and text exist
+        valid_mask = panel_mask_flat & (modality_mask_flat[:, 0] > 0) & (modality_mask_flat[:, 1] > 0)
+        
+        if valid_mask.sum() < 2:
+            return torch.tensor(0.0, device=device)
+        
+        vision_emb = F.normalize(model.encode_image_only(images[valid_mask]), dim=-1)
+        text_emb = F.normalize(model.encode_text_only(input_ids[valid_mask], attention_mask[valid_mask]), dim=-1)
+        
+        logits = torch.mm(vision_emb, text_emb.t()) / self.temperature
+        labels = torch.arange(vision_emb.shape[0], device=device)
+        return F.cross_entropy(logits, labels)
+
+
+# =============================================================================
+# TRAINING LOOP
+# ============================================================================
+
+def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
+    model.train()
+    objectives.train()
+    
+    total_loss = 0
+    total_contrastive = 0
+    total_reconstruction = 0
+    total_alignment = 0
+    
+    pbar = tqdm(dataloader, desc=f
