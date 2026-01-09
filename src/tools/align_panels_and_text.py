@@ -128,12 +128,27 @@ def main():
     parser.add_argument('--vlm-root', required=True)
     parser.add_argument('--ocr-root', required=True, help='Root of PaddleOCR JSONs')
     parser.add_argument('--output-dir', required=True)
+    parser.add_argument('--zarr-path', help='Optional: Path to Zarr for filtering (Story only)')
     parser.add_argument('--limit', type=int, default=None)
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
     
     print(f"Loading manifest: {args.manifest}")
     df = pd.read_csv(args.manifest)
+    
+    # Optional Zarr Filtering
+    if args.zarr_path:
+        import xarray as xr
+        print(f"Filtering by Zarr predictions: {args.zarr_path}")
+        ds = xr.open_zarr(args.zarr_path)
+        # Prediction 2 is 'story' in our list
+        story_mask = ds['prediction'].values == 2
+        story_ids = set(ds['ids'].values[story_mask])
+        
+        initial_len = len(df)
+        df = df[df['canonical_id'].isin(story_ids)]
+        print(f"Filtered to story pages: {len(df)} / {initial_len}")
+
     if args.limit:
         print(f"Limiting to first {args.limit} pages.")
         df = df.head(args.limit)
