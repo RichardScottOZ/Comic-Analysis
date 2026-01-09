@@ -1,70 +1,44 @@
 """
-Stage 3 Dataset Loader
+Stage 3 Dataset Loader (Manifest-Driven)
 
 Dataset for training Stage 3 panel feature extractors.
-Expects input from Stage 2 (PSS/CoSMo) that has classified narrative pages.
-
-Dataset format:
-- Only processes 'narrative' pages from PSS
-- Loads panel crops, text, and compositional features
-- Supports both training and inference modes
+Uses a Master Manifest to locate images across multiple drives/folders.
+Uses a JSON root to locate aligned panel metadata.
 """
 
 import os
 import json
 import torch
+import csv
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
 from transformers import AutoTokenizer
 from typing import Dict, List, Optional, Tuple
 import torchvision.transforms as T
-
+from pathlib import Path
 
 class Stage3PanelDataset(Dataset):
     """
-    Dataset for Stage 3 panel feature learning.
+    Manifest-Driven Dataset for Stage 3.
     
-    Expected directory structure:
-        root_dir/
-            book_id/
-                page_001.jpg
-                page_001.json  # Contains OCR text and panel detections
-                page_002.jpg
-                page_002.json
-                ...
-            pss_labels.json  # From Stage 2 CoSMo: page type classifications
-    
-    The pss_labels.json format:
-    {
-        "book_id": {
-            "page_001": "narrative",
-            "page_002": "advertisement",
-            "page_003": "narrative",
-            ...
-        }
-    }
+    Args:
+        manifest_path: Path to master_manifest.csv (maps ID -> Image Path)
+        json_root: Root directory containing aligned Stage 3 JSONs
+        pss_labels_path: Path to PSS labels JSON (from Stage 2 export)
     """
     
     def __init__(self, 
-                 root_dir: str,
+                 manifest_path: str,
+                 json_root: str,
                  pss_labels_path: str,
                  text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
                  max_text_length: int = 128,
                  image_size: int = 224,
                  only_narrative: bool = True,
                  max_panels_per_page: int = 16):
-        """
-        Args:
-            root_dir: Root directory containing book subdirectories
-            pss_labels_path: Path to PSS labels JSON from Stage 2
-            text_model_name: Tokenizer model name
-            max_text_length: Maximum text sequence length
-            image_size: Image size for panel crops
-            only_narrative: Whether to only load narrative pages
-            max_panels_per_page: Maximum number of panels per page
-        """
-        self.root_dir = root_dir
+        
+        self.json_root = json_root
         self.text_model_name = text_model_name
         self.max_text_length = max_text_length
         self.image_size = image_size
@@ -83,116 +57,95 @@ class Stage3PanelDataset(Dataset):
         ])
         
         # Load PSS labels
+        print(f"Loading PSS Labels: {pss_labels_path}")
         with open(pss_labels_path, 'r') as f:
             self.pss_labels = json.load(f)
-        
-        # Build dataset index
-        self.samples = self._build_index()
+            
+        # Build Index from Manifest
+        self.samples = self._build_index(manifest_path)
         
         print(f"Stage 3 Dataset initialized:")
-        print(f"  - Total pages: {len(self.samples)}")
+        print(f"  - Total samples: {len(self.samples)}")
         print(f"  - Only narrative: {only_narrative}")
-        print(f"  - Max panels per page: {max_panels_per_page}")
     
-    def _build_index(self) -> List[Dict]:
-        """
-        Build index of all panel samples.
-        
-        Returns:
-            List of sample dictionaries containing paths and metadata
-        """
+    def _build_index(self, manifest_path) -> List[Dict]:
         samples = []
+        print(f"Loading Manifest: {manifest_path}")
         
-        for book_id in os.listdir(self.root_dir):
-            book_dir = os.path.join(self.root_dir, book_id)
-            if not os.path.isdir(book_dir):
-                continue
-            
-            # Check if book has PSS labels
-            if book_id not in self.pss_labels:
-                continue
-            
-            book_labels = self.pss_labels[book_id]
-            
-            # Find all pages
-            for filename in os.listdir(book_dir):
-                if not filename.endswith('.jpg') and not filename.endswith('.png'):
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                cid = row['canonical_id']
+                img_path = row['absolute_image_path']
+                
+                # Check PSS Label
+                # PSS Labels key format: "BookID/PageID" or just "PageFilename"?
+                # Assuming the export tool keys by canonical_id or similar unique ID.
+                # We will support a direct lookup by canonical_id.
+                
+                page_type = self.pss_labels.get(cid, "unknown")
+                
+                if self.only_narrative and page_type != 'narrative' and page_type != 'story':
                     continue
                 
-                page_name = os.path.splitext(filename)[0]
+                # Locate JSON
+                # json_root / canonical_id.json
+                # Handle Windows paths if needed
+                cid_path = cid.replace('/', os.sep)
+                json_path = os.path.join(self.json_root, f"{cid_path}.json")
                 
-                # Check PSS label
-                if page_name not in book_labels:
-                    continue
-                
-                page_type = book_labels[page_name]
-                
-                # Filter by page type if needed
-                if self.only_narrative and page_type != 'narrative':
-                    continue
-                
-                # Check for corresponding JSON
-                json_path = os.path.join(book_dir, f"{page_name}.json")
                 if not os.path.exists(json_path):
                     continue
                 
-                image_path = os.path.join(book_dir, filename)
-                
                 samples.append({
-                    'book_id': book_id,
-                    'page_name': page_name,
+                    'canonical_id': cid,
                     'page_type': page_type,
-                    'image_path': image_path,
+                    'image_path': img_path,
                     'json_path': json_path
                 })
-        
+                
         return samples
     
     def __len__(self) -> int:
         return len(self.samples)
     
     def _load_page_data(self, json_path: str, image_path: str) -> Dict:
-        """
-        Load panel data from JSON file.
-        
-        Expected JSON format (from R-CNN + VLM):
-        {
-            "image_width": 1988,
-            "image_height": 3057,
-            "panels": [
-                {
-                    "bbox": [x, y, w, h],
-                    "text": "Panel dialogue/narration",
-                    "confidence": 0.95
-                },
-                ...
-            ]
-        }
-        """
-        with open(json_path, 'r') as f:
+        with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         # Load full page image
-        page_image = Image.open(image_path).convert('RGB')
+        try:
+            page_image = Image.open(image_path).convert('RGB')
+        except Exception as e:
+            print(f"Error loading image {image_path}: {e}")
+            # Return dummy data to avoid crashing (dataloader will filter or fail gracefully)
+            return {'panels': [], 'page_width': 100, 'page_height': 100}
+
         page_width, page_height = page_image.size
         
-        # Extract panels
         panels = data.get('panels', [])
-        
-        # Limit number of panels
         if len(panels) > self.max_panels_per_page:
             panels = panels[:self.max_panels_per_page]
         
         panel_data = []
         for panel in panels:
-            bbox = panel['bbox']
+            # Stage 3 JSON format: bbox is [x, y, w, h]
+            bbox = panel.get('bbox')
+            if not bbox or len(bbox) != 4: continue
+            
             text = panel.get('text', '')
             
-            # Crop panel from page
             x, y, w, h = bbox
+            # Clamp crop to image bounds
+            x = max(0, x)
+            y = max(0, y)
+            w = min(w, page_width - x)
+            h = min(h, page_height - y)
+            
+            if w <= 0 or h <= 0: continue
+            
             panel_crop = page_image.crop((x, y, x+w, y+h))
             
-            # Compute compositional features
             comp_feats = self._compute_comp_features(bbox, page_width, page_height)
             
             panel_data.append({
@@ -205,181 +158,91 @@ class Stage3PanelDataset(Dataset):
         return {
             'panels': panel_data,
             'page_width': page_width,
-            'page_height': page_height,
-            'num_panels': len(panel_data)
+            'page_height': page_height
         }
     
     def _compute_comp_features(self, bbox: List[float], 
                                page_width: int, page_height: int) -> np.ndarray:
-        """
-        Compute compositional features for a panel.
-        
-        Features (7-dimensional):
-        1. Aspect ratio (w/h)
-        2. Size ratio (panel_area / page_area)
-        3. Character count (placeholder, set to 0)
-        4. Shot mean (placeholder, set to 0)
-        5. Shot max (placeholder, set to 0)
-        6. Center X (normalized)
-        7. Center Y (normalized)
-        """
         x, y, w, h = bbox
-        
         return np.array([
-            w / h if h > 0 else 1.0,  # aspect ratio
-            (w * h) / (page_width * page_height),  # size ratio
-            0.0,  # character count (placeholder)
-            0.0,  # shot mean (placeholder)
-            0.0,  # shot max (placeholder)
-            (x + w/2) / page_width,   # center x
-            (y + h/2) / page_height   # center y
+            w / h if h > 0 else 1.0,
+            (w * h) / (page_width * page_height),
+            0.0, 0.0, 0.0,
+            (x + w/2) / page_width,
+            (y + h/2) / page_height
         ], dtype=np.float32)
     
     def __getitem__(self, idx: int) -> Dict:
-        """
-        Get a single page sample with all its panels.
-        
-        Returns:
-            Dictionary containing:
-            - images: (N, 3, H, W) panel images
-            - input_ids: (N, max_length) tokenized text
-            - attention_mask: (N, max_length) attention masks
-            - comp_feats: (N, 7) compositional features
-            - panel_mask: (N,) binary mask for valid panels
-            - modality_mask: (N, 3) modality presence indicators
-            - metadata: dict with book_id, page_name, etc.
-        """
         sample = self.samples[idx]
-        
-        # Load page data
         page_data = self._load_page_data(sample['json_path'], sample['image_path'])
         panels = page_data['panels']
         num_panels = len(panels)
         
-        # Prepare tensors
         images = []
         texts = []
         comp_feats = []
         modality_masks = []
         
-        for panel in panels:
-            # Process image
-            panel_img = self.transform(panel['image'])
-            images.append(panel_img)
-            
-            # Store text
-            texts.append(panel['text'])
-            
-            # Store compositional features
-            comp_feats.append(panel['comp_feats'])
-            
-            # Compute modality mask
-            has_image = True
-            has_text = len(panel['text'].strip()) > 0
-            has_comp = True
-            modality_masks.append([float(has_image), float(has_text), float(has_comp)])
+        if num_panels == 0:
+            # Handle empty page (should be rare for 'story' pages)
+            # Create one dummy panel
+            images.append(torch.zeros(3, self.image_size, self.image_size))
+            texts.append("")
+            comp_feats.append(torch.zeros(7))
+            modality_masks.append([0.0, 0.0, 0.0])
+            num_panels = 1
+        else:
+            for panel in panels:
+                images.append(self.transform(panel['image']))
+                texts.append(panel['text'])
+                comp_feats.append(torch.from_numpy(panel['comp_feats']))
+                
+                has_image = 1.0
+                has_text = 1.0 if len(panel['text'].strip()) > 0 else 0.0
+                modality_masks.append([has_image, has_text, 1.0]) # 1.0 for comp
         
-        # Tokenize all texts at once
+        # Tokenize
         text_encoding = self.tokenizer(
-            texts,
-            padding='max_length',
-            truncation=True,
-            max_length=self.max_text_length,
-            return_tensors='pt'
+            texts, padding='max_length', truncation=True, max_length=self.max_text_length, return_tensors='pt'
         )
         
-        # Stack tensors
-        images = torch.stack(images)  # (N, 3, H, W)
-        input_ids = text_encoding['input_ids']  # (N, max_length)
-        attention_mask = text_encoding['attention_mask']  # (N, max_length)
-        comp_feats = torch.from_numpy(np.stack(comp_feats))  # (N, 7)
-        modality_masks = torch.tensor(modality_masks)  # (N, 3)
+        images = torch.stack(images)
+        input_ids = text_encoding['input_ids']
+        attention_mask = text_encoding['attention_mask']
+        comp_feats = torch.stack(comp_feats)
+        modality_masks = torch.tensor(modality_masks)
+        panel_mask = torch.ones(len(images), dtype=torch.bool)
         
-        # Create panel mask (all valid since we loaded them)
-        panel_mask = torch.ones(num_panels, dtype=torch.bool)
-        
-        # Pad to max_panels_per_page if needed
-        if num_panels < self.max_panels_per_page:
-            pad_size = self.max_panels_per_page - num_panels
+        # Padding
+        if len(images) < self.max_panels_per_page:
+            pad_size = self.max_panels_per_page - len(images)
+            images = torch.cat([images, torch.zeros(pad_size, 3, self.image_size, self.image_size)], dim=0)
+            input_ids = torch.cat([input_ids, torch.zeros(pad_size, self.max_text_length, dtype=torch.long)], dim=0)
+            attention_mask = torch.cat([attention_mask, torch.zeros(pad_size, self.max_text_length, dtype=torch.long)], dim=0)
+            comp_feats = torch.cat([comp_feats, torch.zeros(pad_size, 7)], dim=0)
+            modality_masks = torch.cat([modality_masks, torch.zeros(pad_size, 3)], dim=0)
+            panel_mask = torch.cat([panel_mask, torch.zeros(pad_size, dtype=torch.bool)], dim=0)
             
-            # Pad images
-            pad_img = torch.zeros(pad_size, 3, self.image_size, self.image_size)
-            images = torch.cat([images, pad_img], dim=0)
-            
-            # Pad text
-            pad_ids = torch.zeros(pad_size, self.max_text_length, dtype=torch.long)
-            input_ids = torch.cat([input_ids, pad_ids], dim=0)
-            
-            pad_mask = torch.zeros(pad_size, self.max_text_length, dtype=torch.long)
-            attention_mask = torch.cat([attention_mask, pad_mask], dim=0)
-            
-            # Pad comp features
-            pad_comp = torch.zeros(pad_size, 7)
-            comp_feats = torch.cat([comp_feats, pad_comp], dim=0)
-            
-            # Pad modality masks
-            pad_mod = torch.zeros(pad_size, 3)
-            modality_masks = torch.cat([modality_masks, pad_mod], dim=0)
-            
-            # Extend panel mask
-            pad_panel_mask = torch.zeros(pad_size, dtype=torch.bool)
-            panel_mask = torch.cat([panel_mask, pad_panel_mask], dim=0)
-        
         return {
-            'images': images,  # (max_panels, 3, H, W)
-            'input_ids': input_ids,  # (max_panels, max_length)
-            'attention_mask': attention_mask,  # (max_panels, max_length)
-            'comp_feats': comp_feats,  # (max_panels, 7)
-            'panel_mask': panel_mask,  # (max_panels,)
-            'modality_mask': modality_masks,  # (max_panels, 3)
+            'images': images,
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'comp_feats': comp_feats,
+            'panel_mask': panel_mask,
+            'modality_mask': modality_masks,
             'metadata': {
-                'book_id': sample['book_id'],
-                'page_name': sample['page_name'],
-                'page_type': sample['page_type'],
-                'num_panels': num_panels,
-                'page_width': page_data['page_width'],
-                'page_height': page_data['page_height']
+                'canonical_id': sample['canonical_id'],
+                'num_panels': num_panels
             }
         }
 
-
 def collate_stage3(batch: List[Dict]) -> Dict:
-    """
-    Collate function for Stage 3 dataset.
-    
-    Args:
-        batch: List of samples from Stage3PanelDataset
-        
-    Returns:
-        Batched dictionary
-    """
-    # Stack all tensors
-    images = torch.stack([s['images'] for s in batch])  # (B, N, 3, H, W)
-    input_ids = torch.stack([s['input_ids'] for s in batch])  # (B, N, max_length)
-    attention_mask = torch.stack([s['attention_mask'] for s in batch])  # (B, N, max_length)
-    comp_feats = torch.stack([s['comp_feats'] for s in batch])  # (B, N, 7)
-    panel_mask = torch.stack([s['panel_mask'] for s in batch])  # (B, N)
-    modality_mask = torch.stack([s['modality_mask'] for s in batch])  # (B, N, 3)
-    
-    # Collect metadata
-    metadata = [s['metadata'] for s in batch]
-    
     return {
-        'images': images,
-        'input_ids': input_ids,
-        'attention_mask': attention_mask,
-        'comp_feats': comp_feats,
-        'panel_mask': panel_mask,
-        'modality_mask': modality_mask,
-        'metadata': metadata
+        'images': torch.stack([s['images'] for s in batch]),
+        'input_ids': torch.stack([s['input_ids'] for s in batch]),
+        'attention_mask': torch.stack([s['attention_mask'] for s in batch]),
+        'comp_feats': torch.stack([s['comp_feats'] for s in batch]),
+        'panel_mask': torch.stack([s['panel_mask'] for s in batch]),
+        'modality_mask': torch.stack([s['modality_mask'] for s in batch]),
+        'metadata': [s['metadata'] for s in batch]
     }
-
-
-if __name__ == "__main__":
-    print("Stage 3 Dataset Loader")
-    print("=" * 60)
-    print("\nThis dataset:")
-    print("1. Loads narrative pages classified by Stage 2 (PSS/CoSMo)")
-    print("2. Extracts panel crops with text and compositional features")
-    print("3. Prepares batches for Stage 3 panel feature learning")
-    print("4. Supports modality masking for flexible training")
