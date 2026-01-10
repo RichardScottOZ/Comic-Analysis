@@ -288,7 +288,7 @@ if __name__ == "__main__":
     parser.add_argument('--train_pss_labels', type=str, required=True)
     parser.add_argument('--val_pss_labels', type=str)
     parser.add_argument('--limit', type=int, default=None, help='Limit number of pages for training')
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0.01)
