@@ -2,6 +2,7 @@ import os
 import json
 import torch
 import csv
+from tqdm import tqdm
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
@@ -82,26 +83,12 @@ class Stage3PanelDataset(Dataset):
         skipped_img = 0
         added = 0
         
-        print(f"Index building started. Total labels to check: {len(self.pss_labels)}")
-        
-        for i, (cid, page_type) in enumerate(self.pss_labels.items()):
-            # --- DEBUG TRAP ---
-            if i < 3:
-                img_path_debug = self.image_map.get(cid)
-                exists_debug = os.path.exists(img_path_debug) if img_path_debug else False
-                key_debug = self._normalize_key(cid)
-                json_id_debug = self.json_map.get(key_debug)
-                print(f"\n[DEBUG TRAP {i}]")
-                print(f"  CID: '{cid}'")
-                print(f"  Key: '{key_debug}'")
-                print(f"  Img Path: '{img_path_debug}'")
-                print(f"  Img Exists? {exists_debug}")
-                print(f"  Calibre ID: '{json_id_debug}'")
-                if i == 2: print("\nResuming index build...")
-            # ------------------
-
+        pbar = tqdm(enumerate(self.pss_labels.items()), total=len(self.pss_labels), desc="Building Index")
+        for i, (cid, page_type) in pbar:
             if limit and added >= limit:
                 break
+            
+            pbar.set_description(f"Building Index (Added: {added})")
             
             # Check Label
             if self.only_narrative and page_type not in ['narrative', 'story']:
@@ -114,7 +101,7 @@ class Stage3PanelDataset(Dataset):
                 skipped_img += 1
                 continue
 
-            # Check JSON Mapping
+            # Check JSON
             key = self._normalize_key(cid)
             calibre_id = self.json_map.get(key)
             
@@ -127,6 +114,9 @@ class Stage3PanelDataset(Dataset):
             
             if not os.path.exists(json_path):
                 skipped_json += 1
+                if skipped_json <= 5:
+                    print(f"\n[DEBUG FAIL] Missing JSON: {json_path}")
+                    print(f"  Calibre ID: {calibre_id}")
                 continue
             
             samples.append({
