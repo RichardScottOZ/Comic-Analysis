@@ -121,9 +121,15 @@ def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
                0.3 * objectives.modality_alignment_loss(model, batch)
         
         optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-        optimizer.step()
+        if loss.requires_grad:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+        else:
+            # Log the IDs that caused this empty batch
+            cids = [m['canonical_id'] for m in batch['metadata']]
+            print(f"\n[SKIP] Batch skipped (Not enough panels). IDs: {cids}")
+            
         total_loss += loss.item()
         pbar.set_postfix({'loss': f"{loss.item():.4f}"})
     
@@ -282,8 +288,8 @@ if __name__ == "__main__":
     parser.add_argument('--train_pss_labels', type=str, required=True)
     parser.add_argument('--val_pss_labels', type=str)
     parser.add_argument('--limit', type=int, default=None, help='Limit number of pages for training')
-    parser.add_argument('--batch_size', type=int, default=4)
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--epochs', type=int, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--visual_backbone', type=str, default='both', choices=['siglip', 'resnet', 'both'])
@@ -291,7 +297,7 @@ if __name__ == "__main__":
     parser.add_argument('--feature_dim', type=int, default=512)
     parser.add_argument('--freeze_backbones', action='store_true')
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=8)
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/stage3')
     parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--run_name', type=str, default='stage3_run')
