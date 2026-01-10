@@ -261,10 +261,20 @@ def main(args):
     optimizer = AdamW(list(model.parameters()) + list(objectives.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 0.01)
     
-    Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
-    
+    # Resume logic
+    start_epoch = 1
+    if args.resume:
+        print(f"Resuming from {args.resume}...")
+        checkpoint = torch.load(args.resume, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        print(f"Resumed at Epoch {start_epoch}")
+
     best_val_loss = float('inf')
-    for epoch in range(1, args.epochs + 1):
+    
+    for epoch in range(start_epoch, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
         train_metrics = train_epoch(model, objectives, train_loader, optimizer, device, epoch)
         val_metrics = validate(model, objectives, val_loader, device)
@@ -275,10 +285,26 @@ def main(args):
         if args.use_wandb:
             wandb.log({'train_loss': train_metrics['loss'], 'val_loss': val_metrics['loss'], 'epoch': epoch})
         
+        # Save Best
         if val_metrics['loss'] < best_val_loss:
             best_val_loss = val_metrics['loss']
-            torch.save(model.state_dict(), Path(args.checkpoint_dir) / 'best_model.pt')
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'val_loss': best_val_loss
+            }, Path(args.checkpoint_dir) / 'best_model.pt')
             print("Saved best model.")
+            
+        # Save Every Epoch (Safety)
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'val_loss': val_metrics['loss']
+        }, Path(args.checkpoint_dir) / f'checkpoint_epoch_{epoch}.pt')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -287,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument('--json_root', type=str, required=True)
     parser.add_argument('--train_pss_labels', type=str, required=True)
     parser.add_argument('--val_pss_labels', type=str)
+    parser.add_argument('--resume', type=str, help='Path to checkpoint to resume from')
     parser.add_argument('--limit', type=int, default=None, help='Limit number of pages for training')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--epochs', type=int, default=5)
