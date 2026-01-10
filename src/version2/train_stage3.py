@@ -94,11 +94,69 @@ class Stage3TrainingObjectives(nn.Module):
 
 
 # ============================================================================ 
-# MANIFEST BRIDGING
+# TRAINING LOOP
 # ============================================================================ 
 
+def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
+    model.train()
+    objectives.train()
+    total_loss = 0
+    pbar = tqdm(dataloader, desc=f"Epoch {epoch}")
+    
+    for batch in pbar:
+        batch = {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
+        B, N = batch['panel_mask'].shape
+        
+        model_batch = {
+            'images': batch['images'].view(B*N, 3, batch['images'].shape[-2], batch['images'].shape[-1]),
+            'input_ids': batch['input_ids'].view(B*N, -1),
+            'attention_mask': batch['attention_mask'].view(B*N, -1),
+            'comp_feats': batch['comp_feats'].view(B*N, -1),
+            'modality_mask': batch['modality_mask'].view(B*N, 3)
+        }
+        
+        panel_embeddings = model(model_batch).view(B, N, -1)
+        loss = 1.0 * objectives.contrastive_loss(panel_embeddings, batch['panel_mask']) + \
+               0.5 * objectives.reconstruction_loss(panel_embeddings, batch['panel_mask']) + \
+               0.3 * objectives.modality_alignment_loss(model, batch)
+        
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        total_loss += loss.item()
+        pbar.set_postfix({'loss': f"{loss.item():.4f}"})
+    
+    return {'loss': total_loss / len(dataloader) if len(dataloader) > 0 else 0}
+
+@torch.no_grad()
+def validate(model, objectives, dataloader, device):
+    model.eval()
+    total_loss = 0
+    for batch in tqdm(dataloader, desc="Validation"):
+        batch = {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
+        B, N = batch['panel_mask'].shape
+        model_batch = {
+            'images': batch['images'].view(B*N, 3, batch['images'].shape[-2], batch['images'].shape[-1]),
+            'input_ids': batch['input_ids'].view(B*N, -1),
+            'attention_mask': batch['attention_mask'].view(B*N, -1),
+            'comp_feats': batch['comp_feats'].view(B*N, -1),
+            'modality_mask': batch['modality_mask'].view(B*N, 3)
+        }
+        panel_embeddings = model(model_batch).view(B, N, -1)
+        loss = objectives.contrastive_loss(panel_embeddings, batch['panel_mask']) + \
+               0.5 * objectives.reconstruction_loss(panel_embeddings, batch['panel_mask']) + \
+               0.3 * objectives.modality_alignment_loss(model, batch)
+        total_loss += loss.item()
+    n = len(dataloader)
+    return {'loss': total_loss / n if n > 0 else 0}
+
+# --- Manifest Bridging ---
+
 def normalize_key(cid):
-    """Robust join key logic (shared with dataset loader)."""
+    """
+    Robust normalization for map lookup.
+    """
     prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\\", "amazon/"]
     for p in prefixes:
         if cid.startswith(p):
@@ -109,18 +167,23 @@ def normalize_key(cid):
     return res.replace('/', '_').replace('\\', '_').strip()
 
 def build_json_map(s3_manifest_path):
-    """Maps {Normalized_Key: Calibre_ID}."""
-    print("Building JSON ID Map...")
-    json_map = {}
+    print("Building JSON ID Map (Suffix Strategy)...")
+    suffix_map = {}
     with open(s3_manifest_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             cid = row['canonical_id']
             if "__MACOSX" in cid: continue
-            key = normalize_key(cid)
-            json_map[key] = cid
-    print(f"Indexed {len(json_map)} Calibre IDs for JSON lookup.")
-    return json_map
+            parts = cid.split('/')
+            for i in range(len(parts)):
+                suffix = "/".join(parts[i:])
+                if suffix not in suffix_map:
+                    suffix_map[suffix] = cid
+            filename = parts[-1]
+            if filename not in suffix_map:
+                suffix_map[filename] = cid
+    print(f"Suffix Map Size: {len(suffix_map)}")
+    return suffix_map
 
 def main(args):
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
@@ -129,20 +192,35 @@ def main(args):
     if args.use_wandb:
         wandb.init(project="comic-analysis-stage3", name=args.run_name, config=vars(args))
     
-    # 1. Build JSON Map (Normalized Key -> Calibre ID)
+    # Build Map (Master Key -> Calibre ID)
     json_map = build_json_map(args.s3_manifest)
     
-    # 2. Load Master Manifest for Image Paths (Direct Master ID lookup)
+    # Load Master Manifest for Image Paths (Direct Master ID lookup)
     print(f"Loading Master Manifest: {args.manifest}")
     image_map = {}
+    master_ids = []
     with open(args.manifest, 'r', encoding='utf-8') as f:
         for row in csv.DictReader(f):
-            image_map[row['canonical_id']] = row['absolute_image_path']
+            master_id = row['canonical_id']
+            image_map[master_id] = row['absolute_image_path']
+            master_ids.append(master_id)
+            
+    # Bridge Master IDs to Calibre IDs
+    print("Bridging Manifests...")
+    bridged_map = {}
+    for mid in tqdm(master_ids, desc="Bridging"):
+        filename = Path(image_map[mid]).name
+        # Match using suffix logic
+        calibre_id = json_map.get(filename) or json_map.get(mid)
+        if calibre_id:
+            bridged_map[normalize_key(mid)] = calibre_id
+            
+    print(f"✅ Successfully bridged {len(bridged_map)} / {len(master_ids)} Master IDs.")
     
     # 3. Create Datasets
     train_dataset = Stage3PanelDataset(
         image_map=image_map,
-        json_map=json_map,
+        json_map=bridged_map, # Pass the bridged map
         json_root=args.json_root,
         pss_labels_path=args.train_pss_labels,
         image_size=args.image_size,
@@ -155,9 +233,9 @@ def main(args):
     
     val_dataset = Stage3PanelDataset(
         image_map=image_map,
-        json_map=json_map,
+        json_map=bridged_map, # Use the bridged map here too!
         json_root=args.json_root,
-        pss_labels_path=val_labels,
+        pss_labels_path=args.val_pss_labels if args.val_pss_labels else args.train_pss_labels,
         image_size=args.image_size,
         max_panels_per_page=args.max_panels,
         limit=val_limit
@@ -166,7 +244,6 @@ def main(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, collate_fn=collate_stage3, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, collate_fn=collate_stage3, pin_memory=True)
     
-    # ... Rest of training logic (model, optimizer, loop) ...
     model = PanelFeatureExtractor(
         visual_backbone=args.visual_backbone,
         visual_fusion=args.visual_fusion,
@@ -204,7 +281,7 @@ if __name__ == "__main__":
     parser.add_argument('--json_root', type=str, required=True)
     parser.add_argument('--train_pss_labels', type=str, required=True)
     parser.add_argument('--val_pss_labels', type=str)
-    parser.add_argument('--limit', type=int, default=None)
+    parser.add_argument('--limit', type=int, default=None, help='Limit number of pages for training')
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -220,5 +297,6 @@ if __name__ == "__main__":
     parser.add_argument('--run_name', type=str, default='stage3_run')
     parser.add_argument('--image_size', type=int, default=224)
     parser.add_argument('--max_panels', type=int, default=16)
+    
     args = parser.parse_args()
     main(args)
