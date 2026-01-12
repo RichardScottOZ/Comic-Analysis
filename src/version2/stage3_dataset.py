@@ -6,6 +6,10 @@ from tqdm import tqdm
 from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
+
+# Suppress decompression bomb warnings for high-res comic scans
+Image.MAX_IMAGE_PIXELS = None
+
 from transformers import AutoTokenizer
 from typing import Dict, List, Optional, Tuple
 import torchvision.transforms as T
