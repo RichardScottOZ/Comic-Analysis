@@ -4,11 +4,14 @@ import torch
 import csv
 from tqdm import tqdm
 from torch.utils.data import Dataset
-from PIL import Image
+from PIL import Image, ImageFile
 import numpy as np
 
 # Suppress decompression bomb warnings for high-res comic scans
 Image.MAX_IMAGE_PIXELS = None
+# Allow loading of truncated (partially corrupted) images
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 
 from transformers import AutoTokenizer
 from typing import Dict, List, Optional, Tuple
