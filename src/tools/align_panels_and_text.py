@@ -47,15 +47,37 @@ def process_page(cnn_path, vlm_path, ocr_path, output_path):
             panels.append({'bbox_xyxy': [float(x) for x in box], 'score': float(det.get('score', 1.0)), 'text_regions': []})
     
     ocr_data = load_json(ocr_path)
-    if ocr_data and 'OCRResult' in ocr_data:
-        for reg in ocr_data['OCRResult'].get('text_regions', []):
-            t_box, t_text = reg.get('bbox'), reg.get('text', '')
-            if t_box and t_text:
-                best_iota, best_panel = 0.0, None
-                for p in panels:
-                    iota = compute_iota(p['bbox_xyxy'], t_box)
-                    if iota > 0.5 and iota > best_iota: best_iota, best_panel = iota, p
-                if best_panel: best_panel['text_regions'].append({'bbox': t_box, 'text': t_text})
+    text_regions = []
+    
+    if ocr_data:
+        # Format 1: PaddleOCR Results (Polygon bbox)
+        if 'paddleocr_results' in ocr_data:
+            for item in ocr_data['paddleocr_results']:
+                poly = item.get('bbox')
+                txt = item.get('text', '')
+                if poly and txt:
+                    # Convert polygon [[x,y]...] to xyxy
+                    xs = [p[0] for p in poly]
+                    ys = [p[1] for p in poly]
+                    xyxy = [min(xs), min(ys), max(xs), max(ys)]
+                    text_regions.append({'bbox': xyxy, 'text': txt})
+                    
+        # Format 2: Legacy OCRResult (xywh or xyxy)
+        elif 'OCRResult' in ocr_data:
+            for reg in ocr_data['OCRResult'].get('text_regions', []):
+                t_box = reg.get('bbox')
+                t_text = reg.get('text', '')
+                if t_box and t_text:
+                    # Assume xyxy for compatibility, or check length
+                    text_regions.append({'bbox': t_box, 'text': t_text})
+
+    for reg in text_regions:
+        t_box, t_text = reg['bbox'], reg['text']
+        best_iota, best_panel = 0.0, None
+        for p in panels:
+            iota = compute_iota(p['bbox_xyxy'], t_box)
+            if iota > 0.5 and iota > best_iota: best_iota, best_panel = iota, p
+        if best_panel: best_panel['text_regions'].append({'bbox': t_box, 'text': t_text})
 
     vlm_text = ""
     vlm_data = load_json(vlm_path)
@@ -87,6 +109,7 @@ def main():
     parser.add_argument('--ocr-root', required=True)
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--limit', type=int, default=None)
+    parser.add_argument('--overwrite', action='store_true', help='Overwrite existing output files')
     args = parser.parse_args()
     
     # 1. Index Master Manifest (Direct ID Index)
@@ -108,7 +131,7 @@ def main():
         cid_path = cid.replace('/', os.sep)
         output_path = os.path.join(args.output_dir, f"{cid_path}.json")
         
-        if os.path.exists(output_path):
+        if os.path.exists(output_path) and not args.overwrite:
             skipped += 1
             continue
             
