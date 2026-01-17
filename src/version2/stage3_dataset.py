@@ -87,28 +87,25 @@ class Stage3PanelDataset(Dataset):
         samples = []
         skipped_label = 0
         skipped_json = 0
-        skipped_img = 0
         added = 0
         
+        # Optimization: We skip physical disk checks (os.path.exists) during indexing
+        # to handle 1M+ files in seconds rather than hours.
         pbar = tqdm(enumerate(self.pss_labels.items()), total=len(self.pss_labels), desc="Building Index")
         for i, (cid, page_type) in pbar:
             if limit and added >= limit:
                 break
-            
-            pbar.set_description(f"Building Index (Added: {added})")
             
             # Check Label
             if self.only_narrative and page_type not in ['narrative', 'story']:
                 skipped_label += 1
                 continue
             
-            # Check Image
             img_path = self.image_map.get(cid)
-            if not img_path or not os.path.exists(img_path):
-                skipped_img += 1
+            if not img_path:
                 continue
 
-            # Check JSON
+            # Check JSON Mapping
             key = self._normalize_key(cid)
             calibre_id = self.json_map.get(key)
             
@@ -119,13 +116,6 @@ class Stage3PanelDataset(Dataset):
             cid_path = calibre_id.replace('/', os.sep)
             json_path = os.path.join(self.json_root, f"{cid_path}.json")
             
-            if not os.path.exists(json_path):
-                skipped_json += 1
-                if skipped_json <= 5:
-                    print(f"\n[DEBUG FAIL] Missing JSON: {json_path}")
-                    print(f"  Calibre ID: {calibre_id}")
-                continue
-            
             samples.append({
                 'canonical_id': calibre_id,
                 'page_type': page_type,
@@ -134,11 +124,10 @@ class Stage3PanelDataset(Dataset):
             })
             added += 1
                 
-        print(f"\n--- Index Build Summary ---")
+        print(f"\n--- Index Build Summary (Optimized) ---")
         print(f"Total Labels Scanned: {len(self.pss_labels)}")
         print(f"Skipped (Non-Story): {skipped_label}")
-        print(f"Skipped (Missing Image): {skipped_img}")
-        print(f"Skipped (Missing JSON/Mapping): {skipped_json}")
+        print(f"Skipped (Missing JSON Mapping): {skipped_json}")
         print(f"Added to Dataset: {added}")
         return samples
     
@@ -146,11 +135,12 @@ class Stage3PanelDataset(Dataset):
         return len(self.samples)
     
     def _load_page_data(self, json_path: str, image_path: str) -> Dict:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
         try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             page_image = Image.open(image_path).convert('RGB')
         except Exception as e:
+            # Runtime fallback for missing or corrupted files
             return {'panels': [], 'page_width': 100, 'page_height': 100}
         
         page_width, page_height = page_image.size
