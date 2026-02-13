@@ -92,7 +92,7 @@ def main():
             feature_dim=FEATURE_DIM
         ).to(device)
         # Support both formats: raw state_dict or dict with 'model_state_dict' key
-        state_dict = checkpoint.get('model_state_dict', checkpoint) if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint else checkpoint
+        state_dict = checkpoint.get('model_state_dict', checkpoint) if isinstance(checkpoint, dict) else checkpoint
         model.load_state_dict(state_dict)
         model.eval()
     except Exception as e:
