@@ -178,7 +178,7 @@ def validate(model, objectives, dataloader, device):
 # --- Manifest Bridging ---
 
 def normalize_key(cid):
-    prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\", "amazon/"]
+    prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\\", "amazon/"]
     for p in prefixes:
         if cid.startswith(p):
             cid = cid.replace(p, "")
