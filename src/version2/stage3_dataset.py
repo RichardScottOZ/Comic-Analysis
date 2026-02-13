@@ -60,14 +60,14 @@ class Stage3PanelDataset(Dataset):
         print(f"Stage 3 Dataset initialized: {len(self.samples)} samples.")
     
     def _normalize_key(self, cid):
-        prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "amazon/"]
+        prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\\", "amazon/"]
         for p in prefixes:
             if cid.startswith(p):
                 cid = cid.replace(p, "")
         res = cid.lower()
         for ext in ['.jpg', '.png', '.jpeg']:
             res = res.replace(ext, '')
-        return res.replace('/', '_').strip()
+        return res.replace('/', '_').replace('\\', '_').strip()
 
     def _build_index(self, limit=None) -> List[Dict]:
         samples = []
@@ -124,7 +124,7 @@ class Stage3PanelDataset(Dataset):
         try:
             with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
             page_image = Image.open(image_path).convert('RGB')
-        except: return {'panels': [], 'page_width': 100, 'page_height': 100}
+        except Exception: return {'panels': [], 'page_width': 100, 'page_height': 100}
         
         pw, ph = page_image.size
         panels = data.get('panels', [])[:self.max_panels_per_page]
