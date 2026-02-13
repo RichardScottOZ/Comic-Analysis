@@ -1,3 +1,9 @@
+"Training Script for Stage 3: Domain-Adapted Panel Feature Extraction (Manifest-Driven)"
+
+This script trains the Stage 3 model with contrastive and reconstruction objectives.
+It uses a manifest CSV to locate images across distributed storage.
+"
+
 import os
 import argparse
 import json
@@ -15,9 +21,9 @@ import csv
 from stage3_panel_features_framework import PanelFeatureExtractor
 from stage3_dataset import Stage3PanelDataset, collate_stage3
 
-# ============================================================================ 
+# ============================================================================
 # TRAINING OBJECTIVES
-# ============================================================================ 
+# ============================================================================
 
 class Stage3TrainingObjectives(nn.Module):
     def __init__(self, feature_dim=512, temperature=0.07):
@@ -33,23 +39,69 @@ class Stage3TrainingObjectives(nn.Module):
         )
     
     def contrastive_loss(self, panel_embeddings, panel_mask):
+        """
+        InfoNCE Contrastive Loss.
+        Push positives together, push negatives apart.
+        """
         B, N, D = panel_embeddings.shape
-        embeddings_norm = F.normalize(panel_embeddings, dim=-1)
-        losses = []
-        for b in range(B):
-            valid_mask = panel_mask[b]
-            valid_panels = embeddings_norm[b][valid_mask]
-            n_valid = valid_panels.shape[0]
-            if n_valid < 2: continue
-            
-            sim_matrix = torch.mm(valid_panels, valid_panels.t()) / self.temperature
-            pos_mask = ~torch.eye(n_valid, device=sim_matrix.device, dtype=torch.bool)
-            pos_sims = sim_matrix[pos_mask].view(n_valid, n_valid - 1)
-            loss = -pos_sims.mean()
-            losses.append(loss)
         
-        if not losses: return torch.tensor(0.0, device=panel_embeddings.device)
-        return torch.stack(losses).mean()
+        # Flatten to (TotalPanels, D)
+        flat_embeddings = panel_embeddings.view(B*N, D)
+        flat_mask = panel_mask.view(B*N)
+        
+        # Filter invalid
+        valid_embeddings = flat_embeddings[flat_mask]
+        valid_embeddings = F.normalize(valid_embeddings, dim=-1)
+        
+        if valid_embeddings.shape[0] < 2:
+            return torch.tensor(0.0, device=panel_embeddings.device)
+            
+        # Create Page IDs for each panel: [0,0,0, 1,1, 2,2,2...]
+        page_ids = torch.arange(B, device=panel_embeddings.device).unsqueeze(1).expand(B, N)
+        valid_page_ids = page_ids.reshape(-1)[flat_mask]
+        
+        # Similarity Matrix
+        sim_matrix = torch.mm(valid_embeddings, valid_embeddings.t()) / self.temperature
+        
+        # Positive Mask: Same Page
+        pos_mask = valid_page_ids.unsqueeze(0) == valid_page_ids.unsqueeze(1)
+        # Remove diagonal (self-contrast)
+        eye = torch.eye(valid_embeddings.shape[0], device=panel_embeddings.device, dtype=torch.bool)
+        pos_mask = pos_mask & ~eye
+        
+        # Check if we have valid positives
+        if pos_mask.sum() == 0:
+             return torch.tensor(0.0, device=panel_embeddings.device)
+
+        # InfoNCE: -log( exp(pos) / sum(exp(all)) )
+        # Implementation via LogSumExp for stability
+        
+        # Denominator: Sum of exp of ALL similarities (for each anchor)
+        # We mask out the diagonal in the sum (don't contrast with self)
+        # exp_sim = torch.exp(sim_matrix) * (~eye).float() # Unstable?
+        # Better: log_softmax
+        
+        # Actually, standard InfoNCE is usually 1 positive, K negatives.
+        # Here we have Many Positives (other panels on page) and Many Negatives (other pages).
+        # We use SupCon loss formulation (Supervised Contrastive).
+        
+        # log_prob = sim - log(sum(exp(sim)))
+        # We mask diagonal in the logsumexp.
+        
+        # Max trick for logsumexp stability
+        sim_max, _ = torch.max(sim_matrix, dim=1, keepdim=True)
+        sim_matrix = sim_matrix - sim_max.detach()
+        
+        exp_sim = torch.exp(sim_matrix) * (~eye).float()
+        log_prob = sim_matrix - torch.log(exp_sim.sum(dim=1, keepdim=True) + 1e-6)
+        
+        # Mean log_prob over positive pairs
+        mean_log_prob_pos = (pos_mask * log_prob).sum(1) / (pos_mask.sum(1) + 1e-6)
+        
+        # Loss is negative mean of that
+        loss = -mean_log_prob_pos.mean()
+        
+        return loss
     
     def reconstruction_loss(self, panel_embeddings, panel_mask):
         B, N, D = panel_embeddings.shape
@@ -93,9 +145,9 @@ class Stage3TrainingObjectives(nn.Module):
         return F.cross_entropy(logits, labels)
 
 
-# ============================================================================ 
+# ============================================================================
 # TRAINING LOOP
-# ============================================================================ 
+# ============================================================================
 
 def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
     model.train()
@@ -121,15 +173,9 @@ def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
                0.3 * objectives.modality_alignment_loss(model, batch)
         
         optimizer.zero_grad()
-        if loss.requires_grad:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-        else:
-            # Log the IDs that caused this empty batch
-            cids = [m['canonical_id'] for m in batch['metadata']]
-            print(f"\n[SKIP] Batch skipped (Not enough panels). IDs: {cids}")
-            
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
         total_loss += loss.item()
         pbar.set_postfix({'loss': f"{loss.item():.4f}"})
     
@@ -163,7 +209,7 @@ def normalize_key(cid):
     """
     Robust normalization for map lookup.
     """
-    prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\\", "amazon/"]
+    prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\", "amazon/"]
     for p in prefixes:
         if cid.startswith(p):
             cid = cid.replace(p, "")
@@ -180,14 +226,18 @@ def build_json_map(s3_manifest_path):
         for row in reader:
             cid = row['canonical_id']
             if "__MACOSX" in cid: continue
+            
+            # Index every suffix
             parts = cid.split('/')
             for i in range(len(parts)):
                 suffix = "/".join(parts[i:])
                 if suffix not in suffix_map:
                     suffix_map[suffix] = cid
+            
             filename = parts[-1]
             if filename not in suffix_map:
                 suffix_map[filename] = cid
+    
     print(f"Suffix Map Size: {len(suffix_map)}")
     return suffix_map
 
@@ -201,32 +251,16 @@ def main(args):
     # Build Map (Master Key -> Calibre ID)
     json_map = build_json_map(args.s3_manifest)
     
-    # Load Master Manifest for Image Paths (Direct Master ID lookup)
+    # Load Master Manifest for Image Paths
     print(f"Loading Master Manifest: {args.manifest}")
     image_map = {}
-    master_ids = []
     with open(args.manifest, 'r', encoding='utf-8') as f:
         for row in csv.DictReader(f):
-            master_id = row['canonical_id']
-            image_map[master_id] = row['absolute_image_path']
-            master_ids.append(master_id)
-            
-    # Bridge Master IDs to Calibre IDs
-    print("Bridging Manifests...")
-    bridged_map = {}
-    for mid in tqdm(master_ids, desc="Bridging"):
-        filename = Path(image_map[mid]).name
-        # Match using suffix logic
-        calibre_id = json_map.get(filename) or json_map.get(mid)
-        if calibre_id:
-            bridged_map[normalize_key(mid)] = calibre_id
-            
-    print(f"✅ Successfully bridged {len(bridged_map)} / {len(master_ids)} Master IDs.")
+            image_map[row['canonical_id']] = row['absolute_image_path']
     
-    # 3. Create Datasets
     train_dataset = Stage3PanelDataset(
         image_map=image_map,
-        json_map=bridged_map, # Pass the bridged map
+        json_map=json_map,
         json_root=args.json_root,
         pss_labels_path=args.train_pss_labels,
         image_size=args.image_size,
@@ -239,9 +273,9 @@ def main(args):
     
     val_dataset = Stage3PanelDataset(
         image_map=image_map,
-        json_map=bridged_map, # Use the bridged map here too!
+        json_map=json_map,
         json_root=args.json_root,
-        pss_labels_path=args.val_pss_labels if args.val_pss_labels else args.train_pss_labels,
+        pss_labels_path=val_labels,
         image_size=args.image_size,
         max_panels_per_page=args.max_panels,
         limit=val_limit
@@ -261,20 +295,10 @@ def main(args):
     optimizer = AdamW(list(model.parameters()) + list(objectives.parameters()), lr=args.lr, weight_decay=args.weight_decay)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 0.01)
     
-    # Resume logic
-    start_epoch = 1
-    if args.resume:
-        print(f"Resuming from {args.resume}...")
-        checkpoint = torch.load(args.resume, map_location=device)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        start_epoch = checkpoint['epoch'] + 1
-        print(f"Resumed at Epoch {start_epoch}")
-
-    best_val_loss = float('inf')
+    Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
     
-    for epoch in range(start_epoch, args.epochs + 1):
+    best_val_loss = float('inf')
+    for epoch in range(1, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
         train_metrics = train_epoch(model, objectives, train_loader, optimizer, device, epoch)
         val_metrics = validate(model, objectives, val_loader, device)
@@ -285,26 +309,10 @@ def main(args):
         if args.use_wandb:
             wandb.log({'train_loss': train_metrics['loss'], 'val_loss': val_metrics['loss'], 'epoch': epoch})
         
-        # Save Best
         if val_metrics['loss'] < best_val_loss:
             best_val_loss = val_metrics['loss']
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
-                'val_loss': best_val_loss
-            }, Path(args.checkpoint_dir) / 'best_model.pt')
+            torch.save(model.state_dict(), Path(args.checkpoint_dir) / 'best_model.pt')
             print("Saved best model.")
-            
-        # Save Every Epoch (Safety)
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'val_loss': val_metrics['loss']
-        }, Path(args.checkpoint_dir) / f'checkpoint_epoch_{epoch}.pt')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -313,10 +321,9 @@ if __name__ == "__main__":
     parser.add_argument('--json_root', type=str, required=True)
     parser.add_argument('--train_pss_labels', type=str, required=True)
     parser.add_argument('--val_pss_labels', type=str)
-    parser.add_argument('--resume', type=str, help='Path to checkpoint to resume from')
     parser.add_argument('--limit', type=int, default=None, help='Limit number of pages for training')
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--visual_backbone', type=str, default='both', choices=['siglip', 'resnet', 'both'])
@@ -324,7 +331,7 @@ if __name__ == "__main__":
     parser.add_argument('--feature_dim', type=int, default=512)
     parser.add_argument('--freeze_backbones', action='store_true')
     parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/stage3')
     parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--run_name', type=str, default='stage3_run')
