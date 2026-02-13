@@ -1,9 +1,3 @@
-"Training Script for Stage 3: Domain-Adapted Panel Feature Extraction (Manifest-Driven)"
-
-This script trains the Stage 3 model with contrastive and reconstruction objectives.
-It uses a manifest CSV to locate images across distributed storage.
-"
-
 import os
 import argparse
 import json
@@ -21,9 +15,9 @@ import csv
 from stage3_panel_features_framework import PanelFeatureExtractor
 from stage3_dataset import Stage3PanelDataset, collate_stage3
 
-# ============================================================================
+# ============================================================================ 
 # TRAINING OBJECTIVES
-# ============================================================================
+# ============================================================================ 
 
 class Stage3TrainingObjectives(nn.Module):
     def __init__(self, feature_dim=512, temperature=0.07):
@@ -39,12 +33,7 @@ class Stage3TrainingObjectives(nn.Module):
         )
     
     def contrastive_loss(self, panel_embeddings, panel_mask):
-        """
-        InfoNCE Contrastive Loss.
-        Push positives together, push negatives apart.
-        """
         B, N, D = panel_embeddings.shape
-        
         # Flatten to (TotalPanels, D)
         flat_embeddings = panel_embeddings.view(B*N, D)
         flat_mask = panel_mask.view(B*N)
@@ -73,22 +62,7 @@ class Stage3TrainingObjectives(nn.Module):
         if pos_mask.sum() == 0:
              return torch.tensor(0.0, device=panel_embeddings.device)
 
-        # InfoNCE: -log( exp(pos) / sum(exp(all)) )
-        # Implementation via LogSumExp for stability
-        
-        # Denominator: Sum of exp of ALL similarities (for each anchor)
-        # We mask out the diagonal in the sum (don't contrast with self)
-        # exp_sim = torch.exp(sim_matrix) * (~eye).float() # Unstable?
-        # Better: log_softmax
-        
-        # Actually, standard InfoNCE is usually 1 positive, K negatives.
-        # Here we have Many Positives (other panels on page) and Many Negatives (other pages).
-        # We use SupCon loss formulation (Supervised Contrastive).
-        
-        # log_prob = sim - log(sum(exp(sim)))
-        # We mask diagonal in the logsumexp.
-        
-        # Max trick for logsumexp stability
+        # InfoNCE: SupCon formulation
         sim_max, _ = torch.max(sim_matrix, dim=1, keepdim=True)
         sim_matrix = sim_matrix - sim_max.detach()
         
@@ -98,9 +72,7 @@ class Stage3TrainingObjectives(nn.Module):
         # Mean log_prob over positive pairs
         mean_log_prob_pos = (pos_mask * log_prob).sum(1) / (pos_mask.sum(1) + 1e-6)
         
-        # Loss is negative mean of that
         loss = -mean_log_prob_pos.mean()
-        
         return loss
     
     def reconstruction_loss(self, panel_embeddings, panel_mask):
@@ -145,9 +117,9 @@ class Stage3TrainingObjectives(nn.Module):
         return F.cross_entropy(logits, labels)
 
 
-# ============================================================================
+# ============================================================================ 
 # TRAINING LOOP
-# ============================================================================
+# ============================================================================ 
 
 def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
     model.train()
@@ -206,9 +178,6 @@ def validate(model, objectives, dataloader, device):
 # --- Manifest Bridging ---
 
 def normalize_key(cid):
-    """
-    Robust normalization for map lookup.
-    """
     prefixes = ["CalibreComics_extracted/", "CalibreComics_extracted_20251107/", "CalibreComics_extracted\", "amazon/"]
     for p in prefixes:
         if cid.startswith(p):
@@ -227,7 +196,6 @@ def build_json_map(s3_manifest_path):
             cid = row['canonical_id']
             if "__MACOSX" in cid: continue
             
-            # Index every suffix
             parts = cid.split('/')
             for i in range(len(parts)):
                 suffix = "/".join(parts[i:])
