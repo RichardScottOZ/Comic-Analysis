@@ -91,7 +91,9 @@ def main():
             visual_fusion='attention',
             feature_dim=FEATURE_DIM
         ).to(device)
-        model.load_state_dict(checkpoint['model_state_dict'])
+        # Support both formats: raw state_dict or dict with 'model_state_dict' key
+        state_dict = checkpoint.get('model_state_dict', checkpoint) if isinstance(checkpoint, dict) else checkpoint
+        model.load_state_dict(state_dict)
         model.eval()
     except Exception as e:
         print(f"❌ Failed to load model: {e}")
@@ -132,7 +134,7 @@ def main():
     print("Loading tokenizer (local)...")
     try:
         tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL, local_files_only=True)
-    except:
+    except Exception:
         tokenizer = AutoTokenizer.from_pretrained(TEXT_MODEL)
     
     batch_images = []

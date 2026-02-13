@@ -497,11 +497,14 @@ class PanelFeatureExtractor(nn.Module):
         
         return panel_embedding
     
-    @torch.no_grad()
     def encode_image_only(self, images):
         """
         Encode panels using only visual features.
         Useful for queries or when other modalities unavailable.
+        
+        Note: Callers should manage their own torch.no_grad() context
+        for inference. The decorator was removed so that gradients can
+        flow during training (e.g. modality alignment loss).
         
         Args:
             images: (B, 3, H, W) panel images
@@ -511,10 +514,13 @@ class PanelFeatureExtractor(nn.Module):
         """
         return self.vision(images)
     
-    @torch.no_grad()
     def encode_text_only(self, input_ids, attention_mask):
         """
         Encode panels using only text features.
+        
+        Note: Callers should manage their own torch.no_grad() context
+        for inference. The decorator was removed so that gradients can
+        flow during training (e.g. modality alignment loss).
         
         Args:
             input_ids: (B, seq_len) text token ids
