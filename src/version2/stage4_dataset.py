@@ -106,10 +106,9 @@ class Stage4SequenceDataset(Dataset):
                 continue
             
             sequences.append({
-                'book_id': item['book_id'],
-                'page_name': item['page_name'],
+                'canonical_id': item['canonical_id'],
                 'num_panels': num_panels,
-                'embedding_indices': item['embedding_indices']
+                'sequence_index': item['sequence_index']
             })
         
         return sequences
@@ -117,22 +116,20 @@ class Stage4SequenceDataset(Dataset):
     def __len__(self) -> int:
         return len(self.sequences)
     
-    def _load_panel_embeddings(self, indices: List[int]) -> np.ndarray:
+    def _load_panel_embeddings(self, sequence_index: int, num_panels: int) -> np.ndarray:
         """
-        Load panel embeddings by indices.
+        Load panel embeddings from Zarr group for a specific page.
         
         Args:
-            indices: List of embedding indices
+            sequence_index: Row index in the Zarr array
+            num_panels: Number of valid panels to slice
             
         Returns:
             (N, D) panel embeddings
         """
-        embeddings = []
-        for idx in indices:
-            emb = self.embeddings[idx]
-            embeddings.append(emb)
-        
-        return np.stack(embeddings, axis=0)
+        # Load the full row, slice up to num_panels
+        emb = self.embeddings['panel_embeddings'][sequence_index, :num_panels, :]
+        return emb
     
     def _create_panel_picking_sample(self, 
                                      panel_embeddings: np.ndarray,
@@ -293,7 +290,7 @@ class Stage4SequenceDataset(Dataset):
         
         # Load panel embeddings
         panel_embeddings = self._load_panel_embeddings(
-            sequence['embedding_indices']
+            sequence['sequence_index'], sequence['num_panels']
         )
         num_panels = sequence['num_panels']
         
