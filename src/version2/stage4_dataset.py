@@ -361,8 +361,7 @@ class Stage4SequenceDataset(Dataset):
             'task_type': task_type,
             'task_data': task_data,
             'metadata': {
-                'book_id': sequence['book_id'],
-                'page_name': sequence['page_name'],
+                'canonical_id': sequence['canonical_id'],
                 'num_panels': num_panels
             }
         }
