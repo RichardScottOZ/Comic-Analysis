@@ -18,8 +18,9 @@ from pathlib import Path
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+import argparse
+
 # Configuration
-CHECKPOINT = "checkpoints/stage3/best_model.pt"
 FEATURE_DIM = 512
 IMAGE_SIZE = 224
 TEXT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -27,65 +28,20 @@ JSON_ROOT = "E:/Comic_Analysis_Results_v2/stage3_json"
 MASTER_MANIFEST = "manifests/master_manifest_20251229.csv"
 CALIBRE_MANIFEST = "manifests/calibrecomics-extracted_manifest.csv"
 
-def build_suffix_map():
-    print("Indexing Calibre Manifest suffixes...")
-    suffix_map = {}
-    with open(CALIBRE_MANIFEST, 'r', encoding='utf-8') as f:
-        for row in csv.DictReader(f):
-            cid = row['canonical_id']
-            if "__MACOSX" in cid: continue
-            
-            parts = cid.split('/')
-            for i in range(len(parts)):
-                suffix = "/".join(parts[i:])
-                if suffix not in suffix_map:
-                    suffix_map[suffix] = cid
-            
-            suffix_map[parts[-1]] = cid
-    return suffix_map
-
-def get_real_sample():
-    suffix_map = build_suffix_map()
-    print("Scanning Master Manifest for a valid pair...")
-    
-    with open(MASTER_MANIFEST, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for i, row in enumerate(reader):
-            if i > 2000: break # Scan enough to skip non-story pages if needed
-            
-            img_path = row['absolute_image_path']
-            master_id = row['canonical_id']
-            
-            if not os.path.exists(img_path): continue
-            
-            # Bridge to Calibre ID
-            filename = Path(img_path).name
-            calibre_id = suffix_map.get(filename)
-            if not calibre_id:
-                calibre_id = suffix_map.get(master_id)
-            if not calibre_id:
-                calibre_id = suffix_map.get(Path(filename).stem)
-                
-            if not calibre_id: continue
-            
-            # Construct JSON Path
-            # json_root / CalibreID.json
-            cid_path = calibre_id.replace('/', os.sep)
-            json_path = os.path.join(JSON_ROOT, f"{cid_path}.json")
-            
-            if os.path.exists(json_path):
-                return img_path, json_path
-                
-    return None, None
+# ... (inside get_real_sample) ...
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint', default="checkpoints/stage3/best_model.pt", help='Path to trained model checkpoint')
+    args = parser.parse_args()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # 1. Load Model
-    print(f"Loading checkpoint: {CHECKPOINT}")
+    print(f"Loading checkpoint: {args.checkpoint}")
     try:
-        checkpoint = torch.load(CHECKPOINT, map_location=device)
+        checkpoint = torch.load(args.checkpoint, map_location=device)
         model = PanelFeatureExtractor(
             visual_backbone='both',
             visual_fusion='attention',
