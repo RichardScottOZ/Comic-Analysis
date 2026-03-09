@@ -30,6 +30,11 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Silence urllib3 connection pool warnings
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.HTTPWarning)
+logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+
 # --- Path Resolution ---
 
 def resolve_s3_uri(local_path, bucket_name="calibrecomics-extracted"):
