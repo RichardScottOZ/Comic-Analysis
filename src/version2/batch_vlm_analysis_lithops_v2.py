@@ -60,32 +60,36 @@ def resolve_s3_uri(local_path, bucket_name="calibrecomics-extracted"):
 
 def get_integrated_prompt():
     """Detailed prompt for grounding and narrative."""
-    return """Analyze this comic page. Provide a detailed structured analysis in JSON format.
+    return """Analyze this comic page in detail.
+For every distinct PANEL, identify its bounding box and describe its content.
+Include all dialogue, captions, and character identities.
 
-REQUIREMENTS:
-1. Identify every panel. For each panel, provide its BOUNDING BOX [ymin, xmin, ymax, xmax] (0-1000).
-2. Describe the visual content and action.
-3. Transcribe all dialogue and attribute it to characters.
-
-Return ONLY valid JSON with this structure:
+Return ONLY a JSON object with this exact structure:
 {
-  "overall_summary": "Brief description of the page",
+  "overall_summary": "Summary of the whole page",
   "panels": [
     {
       "panel_number": 1,
       "box_2d": [ymin, xmin, ymax, xmax],
-      "caption": "Panel title/description",
-      "description": "Detailed panel description",
-      "speakers": [
-        {
-          "character": "Character name",
-          "dialogue": "What they say",
-          "speech_type": "dialogue|thought|narration"
-        }
+      "description": "Visual description of the panel",
+      "text_content": [
+        {"label": "dialogue|caption|thought", "speaker": "Name", "text": "Literal text", "box_2d": [ymin, xmin, ymax, xmax]}
+      ],
+      "characters": [
+        {"name": "Name", "box_2d": [ymin, xmin, ymax, xmax]}
+      ],
+      "faces": [
+        {"character": "Name", "box_2d": [ymin, xmin, ymax, xmax]}
       ]
     }
   ]
-}"""
+}
+
+STRICT RULES:
+- Coordinates MUST be normalized (0-1000).
+- box_2d is [ymin, xmin, ymax, xmax].
+- Ensure every panel, text bubble, character, and face has a corresponding box_2d.
+"""
 
 def process_page_vlm(task_data):
     """
@@ -101,6 +105,8 @@ def process_page_vlm(task_data):
     # Internal JSON repair
     def inner_repair_json(json_str):
         import re
+        if json_str is None:
+            return '{}'
         json_str = json_str.strip()
         
         # 1. Remove markdown code fences
@@ -114,6 +120,16 @@ def process_page_vlm(task_data):
         start = json_str.find('{')
         if start != -1:
             json_str = json_str[start:]
+        
+        # 2.5. Fix invalid escape sequences (e.g., \x -> \\x)
+        # Valid escapes in JSON: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
+        def fix_escapes(match):
+            esc = match.group(1)
+            valid = {'"', '\\', '/', 'b', 'f', 'n', 'r', 't'}
+            if esc in valid or esc == 'u':
+                return match.group(0)  # Keep valid escapes
+            return '\\\\' + esc  # Escape the backslash
+        json_str = re.sub(r'\\([^"\\\/bfnrtu])', fix_escapes, json_str)
         
         # 3. Fix missing commas between properties (common issue)
         # Pattern: "key": value"next_key" -> "key": value, "next_key"
