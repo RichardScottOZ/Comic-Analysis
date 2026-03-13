@@ -254,13 +254,37 @@ def process_page_vlm(task_data):
             }
 
         res_json = api_res.json()
-        content = res_json['choices'][0]['message']['content']
+        choice = res_json.get('choices', [{}])[0]
+        message = choice.get('message', {})
+        content = message.get('content', '')
+        
+        if content is None:
+            content = ""
+            
         final_usage = res_json.get('usage', {})
         
         # 4. Parse & Save (NO RETRIES ON FAILURE)
-        repaired = inner_repair_json(content)
+        
+        # Strip markdown safely
+        clean_json = content.strip()
+        if clean_json.startswith('```json'):
+            clean_json = clean_json[7:]
+        elif clean_json.startswith('```'):
+            clean_json = clean_json[3:]
+            
+        if clean_json.endswith('```'):
+            clean_json = clean_json[:-3]
+            
+        clean_json = clean_json.strip()
+        
+        # Find JSON bounds
+        start = clean_json.find('{')
+        end = clean_json.rfind('}')
+        if start != -1 and end != -1:
+            clean_json = clean_json[start:end+1]
+
         try:
-            out_data = json.loads(repaired, strict=False)
+            out_data = json.loads(clean_json, strict=False)
         except Exception as parse_e:
             raw_snippet = content[:500].replace('\n', '\\n')
             return {
