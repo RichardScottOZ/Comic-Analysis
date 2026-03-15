@@ -16,6 +16,7 @@ import csv
 import json
 import base64
 import time
+import random
 import logging
 import re
 from pathlib import Path
@@ -356,6 +357,12 @@ def process_page_vlm(task_data):
     model = task_data['model']
     api_key = task_data['api_key']
     timeout = task_data.get('timeout', 180)
+    jitter_max = task_data.get('jitter_max', 0)
+    
+    # Spread burst load: sleep a random fraction of jitter_max before the API call.
+    # Prevents all 1000 concurrent Lambdas from hitting OpenRouter simultaneously.
+    if jitter_max > 0:
+        time.sleep(random.uniform(0, jitter_max))
     
     s3_client = boto3.client('s3')
     
@@ -399,11 +406,12 @@ def process_page_vlm(task_data):
                 
                 if api_res.status_code == 429:
                     last_error = "HTTP 429 Rate Limit"
-                    time.sleep(15 * (attempt + 1))
+                    # Jitter the backoff so retry waves don't re-collide
+                    time.sleep(15 * (attempt + 1) + random.uniform(0, 10))
                     continue
                 elif api_res.status_code >= 500:
                     last_error = f"HTTP {api_res.status_code}: {api_res.text[:200]}"
-                    time.sleep(5 * (attempt + 1))  # brief backoff for transient errors
+                    time.sleep(5 * (attempt + 1) + random.uniform(0, 5))  # brief backoff for transient errors
                     continue
                 elif api_res.status_code != 200:
                     last_error = f"HTTP {api_res.status_code}: {api_res.text[:500]}"
@@ -518,6 +526,8 @@ def main():
     parser.add_argument('--config', default='~/.lithops/config_comic_vlm_v2')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--limit', type=int, help="Limit total records to process")
+    parser.add_argument('--jitter', type=float, default=30.0,
+                        help="Max random pre-request sleep (seconds) to spread API burst load. Default: 30. Set 0 to disable.")
     args = parser.parse_args()
 
     logger.info(f"Checking S3 for existing progress...")
@@ -565,7 +575,8 @@ def main():
             'output_bucket': args.output_bucket, 
             'output_prefix': args.output_prefix,
             'model': args.model, 
-            'api_key': args.api_key
+            'api_key': args.api_key,
+            'jitter_max': args.jitter,
         }} for r in chunk]
         
         futures = fexec.map(process_page_vlm, tasks)
