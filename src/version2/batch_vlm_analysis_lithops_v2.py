@@ -144,7 +144,29 @@ def process_page_vlm(task_data):
         # 4. Fix missing commas after string values before next key
         # Pattern: "value"\n"key" -> "value",\n"key"
         json_str = re.sub(r'(")("\s*\n\s*")', r'\1,\2', json_str)
-        
+
+        # 4.5. Fix unescaped double quotes inside string values.
+        # When the LLM writes something like "she said "hello" to him", the inner
+        # quotes break the parser with "Expecting ',' delimiter" at that position.
+        # Strategy: parse, detect the exact offending position, escape it, repeat.
+        try:
+            import json as _json
+            for _ in range(30):
+                try:
+                    _json.loads(json_str, strict=False)
+                    break  # Already valid — no need for further repairs here
+                except _json.JSONDecodeError as e:
+                    if (
+                        ("Expecting ',' delimiter" in str(e) or "Expecting ':' delimiter" in str(e))
+                        and 0 < e.pos < len(json_str)
+                        and json_str[e.pos] == '"'
+                    ):
+                        json_str = json_str[:e.pos] + '\\"' + json_str[e.pos + 1:]
+                    else:
+                        break  # Different error type — let later steps handle it
+        except Exception:
+            pass  # If anything goes wrong here, fall through to the other repairs
+
         # 5. Balance quotes, braces, brackets
         if json_str.count('"') % 2 != 0:
             json_str += '"'
