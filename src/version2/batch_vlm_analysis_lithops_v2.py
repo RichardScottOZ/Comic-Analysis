@@ -116,6 +116,11 @@ def process_page_vlm(task_data):
             if lines and lines[-1].startswith('```'): lines = lines[:-1]
             json_str = '\n'.join(lines).strip()
         
+        # 1.5 Strip markdown bold/italic markers that leak before JSON keys.
+        # The model sometimes outputs `** "panels": [...]` using bold formatting;
+        # the ** is invalid JSON and must be removed before any further processing.
+        json_str = re.sub(r'(?m)^(\s*)\*+\s*(?=")', r'\1', json_str)
+        
         # 2. Find the first { and remove anything before it
         start = json_str.find('{')
         if start != -1:
@@ -207,9 +212,12 @@ def process_page_vlm(task_data):
                             # OPENING quote of an unescaped inner word — escape directly
                             json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
                         elif 0 <= pos < len(json_str) and json_str[pos] not in ':{}[],\\"':
-                            # String closed prematurely; backwards-search for the closer
+                            # String closed prematurely; backwards-search for the closer.
+                            # Guard: if the found quote is a structural opener (key at
+                            # start of indented line) don't escape it — that would
+                            # corrupt key names when strict=False reads across newlines.
                             last_q = _last_unescaped_quote(json_str, pos)
-                            if last_q >= 0:
+                            if last_q >= 0 and not _is_structural_quote(json_str, last_q):
                                 json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
                             else:
                                 break
@@ -223,9 +231,10 @@ def process_page_vlm(task_data):
                         # it as a key-value separator, and then finds a plain letter
                         # instead of the expected `"key"`.  The fix is the same backwards
                         # search: find the premature closing quote and escape it.
+                        # Same structural guard as for ',' and ':' errors.
                         if 0 <= pos < len(json_str) and json_str[pos] not in ':{}[],\\"':
                             last_q = _last_unescaped_quote(json_str, pos)
-                            if last_q >= 0:
+                            if last_q >= 0 and not _is_structural_quote(json_str, last_q):
                                 json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
                             else:
                                 break
@@ -420,6 +429,24 @@ def process_page_vlm(task_data):
         content = message.get('content') or ''
             
         final_usage = res_json.get('usage', {})
+        
+        # Detect zero-token responses (OpenRouter occasionally returns HTTP 200 but
+        # with empty content and zero usage — treat as a transient error and retry).
+        if not content and isinstance(final_usage, dict) and final_usage.get('completion_tokens', 1) == 0:
+            for attempt in range(2):
+                time.sleep(5 * (attempt + 1))
+                try:
+                    api_res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=timeout)
+                    if api_res.status_code == 200:
+                        res_json = api_res.json()
+                        choice = res_json.get('choices', [{}])[0]
+                        message = choice.get('message') or {}
+                        content = message.get('content') or ''
+                        final_usage = res_json.get('usage', {})
+                        if content:
+                            break
+                except Exception:
+                    pass
         
         # 4. Parse & Save (NO RETRIES ON FAILURE)
         
