@@ -382,3 +382,59 @@ Disable jitter only for small batches where burst is not a concern:
 ```
 --limit 50 --workers 10 --jitter 0
 ```
+
+---
+
+## Empirical Cost Analysis (2026-03-15, production run)
+
+### Dataset
+- **8 341 Comic Analysis API calls** processed on this date (~0.7% of the 1.2M corpus)
+- **Single model:** `google/gemini-2.5-flash-lite` via OpenRouter — 100% of calls
+- **Source:** `openrouter_activity_2026-03-15.csv`
+- **Analysis script:** `testcopilot/comic_report.py` → `comic_report_results.json`
+
+### Derived pricing rates (from non-cached production rows)
+| Token type | Google listed rate | OpenRouter actual rate | Markup |
+|---|---|---|---|
+| Input | $0.075 / M | **$0.10 / M** | ~33% |
+| Output | $0.30 / M | **$0.40 / M** | ~33% |
+
+OpenRouter's ~33% provider markup was absent from the March 1 benchmark doc, which used Google's listed rates.
+
+### Token distribution (exact, n=8 341)
+| Metric | Value |
+|---|---|
+| Avg prompt tokens | **3 457** (mix of 3 657 Amazon + 2 109 Calibre) |
+| Avg completion tokens | **2 499** |
+| Truncated responses (completion ≥ 8 192) | **227 / 8 341 = 2.72%** |
+| finish_reason = `stop` | 8 108 (97.2%) |
+| finish_reason = `length` | 229 (2.7%) |
+| finish_reason = `` (empty) | 4 (0.05%) |
+
+### Per-call cost statistics (exact, n=8 341)
+| Metric | Value |
+|---|---|
+| Total spend | **$11.19** |
+| Mean | **$0.001342** |
+| Median (p50) | $0.001278 |
+| p75 | $0.001553 |
+| p90 | $0.001870 |
+| p95 | $0.002204 |
+| p99 | $0.003642 |
+| Max | $0.003668 |
+
+### Projection to 1.2 million pages (exact mean extrapolation)
+
+| Component | Cost |
+|---|---|
+| Model API ($0.001342 × 1 200 000) | **$1 610** |
+| AWS S3 egress + Lambda (fixed) | $608 |
+| **Total all-in** | **$2 218** |
+
+vs. March 1 doc estimate of **$1 988** — a **+$230 (+11.6%) underestimate**, almost entirely due to the OpenRouter ~33% provider markup not being in the original doc.
+
+### Calibre / lower-res tranche (estimated 300–400K pages)
+- Avg prompt drops 3 657 → 2 109 tokens (~42% reduction)
+- Estimated cost: ~$0.00093/page vs $0.00134 for Amazon
+- Savings: ~$0.00041/page × 400K pages ≈ **~$164 saving**
+- Blended 1.2M projection with Calibre mix: model ~$1 500, all-in ~**$2 108**
