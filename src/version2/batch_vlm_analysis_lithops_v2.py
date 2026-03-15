@@ -213,11 +213,13 @@ def process_page_vlm(task_data):
                             json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
                         elif 0 <= pos < len(json_str) and json_str[pos] not in ':{}[],\\"':
                             # String closed prematurely; backwards-search for the closer.
-                            # Guard: if the found quote is a structural opener (key at
-                            # start of indented line) don't escape it — that would
-                            # corrupt key names when strict=False reads across newlines.
+                            # No structural-quote guard here — over-escaping a key opener
+                            # for ',' errors eventually hits ':' or another break-char and
+                            # stops, allowing step 5/6 to recover.  Adding the guard here
+                            # caused regressions (Abbott-001 p002 style) without fixing the
+                            # cross-line cases that were already failing for other reasons.
                             last_q = _last_unescaped_quote(json_str, pos)
-                            if last_q >= 0 and not _is_structural_quote(json_str, last_q):
+                            if last_q >= 0:
                                 json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
                             else:
                                 break
@@ -231,7 +233,8 @@ def process_page_vlm(task_data):
                         # it as a key-value separator, and then finds a plain letter
                         # instead of the expected `"key"`.  The fix is the same backwards
                         # search: find the premature closing quote and escape it.
-                        # Same structural guard as for ',' and ':' errors.
+                        # Structural guard: if the found quote is a key opener (preceded
+                        # by newline+indent), don't escape — break and let step 5/6 handle.
                         if 0 <= pos < len(json_str) and json_str[pos] not in ':{}[],\\"':
                             last_q = _last_unescaped_quote(json_str, pos)
                             if last_q >= 0 and not _is_structural_quote(json_str, last_q):
