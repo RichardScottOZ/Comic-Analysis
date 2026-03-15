@@ -147,22 +147,26 @@ def process_page_vlm(task_data):
 
         # 4.5. Fix unescaped double quotes and other inline value errors iteratively.
         #
-        # Problem: LLMs write things like "sign for "Wolf Boy" and a woman..."
-        # Each quoted word needs TWO fixes:
-        #   - The OPENING quote ("Wolf) triggers error at the " itself → escape it.
-        #   - After that fix, the string closes at the CLOSING quote (Boy") and the
-        #     parser then fails on the char AFTER it (a space or letter). In that case
-        #     we scan BACKWARDS from the error pos to find the last unescaped " and
-        #     escape that premature closer instead.
+        # Two sub-cases for "Expecting ',' delimiter":
+        #   a) json_str[pos] == '"' → OPENING quote of unescaped inner word → escape it.
+        #   b) json_str[pos] is a word char (letter/digit) → string closed prematurely
+        #      somewhere before pos → scan backwards (≤200 chars) for the premature
+        #      closer and escape it.
+        #      Crucially, we do NOT apply the backwards search for ':' delimiter errors —
+        #      those at EOF are truncation artefacts; a backwards escape there would
+        #      corrupt legitimate key quotes.
         #
         # Also handles:
         #   - "Expecting value": trailing commas and Python None / JS undefined / NaN.
         try:
             import json as _json
 
-            def _last_unescaped_quote(s, before_pos):
-                """Return index of last unescaped " in s before before_pos, or -1."""
-                for k in range(min(before_pos, len(s)) - 1, -1, -1):
+            def _last_unescaped_quote(s, before_pos, max_lookback=200):
+                """Return index of last unescaped " in s within max_lookback chars of
+                before_pos, or -1.  Limiting lookback prevents accidentally escaping
+                legitimate structural quotes far from the error site."""
+                search_from = max(0, before_pos - max_lookback)
+                for k in range(min(before_pos, len(s)) - 1, search_from - 1, -1):
                     if s[k] == '"':
                         bs = 0
                         j = k - 1
@@ -181,18 +185,28 @@ def process_page_vlm(task_data):
                     err_msg = str(e)
                     pos = e.pos
 
-                    if "Expecting ',' delimiter" in err_msg or "Expecting ':' delimiter" in err_msg:
+                    if "Expecting ',' delimiter" in err_msg:
                         if 0 <= pos < len(json_str) and json_str[pos] == '"':
-                            # OPENING quote of an unescaped inner word — escape it directly
+                            # OPENING quote of an unescaped inner word — escape directly
                             json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
-                        else:
-                            # The string closed prematurely at some " BEFORE pos.
-                            # Find that last unescaped " and escape it.
+                        elif 0 <= pos < len(json_str) and (json_str[pos].isalnum() or json_str[pos] in "_'"):
+                            # String closed prematurely; backwards-search for the closer
                             last_q = _last_unescaped_quote(json_str, pos)
                             if last_q >= 0:
                                 json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
                             else:
                                 break
+                        else:
+                            break  # Structural char at pos — not an inner-quote issue
+
+                    elif "Expecting ':' delimiter" in err_msg:
+                        # Only fix the direct-quote case (e.g. "key: value" inside text).
+                        # Do NOT backwards-search here: ':' errors at or near EOF are
+                        # truncation artefacts and backwards-escaping would corrupt keys.
+                        if 0 <= pos < len(json_str) and json_str[pos] == '"':
+                            json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
+                        else:
+                            break
 
                     elif "Expecting value" in err_msg:
                         # Trailing comma before ] or }
@@ -210,21 +224,41 @@ def process_page_vlm(task_data):
                             break
 
                     else:
-                        break  # Unknown error type — let later steps handle it
+                        break  # Unknown error type — let step 5 handle it
         except Exception:
-            pass  # Fall through to bracket-balancing steps
+            pass  # Fall through to truncation-close step
 
-        # 5. Balance quotes, braces, brackets
-        if json_str.count('"') % 2 != 0:
-            json_str += '"'
-        
-        ob = json_str.count('{')
-        cb = json_str.count('}')
-        ok = json_str.count('[')
-        ck = json_str.count(']')
-        
-        if ok > ck: json_str += ']' * (ok - ck)
-        if ob > cb: json_str += '}' * (ob - cb)
+        # 5. Close any open strings and structures in the correct nesting order.
+        #
+        # The old approach (count '{'s and '['s then append ']'*N + '}'*M) produces
+        # wrong output for nested {[...]} truncations — e.g. a truncated panel array
+        # would need "}]}" not "]}}" .  A stack-based scan emits close tokens in the
+        # exact reverse order they were opened, which is always correct.
+        _stk = []
+        _in_s = False
+        _esc = False
+        for _ch in json_str:
+            if _esc:
+                _esc = False
+                continue
+            if _ch == '\\':
+                _esc = True
+                continue
+            if _ch == '"':
+                _in_s = not _in_s
+                continue
+            if _in_s:
+                continue
+            if _ch == '{':
+                _stk.append('}')
+            elif _ch == '[':
+                _stk.append(']')
+            elif _ch in ('}', ']') and _stk and _stk[-1] == _ch:
+                _stk.pop()
+        if _in_s:
+            json_str += '"'       # close the unterminated string
+        if _stk:
+            json_str += ''.join(reversed(_stk))  # close open {[ in correct order
         
         # 6. Handle "Extra data" - truncate after first complete JSON object
         # Find where the outermost object closes
@@ -293,7 +327,8 @@ def process_page_vlm(task_data):
         api_res = None
         last_error = "Unknown Error"
         
-        # We only retry for 429 Rate Limits, NOT for JSON parse errors to save money.
+        # We retry on 429 (rate limit) and 5xx (transient server errors).
+        # 4xx errors other than 429 are not retried (auth, bad request, etc.).
         for attempt in range(max_retries):
             try:
                 api_res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload, timeout=timeout)
@@ -302,9 +337,13 @@ def process_page_vlm(task_data):
                     last_error = "HTTP 429 Rate Limit"
                     time.sleep(15 * (attempt + 1))
                     continue
+                elif api_res.status_code >= 500:
+                    last_error = f"HTTP {api_res.status_code}: {api_res.text[:200]}"
+                    time.sleep(5 * (attempt + 1))  # brief backoff for transient errors
+                    continue
                 elif api_res.status_code != 200:
                     last_error = f"HTTP {api_res.status_code}: {api_res.text[:500]}"
-                    break # Don't retry auth errors
+                    break  # Don't retry 4xx auth/bad-request errors
                     
                 # Success HTTP
                 last_error = None
