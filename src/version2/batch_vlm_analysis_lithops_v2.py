@@ -528,6 +528,8 @@ def main():
     parser.add_argument('--limit', type=int, help="Limit total records to process")
     parser.add_argument('--jitter', type=float, default=30.0,
                         help="Max random pre-request sleep (seconds) to spread API burst load. Default: 30. Set 0 to disable.")
+    parser.add_argument('--chunk-cooldown', type=float, default=90.0,
+                        help="Seconds to sleep between chunks to let OpenRouter rate-limit window reset. Default: 90.")
     args = parser.parse_args()
 
     logger.info(f"Checking S3 for existing progress...")
@@ -612,6 +614,13 @@ def main():
                         f.write(f"{r['canonical_id']}: {r.get('error')} | Usage: {r.get('usage')}\n")
         
         logger.info(f"Chunk results: Success={success}, Fail={failed}")
+
+        # Sleep between chunks to let OpenRouter's sliding rate-limit window reset.
+        # Skip cooldown after the final chunk.
+        if args.chunk_cooldown > 0 and i + args.batch_size < len(records):
+            logger.info(f"Inter-chunk cooldown: sleeping {args.chunk_cooldown}s to avoid rate-limit saturation...")
+            time.sleep(args.chunk_cooldown)
+            logger.info("Cooldown complete, launching next chunk.")
 
 if __name__ == "__main__":
     main()
