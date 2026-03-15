@@ -221,11 +221,25 @@ def process_page_vlm(task_data):
                             break
 
                     elif "Expecting ':' delimiter" in err_msg:
-                        # Only fix the direct-quote case (e.g. "key: value" inside text).
-                        # Do NOT backwards-search here: ':' errors at or near EOF are
-                        # truncation artefacts and backwards-escaping would corrupt keys.
+                        # Two sub-cases:
+                        #  a) json_str[pos] == '"' → opening quote of an inner word
+                        #     acting as a spurious key closer — escape directly.
+                        #  b) json_str[pos] is a letter/non-structural char AND the error
+                        #     is far from EOF → unescaped quoted word in key name, e.g.
+                        #     `"character "Lex" Luthor": ...`  → backwards-search safe.
+                        #     We guard with (len - pos) > 200 because genuine truncation
+                        #     EOF ':' errors land at pos ≈ len(json_str) (key present but
+                        #     no colon/value follows), and escaping there would corrupt keys.
                         if 0 <= pos < len(json_str) and json_str[pos] == '"':
                             json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
+                        elif (0 <= pos < len(json_str)
+                              and json_str[pos] not in ':{}[],\\"'
+                              and (len(json_str) - pos) > 200):
+                            last_q = _last_unescaped_quote(json_str, pos)
+                            if last_q >= 0:
+                                json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
+                            else:
+                                break
                         else:
                             break
 
