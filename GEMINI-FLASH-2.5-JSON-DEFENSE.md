@@ -438,3 +438,14 @@ vs. March 1 doc estimate of **$1 988** — a **+$230 (+11.6%) underestimate**, a
 - Estimated cost: ~$0.00093/page vs $0.00134 for Amazon
 - Savings: ~$0.00041/page × 400K pages ≈ **~$164 saving**
 - Blended 1.2M projection with Calibre mix: model ~$1 500, all-in ~**$2 108**
+
+### Additional cost overheads (not in the $2 218 figure)
+
+| Item | Estimate | Notes |
+|---|---|---|
+| **Failure reruns** | +~$16 | ~1% of pages make 2 API calls; 1.2M × 1% × $0.001342 |
+| **Internal retries** | +~$5–10 | 429/5xx/zero-token retries inside Lambda — billed but invisible in success count |
+| **AWS egress + Lambda** | $608 *(estimated)* | Pending verification via AWS Cost Explorer in coming days |
+| **Calibre tranche saving** | −~$164 | ~400K pages at $0.00093/page vs $0.00134 |
+
+**Likely true all-in range: ~$2,075–$2,250** once Calibre savings and retry overhead are netted off and AWS actuals confirmed.
