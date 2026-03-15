@@ -145,27 +145,74 @@ def process_page_vlm(task_data):
         # Pattern: "value"\n"key" -> "value",\n"key"
         json_str = re.sub(r'(")("\s*\n\s*")', r'\1,\2', json_str)
 
-        # 4.5. Fix unescaped double quotes inside string values.
-        # When the LLM writes something like "she said "hello" to him", the inner
-        # quotes break the parser with "Expecting ',' delimiter" at that position.
-        # Strategy: parse, detect the exact offending position, escape it, repeat.
+        # 4.5. Fix unescaped double quotes and other inline value errors iteratively.
+        #
+        # Problem: LLMs write things like "sign for "Wolf Boy" and a woman..."
+        # Each quoted word needs TWO fixes:
+        #   - The OPENING quote ("Wolf) triggers error at the " itself → escape it.
+        #   - After that fix, the string closes at the CLOSING quote (Boy") and the
+        #     parser then fails on the char AFTER it (a space or letter). In that case
+        #     we scan BACKWARDS from the error pos to find the last unescaped " and
+        #     escape that premature closer instead.
+        #
+        # Also handles:
+        #   - "Expecting value": trailing commas and Python None / JS undefined / NaN.
         try:
             import json as _json
-            for _ in range(30):
+
+            def _last_unescaped_quote(s, before_pos):
+                """Return index of last unescaped " in s before before_pos, or -1."""
+                for k in range(min(before_pos, len(s)) - 1, -1, -1):
+                    if s[k] == '"':
+                        bs = 0
+                        j = k - 1
+                        while j >= 0 and s[j] == '\\':
+                            bs += 1
+                            j -= 1
+                        if bs % 2 == 0:  # unescaped
+                            return k
+                return -1
+
+            for _ in range(100):
                 try:
                     _json.loads(json_str, strict=False)
-                    break  # Already valid — no need for further repairs here
+                    break
                 except _json.JSONDecodeError as e:
-                    if (
-                        ("Expecting ',' delimiter" in str(e) or "Expecting ':' delimiter" in str(e))
-                        and 0 < e.pos < len(json_str)
-                        and json_str[e.pos] == '"'
-                    ):
-                        json_str = json_str[:e.pos] + '\\"' + json_str[e.pos + 1:]
+                    err_msg = str(e)
+                    pos = e.pos
+
+                    if "Expecting ',' delimiter" in err_msg or "Expecting ':' delimiter" in err_msg:
+                        if 0 <= pos < len(json_str) and json_str[pos] == '"':
+                            # OPENING quote of an unescaped inner word — escape it directly
+                            json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
+                        else:
+                            # The string closed prematurely at some " BEFORE pos.
+                            # Find that last unescaped " and escape it.
+                            last_q = _last_unescaped_quote(json_str, pos)
+                            if last_q >= 0:
+                                json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
+                            else:
+                                break
+
+                    elif "Expecting value" in err_msg:
+                        # Trailing comma before ] or }
+                        before = json_str[:pos].rstrip()
+                        if before and before[-1] == ',':
+                            json_str = before[:-1] + json_str[pos:]
+                        # Python None / JS undefined / NaN written literally
+                        elif json_str[pos:pos + 4] == 'None':
+                            json_str = json_str[:pos] + 'null' + json_str[pos + 4:]
+                        elif json_str[pos:pos + 9] == 'undefined':
+                            json_str = json_str[:pos] + 'null' + json_str[pos + 9:]
+                        elif json_str[pos:pos + 3] == 'NaN':
+                            json_str = json_str[:pos] + 'null' + json_str[pos + 3:]
+                        else:
+                            break
+
                     else:
-                        break  # Different error type — let later steps handle it
+                        break  # Unknown error type — let later steps handle it
         except Exception:
-            pass  # If anything goes wrong here, fall through to the other repairs
+            pass  # Fall through to bracket-balancing steps
 
         # 5. Balance quotes, braces, brackets
         if json_str.count('"') % 2 != 0:
