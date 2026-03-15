@@ -130,6 +130,11 @@ def process_page_vlm(task_data):
                 return match.group(0)  # Keep valid escapes
             return '\\\\' + esc  # Escape the backslash
         json_str = re.sub(r'\\([^"\\\/bfnrtu])', fix_escapes, json_str)
+        # Also fix \u not followed by exactly 4 hex digits (e.g. \uROSC, \u followed
+        # by whitespace, etc.) — Python's json module raises "Invalid \uXXXX escape"
+        # for these.  Double-escaping the backslash produces a literal u-sequence that
+        # won't be misinterpreted.
+        json_str = re.sub(r'\\u(?![0-9a-fA-F]{4})', r'\\\\u', json_str)
         
         # 3. Fix missing commas between properties (common issue)
         # Pattern: "key": value"next_key" -> "key": value, "next_key"
@@ -198,6 +203,22 @@ def process_page_vlm(task_data):
                                 break
                         else:
                             break  # Structural char at pos — not an inner-quote issue
+
+                    elif "Expecting property name enclosed in double quotes" in err_msg:
+                        # This happens when an unescaped quoted word like "Doc" causes
+                        # the outer string to close prematurely, a literal comma follows
+                        # in the text (e.g. `"Doc", is speaking`), the parser consumes
+                        # it as a key-value separator, and then finds a plain letter
+                        # instead of the expected `"key"`.  The fix is the same backwards
+                        # search: find the premature closing quote and escape it.
+                        if 0 <= pos < len(json_str) and json_str[pos] not in ':{}[],\\"':
+                            last_q = _last_unescaped_quote(json_str, pos)
+                            if last_q >= 0:
+                                json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
+                            else:
+                                break
+                        else:
+                            break
 
                     elif "Expecting ':' delimiter" in err_msg:
                         # Only fix the direct-quote case (e.g. "key: value" inside text).
@@ -491,6 +512,26 @@ def main():
         
         success = sum(1 for r in results if r['status'] == 'success')
         failed = sum(1 for r in results if r['status'] == 'error')
+        
+        # Token distribution stats (all results that have usage data)
+        completion_tokens = [
+            r['usage']['completion_tokens']
+            for r in results
+            if r.get('usage') and isinstance(r['usage'], dict) and 'completion_tokens' in r['usage']
+        ]
+        if completion_tokens:
+            ct = sorted(completion_tokens)
+            n = len(ct)
+            truncated = sum(1 for t in ct if t >= 8192)
+            p95_idx = min(int(n * 0.95), n - 1)
+            logger.info(
+                f"Token stats (n={n}): "
+                f"min={ct[0]}, "
+                f"mean={sum(ct)//n}, "
+                f"p95={ct[p95_idx]}, "
+                f"max={ct[-1]}, "
+                f"truncated(>=8192)={truncated}"
+            )
         
         if failed > 0:
             with open('vlm_production_failures.log', 'a', encoding='utf-8') as f:
