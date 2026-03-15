@@ -255,11 +255,9 @@ def process_page_vlm(task_data):
 
         res_json = api_res.json()
         choice = res_json.get('choices', [{}])[0]
-        message = choice.get('message', {})
-        content = message.get('content', '')
-        
-        if content is None:
-            content = ""
+        # Defensively handle API responses where 'message' or 'content' may be null
+        message = choice.get('message') or {}
+        content = message.get('content') or ''
             
         final_usage = res_json.get('usage', {})
         
@@ -277,23 +275,29 @@ def process_page_vlm(task_data):
             
         clean_json = clean_json.strip()
         
-        # Find JSON bounds
+        # Find JSON start; do NOT use rfind('}') as "Extra data" errors mean
+        # there are multiple objects and rfind picks up the last one.
+        # inner_repair_json handles proper truncation at the first complete object.
         start = clean_json.find('{')
-        end = clean_json.rfind('}')
-        if start != -1 and end != -1:
-            clean_json = clean_json[start:end+1]
+        if start != -1:
+            clean_json = clean_json[start:]
 
         try:
             out_data = json.loads(clean_json, strict=False)
         except Exception as parse_e:
-            raw_snippet = content[:500].replace('\n', '\\n')
-            return {
-                'status': 'error', 
-                'canonical_id': canonical_id, 
-                'error': f"JSON Parse Failure ({str(parse_e)}) | Raw: {raw_snippet}", 
-                'usage': final_usage,
-                'raw_content': content
-            }
+            # First parse failed — attempt structural repair before giving up
+            repaired = inner_repair_json(clean_json)
+            try:
+                out_data = json.loads(repaired, strict=False)
+            except Exception as repair_e:
+                raw_snippet = content[:500].replace('\n', '\\n')
+                return {
+                    'status': 'error',
+                    'canonical_id': canonical_id,
+                    'error': f"JSON Parse Failure ({str(repair_e)}) | Raw: {raw_snippet}",
+                    'usage': final_usage,
+                    'raw_content': content
+                }
             
         # Save to S3
         out_data['canonical_id'] = canonical_id
