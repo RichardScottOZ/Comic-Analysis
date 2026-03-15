@@ -189,7 +189,7 @@ def process_page_vlm(task_data):
                         if 0 <= pos < len(json_str) and json_str[pos] == '"':
                             # OPENING quote of an unescaped inner word — escape directly
                             json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
-                        elif 0 <= pos < len(json_str) and (json_str[pos].isalnum() or json_str[pos] in "_'"):
+                        elif 0 <= pos < len(json_str) and json_str[pos] not in ':{}[],\\"':
                             # String closed prematurely; backwards-search for the closer
                             last_q = _last_unescaped_quote(json_str, pos)
                             if last_q >= 0:
