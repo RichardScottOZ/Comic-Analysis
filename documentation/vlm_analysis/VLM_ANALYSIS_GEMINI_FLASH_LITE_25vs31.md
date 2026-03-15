@@ -31,12 +31,19 @@ Calculated for 1.2 million pages, including AWS infrastructure taxes.
 
 | Cost Component | Gemini 2.5 Flash Lite | Gemini 3.1 Flash Lite |
 | :--- | :--- | :--- |
-| **Model Cost (API)** | ~$1,380.00 | ~$2,520.00 |
+| **Model Cost (API)** | ~$1,610 *(empirical)* / ~$1,380 *(March 1 est.)* | ~$2,520.00 |
 | **AWS S3 Egress (3.34 TB)** | $300.60 | $300.60 |
 | **S3 API Requests** | $7.00 | $7.00 |
 | **Lithops Compute (Lambda)** | ~$300.00 | ~$300.00 |
-| **TOTAL PROJECT COST** | **~$1,987.60** | **~$3,127.60** |
-| **Cost Per Page** | **$0.0016** | **$0.0026** |
+| **TOTAL PROJECT COST** | **~$2,218** *(empirical)* / **~$1,988** *(March 1 est.)* | **~$3,127.60** |
+| **Cost Per Page** | **$0.00134** *(empirical mean, 8 341 calls)* | **$0.0026** |
+
+> **Empirical correction (2026-03-15):** Production data from 8 341 actual API calls shows a mean of
+> $0.001342/page, projecting to **$1,610 model cost** and **$2,218 all-in** for 1.2M pages.
+> The March 1 estimate of $1,380/$1,988 used Google's listed rates ($0.075/$0.30 per M tokens);
+> OpenRouter charges ~33% above those rates ($0.10/$0.40 per M), accounting for the ~$230 gap.
+> With the Calibre/lower-res tranche (~300–400K pages at ~$0.00093/page) blended in, the
+> all-in cost settles around **~$2,100–$2,220**.
 
 ---
 
