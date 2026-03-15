@@ -339,3 +339,46 @@ This handles:
 - Nondeterministic LLM responses that happen to be cleaner on the second call
 - Truncated responses where a shorter retry response avoids truncation
 - Transient API issues that the inner retry loop didn't catch
+
+---
+
+## Throughput & Rate Limiting
+
+### Observed chunk timing anomaly (2026-03-15, 3 000-record batch)
+
+| Chunk | Duration | Truncated | Fail | Note |
+|-------|----------|-----------|------|------|
+| 1 (records 5001–6000) | ~1 min | 21 (2.1%) | 11 | Normal |
+| 2 (records 6001–7000) | ~3.5 min | **48 (4.8%)** | 20 | Rate-limit degradation |
+| 3 (records 7001–8000) | hung at 2/1000 | — | — | Full rate-limit saturation |
+
+**Root cause:** OpenRouter has per-API-key rate limits (RPM and/or concurrent-request limits).
+At `--workers 100` with a 1 000-record chunk, Lithops can launch all 1 000 Lambdas nearly
+simultaneously.  After 2 000 API calls in ~4 minutes, OpenRouter throttles heavily.
+
+- Chunk 2 degradation signals: 3.5× slower duration AND 2.3× more truncations (the model
+  truncates under load, serving shorter responses more quickly).
+- Chunk 3 hit the wall: all 1 000 Lambdas received 429s and entered their retry sleep loops
+  simultaneously.  With backoff of 15 → 30 → 45 seconds (90 s total), plus Lambda timeout
+  constraints, most functions timed out before succeeding.
+
+### Fixes applied
+
+1. **`--jitter` flag (default 30 s):** Each Lambda sleeps `random.uniform(0, jitter_max)` seconds
+   before its first API call.  This spreads 1 000 concurrent API calls over a 30-second window
+   (~33 req/s) instead of a sub-second burst.
+
+2. **Jittered 429 backoff:** Retry sleeps are now `15*(attempt+1) + random(0,10)` and
+   `5*(attempt+1) + random(0,5)` so all rate-limited Lambdas do not retry at the same moment.
+
+### Recommended settings for large batches
+
+```
+--workers 50 --jitter 30    # ~33 req/s peak, well under typical OpenRouter limits
+--workers 100 --jitter 60   # same ~17 req/s, more cautious
+```
+
+Disable jitter only for small batches where burst is not a concern:
+```
+--limit 50 --workers 10 --jitter 0
+```
