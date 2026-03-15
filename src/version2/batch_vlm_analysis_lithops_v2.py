@@ -180,6 +180,18 @@ def process_page_vlm(task_data):
                             j -= 1
                         if bs % 2 == 0:  # unescaped
                             return k
+
+            def _is_structural_quote(s, q_pos):
+                """Return True if the " at q_pos is a structural opener — i.e. it is
+                preceded (ignoring spaces/tabs) by a newline, '{', '[', or ',' — and
+                therefore should NOT be escaped as an inner inline quote.
+                Example: the " at col 7 of '      "panel_number": 3' is structural."""
+                j = q_pos - 1
+                while j >= 0 and s[j] in ' \t':
+                    j -= 1
+                if j < 0:
+                    return True
+                return s[j] in '{[,\n\r'
                 return -1
 
             for _ in range(100):
@@ -230,13 +242,18 @@ def process_page_vlm(task_data):
                         #     We guard with (len - pos) > 200 because genuine truncation
                         #     EOF ':' errors land at pos ≈ len(json_str) (key present but
                         #     no colon/value follows), and escaping there would corrupt keys.
+                        #  c) We also guard against escaping a structural quote (e.g. the
+                        #     key opener `"` at the start of an indented line) — if the
+                        #     quote found by backwards search is preceded only by whitespace
+                        #     then a newline/{/[/, it is a structural opener, not an inner
+                        #     inline quote, and escaping it would corrupt key names.
                         if 0 <= pos < len(json_str) and json_str[pos] == '"':
                             json_str = json_str[:pos] + '\\"' + json_str[pos + 1:]
                         elif (0 <= pos < len(json_str)
                               and json_str[pos] not in ':{}[],\\"'
                               and (len(json_str) - pos) > 200):
                             last_q = _last_unescaped_quote(json_str, pos)
-                            if last_q >= 0:
+                            if last_q >= 0 and not _is_structural_quote(json_str, last_q):
                                 json_str = json_str[:last_q] + '\\"' + json_str[last_q + 1:]
                             else:
                                 break
