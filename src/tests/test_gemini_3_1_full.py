@@ -104,6 +104,11 @@ def run_test(model, api_key, image_path):
         return
 
     res_json = response.json()
+    if 'choices' not in res_json:
+        print(f"❌ API returned an unexpected response format. Missing 'choices'.")
+        print(f"Full Response: {json.dumps(res_json, indent=2)}")
+        return
+        
     content = res_json['choices'][0]['message']['content']
     print(f"Response Length: {len(content)}")
 
@@ -116,7 +121,12 @@ def run_test(model, api_key, image_path):
         data = json.loads(clean_json.strip(), strict=False)
     except:
         print("⚠️ Truncated response detected. Repairing...")
-        data = json.loads(repair_json(clean_json))
+        try:
+            data = json.loads(repair_json(clean_json))
+        except Exception as e:
+            print(f"❌ Fatal JSON Parse Error: {e}")
+            print(f"Raw Model Output:\n{content}")
+            return
 
     safe_model = model.replace('/', '_').replace(':', '_')
     with open(f"full_analysis_{safe_model}.json", 'w', encoding='utf-8') as f:
