@@ -30,11 +30,14 @@ logger = logging.getLogger(__name__)
 NARRATIVE_TYPES = {'narrative', 'story'}
 
 
-def download_one(s3_client, bucket, s3_key, local_path, lock, counters):
+def download_one(s3_client, bucket, s3_key, local_path, lock, counters, pbar):
     """Download a single VLM JSON from S3 to local disk. Thread-safe."""
     if local_path.exists():
         with lock:
             counters['skipped'] += 1
+            pbar.update(1)
+            pbar.set_postfix(ok=counters['success'], skip=counters['skipped'],
+                             miss=counters['missing'], err=counters['error'], refresh=False)
         return 'skipped'
 
     try:
@@ -43,16 +46,25 @@ def download_one(s3_client, bucket, s3_key, local_path, lock, counters):
         local_path.write_bytes(response['Body'].read())
         with lock:
             counters['success'] += 1
+            pbar.update(1)
+            pbar.set_postfix(ok=counters['success'], skip=counters['skipped'],
+                             miss=counters['missing'], err=counters['error'], refresh=False)
         return 'success'
     except s3_client.exceptions.NoSuchKey:
         with lock:
             counters['missing'] += 1
+            pbar.update(1)
+            pbar.set_postfix(ok=counters['success'], skip=counters['skipped'],
+                             miss=counters['missing'], err=counters['error'], refresh=False)
         return 'missing'
     except Exception as e:
         with lock:
             counters['error'] += 1
             if len(counters['errors']) < 20:
                 counters['errors'].append(f"{s3_key}: {e}")
+            pbar.update(1)
+            pbar.set_postfix(ok=counters['success'], skip=counters['skipped'],
+                             miss=counters['missing'], err=counters['error'], refresh=False)
         return 'error'
 
 
@@ -120,30 +132,26 @@ def main():
     counters = {'success': 0, 'skipped': 0, 'missing': 0, 'error': 0, 'errors': []}
     lock = Lock()
 
+    # Stream-submit so the progress bar appears immediately instead of blocking
+    # while Python builds a 1.2M-entry futures dict
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        futures = {
-            executor.submit(
-                download_one,
-                s3,
-                args.bucket,
-                f"{prefix}/{cid}.json",
-                cache_dir / f"{cid}.json",
-                lock,
-                counters
-            ): cid
-            for cid in canonical_ids
-        }
-
-        with tqdm(total=len(futures), desc="Downloading", unit="file") as pbar:
-            for fut in as_completed(futures):
-                pbar.update(1)
-                pbar.set_postfix(
-                    ok=counters['success'],
-                    skip=counters['skipped'],
-                    miss=counters['missing'],
-                    err=counters['error'],
-                    refresh=False
+        with tqdm(total=len(canonical_ids), desc="Downloading", unit="file") as pbar:
+            futures = {}
+            for cid in canonical_ids:
+                fut = executor.submit(
+                    download_one,
+                    s3,
+                    args.bucket,
+                    f"{prefix}/{cid}.json",
+                    cache_dir / f"{cid}.json",
+                    lock,
+                    counters,
+                    pbar
                 )
+                futures[fut] = cid
+
+            for fut in as_completed(futures):
+                pass  # progress already updated inside download_one
 
     logger.info(
         f"\n=== Sync Complete ===\n"
