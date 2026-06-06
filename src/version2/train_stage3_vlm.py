@@ -191,6 +191,22 @@ def validate(model, objectives, dataloader, device):
 # MAIN
 # ============================================================================
 
+def _find_latest_checkpoint(checkpoint_dir: str):
+    """Return the checkpoint file with the highest epoch number, or None."""
+    import glob
+    pattern = str(Path(checkpoint_dir) / 'checkpoint_vlm_epoch_*.pt')
+    files = glob.glob(pattern)
+    if not files:
+        return None
+    # Extract epoch number from filename and return highest
+    def epoch_num(p):
+        try:
+            return int(Path(p).stem.split('_')[-1])
+        except ValueError:
+            return -1
+    return max(files, key=epoch_num)
+
+
 def main(args):
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -253,8 +269,25 @@ def main(args):
 
     Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
     best_val_loss = float('inf')
+    start_epoch = 1
 
-    for epoch in range(1, args.epochs + 1):
+    # Resume from latest checkpoint if --resume is set
+    if args.resume:
+        ckpt_path = _find_latest_checkpoint(args.checkpoint_dir)
+        if ckpt_path:
+            print(f"Resuming from: {ckpt_path}")
+            ckpt = torch.load(ckpt_path, map_location=device)
+            model.load_state_dict(ckpt['model_state_dict'])
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+            start_epoch = ckpt['epoch'] + 1
+            best_val_loss = ckpt.get('val_loss', float('inf'))
+            print(f"  Resumed at epoch {ckpt['epoch']} | Val Loss was {ckpt['val_loss']:.4f}")
+            print(f"  Starting from epoch {start_epoch}/{args.epochs}")
+        else:
+            print("No checkpoint found in checkpoint_dir — starting from scratch.")
+
+    for epoch in range(start_epoch, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
         train_metrics = train_epoch(model, objectives, train_loader, optimizer, device, epoch)
         val_metrics = validate(model, objectives, val_loader, device)
@@ -319,7 +352,8 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/stage3_vlm')
-    parser.add_argument('--use_wandb', action='store_true')
+    parser.add_argument('--resume', action='store_true',
+                        help="Resume from latest checkpoint in --checkpoint_dir")
     parser.add_argument('--run_name', type=str, default='stage3_vlm_run')
 
     args = parser.parse_args()
