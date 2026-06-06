@@ -198,7 +198,7 @@ class Stage3PanelDatasetVLM(Dataset):
         desc = panel.get('description', '').strip()
         if desc:
             parts.append(desc)
-        for tc in panel.get('text_content', []):
+        for tc in (panel.get('text_content') or []):
             t = tc.get('text', '').strip()
             if t:
                 parts.append(t)
@@ -235,7 +235,7 @@ class Stage3PanelDatasetVLM(Dataset):
             return {'panels': [], 'overall_summary': '', 'page_width': 100, 'page_height': 100}
 
         pw, ph = page_image.size
-        raw_panels = data.get('panels', [])[:self.max_panels_per_page]
+        raw_panels = (data.get('panels') or [])[:self.max_panels_per_page]
         panel_data = []
 
         for p in raw_panels:
@@ -265,7 +265,7 @@ class Stage3PanelDatasetVLM(Dataset):
 
         return {
             'panels': panel_data,
-            'overall_summary': data.get('overall_summary', ''),
+            'overall_summary': data.get('overall_summary') or '',
             'page_width': pw,
             'page_height': ph,
         }
