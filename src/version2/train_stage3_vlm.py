@@ -149,6 +149,10 @@ def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
                 0.5 * objectives.reconstruction_loss(panel_embeddings, batch['panel_mask']) +
                 0.3 * objectives.modality_alignment_loss(model, batch))
 
+        # Skip degenerate batches where all panels are masked (loss has no grad_fn)
+        if loss.grad_fn is None:
+            continue
+
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -177,7 +181,8 @@ def validate(model, objectives, dataloader, device):
         loss = (objectives.contrastive_loss(panel_embeddings, batch['panel_mask']) +
                 0.5 * objectives.reconstruction_loss(panel_embeddings, batch['panel_mask']) +
                 0.3 * objectives.modality_alignment_loss(model, batch))
-        total_loss += loss.item()
+        if loss.grad_fn is not None or loss.item() > 0:
+            total_loss += loss.item()
     n = len(dataloader)
     return {'loss': total_loss / n if n > 0 else 0}
 
