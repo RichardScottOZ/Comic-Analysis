@@ -212,7 +212,8 @@ def main(args):
         pss_labels_path=args.train_pss_labels,
         image_size=args.image_size,
         max_panels_per_page=args.max_panels,
-        limit=args.limit
+        limit=args.limit,
+        shuffle_seed=args.shuffle_seed
     )
 
     val_labels = args.val_pss_labels if args.val_pss_labels else args.train_pss_labels
@@ -269,9 +270,19 @@ def main(args):
             torch.save(model.state_dict(), Path(args.checkpoint_dir) / 'best_model_vlm.pt')
             print("  ✅ Saved best model.")
 
-        # Save periodic checkpoint
-        if epoch % 5 == 0:
-            torch.save(model.state_dict(), Path(args.checkpoint_dir) / f'checkpoint_vlm_epoch_{epoch}.pt')
+        # Save every epoch so a crash never loses more than one epoch of work
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'train_loss': train_metrics['loss'],
+            'val_loss': val_metrics['loss'],
+        }, Path(args.checkpoint_dir) / f'checkpoint_vlm_epoch_{epoch}.pt')
+        # Keep only last 2 epoch checkpoints to save disk space
+        prev = Path(args.checkpoint_dir) / f'checkpoint_vlm_epoch_{epoch - 2}.pt'
+        if prev.exists():
+            prev.unlink()
 
 
 if __name__ == "__main__":
@@ -287,7 +298,9 @@ if __name__ == "__main__":
     parser.add_argument('--val_pss_labels', type=str,
                         help="PSS labels JSON for validation pages (optional; uses train if omitted)")
     parser.add_argument('--limit', type=int, default=None,
-                        help="Limit pages loaded (use --limit 100 for smoke tests)")
+                        help="Limit pages loaded — shuffled first so sample is representative")
+    parser.add_argument('--shuffle_seed', type=int, default=42,
+                        help="Random seed for index shuffle before limit (default: 42)")
 
     # Model
     parser.add_argument('--visual_backbone', type=str, default='both',
