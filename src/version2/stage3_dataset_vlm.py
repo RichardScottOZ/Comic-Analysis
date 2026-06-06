@@ -194,12 +194,16 @@ class Stage3PanelDatasetVLM(Dataset):
     @staticmethod
     def _panel_text(panel: Dict) -> str:
         """Combine VLM description + all dialogue/caption texts into one string."""
+        if not panel:
+            return ''
         parts = []
-        desc = panel.get('description', '').strip()
+        desc = (panel.get('description') or '').strip()
         if desc:
             parts.append(desc)
         for tc in (panel.get('text_content') or []):
-            t = tc.get('text', '').strip()
+            if not tc or not isinstance(tc, dict):
+                continue
+            t = (tc.get('text') or '').strip()
             if t:
                 parts.append(t)
         return ' '.join(parts)
