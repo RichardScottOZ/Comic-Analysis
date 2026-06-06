@@ -61,7 +61,8 @@ class Stage3PanelDatasetVLM(Dataset):
                  image_size: int = 224,
                  only_narrative: bool = True,
                  max_panels_per_page: int = 16,
-                 limit: Optional[int] = None):
+                 limit: Optional[int] = None,
+                 shuffle_seed: Optional[int] = 42):
 
         self.image_map = image_map
         self.vlm_cache_dir = Path(vlm_cache_dir)
@@ -88,7 +89,7 @@ class Stage3PanelDatasetVLM(Dataset):
         with open(pss_labels_path, 'r') as f:
             self.pss_labels = json.load(f)
 
-        self.samples = self._build_index(limit)
+        self.samples = self._build_index(limit, shuffle_seed)
         print(f"Stage3PanelDatasetVLM ready: {len(self.samples):,} samples.")
 
     def _scan_vlm_cache(self) -> set:
@@ -121,7 +122,8 @@ class Stage3PanelDatasetVLM(Dataset):
                 break
         return cid.replace('/', '_').replace('\\', '_').strip()
 
-    def _build_index(self, limit: Optional[int] = None) -> List[Dict]:
+    def _build_index(self, limit: Optional[int] = None,
+                     shuffle_seed: Optional[int] = None) -> List[Dict]:
         samples = []
         skipped_label = skipped_img = skipped_json = added = 0
 
@@ -138,9 +140,6 @@ class Stage3PanelDatasetVLM(Dataset):
         print(f"Building index from {len(self.pss_labels):,} PSS label entries...")
 
         for cid, page_type in tqdm(self.pss_labels.items(), desc="Building index"):
-            if limit and added >= limit:
-                break
-
             if self.only_narrative and page_type not in NARRATIVE_TYPES:
                 skipped_label += 1
                 continue
@@ -171,6 +170,14 @@ class Stage3PanelDatasetVLM(Dataset):
                 'json_path': str(self.vlm_cache_dir / f"{canonical_id}.json"),
             })
             added += 1
+
+        # Shuffle then limit — ensures representative sample across all publishers
+        if shuffle_seed is not None:
+            import random
+            random.seed(shuffle_seed)
+            random.shuffle(samples)
+        if limit:
+            samples = samples[:limit]
 
         print(
             f"\n--- Index Summary ---\n"
