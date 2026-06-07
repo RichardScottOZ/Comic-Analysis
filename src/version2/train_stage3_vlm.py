@@ -151,7 +151,7 @@ def _make_epoch_loader(dataset, epoch, batch_size, num_workers, start_batch=0, s
     subset = _SubsetView(dataset, remaining)
     return DataLoader(
         subset, batch_size=batch_size, shuffle=False,
-        sampler=sampler, num_workers=num_workers,
+        num_workers=num_workers,
         collate_fn=collate_stage3, pin_memory=True
     ), len(all_indices) // batch_size  # total batches in full epoch
 
