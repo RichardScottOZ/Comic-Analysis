@@ -17,6 +17,7 @@ and generate_stage3_embeddings.py need only import swaps.
 
 import os
 import json
+import logging
 import torch
 import csv
 from tqdm import tqdm
@@ -32,6 +33,7 @@ Image.MAX_IMAGE_PIXELS = None
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 NARRATIVE_TYPES = {'narrative', 'story'}
+logger = logging.getLogger(__name__)
 
 
 class Stage3PanelDatasetVLM(Dataset):
@@ -231,41 +233,56 @@ class Stage3PanelDatasetVLM(Dataset):
 
     def _load_page_data(self, json_path: str, image_path: str) -> Dict:
         """Parse VLM JSON + load page image, return panel crops + metadata."""
+        _empty = {'panels': [], 'overall_summary': '', 'page_width': 100, 'page_height': 100}
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             page_image = Image.open(image_path).convert('RGB')
-        except Exception:
-            return {'panels': [], 'overall_summary': '', 'page_width': 100, 'page_height': 100}
+        except Exception as e:
+            logger.warning(f"Failed to load page ({type(e).__name__}): json={json_path} img={image_path} | {e}")
+            return _empty
+
+        if not isinstance(data, dict):
+            logger.warning(f"VLM JSON is not a dict (got {type(data).__name__}): {json_path}")
+            return _empty
 
         pw, ph = page_image.size
-        raw_panels = (data.get('panels') or [])[:self.max_panels_per_page]
+        panels = data.get('panels') or []
+        if isinstance(panels, dict):
+            logger.warning(f"panels is a dict not a list in: {json_path}")
+            panels = list(panels.values())
+        if not isinstance(panels, list):
+            logger.warning(f"panels is unexpected type {type(panels).__name__} in: {json_path}")
+            panels = []
+        raw_panels = panels[:self.max_panels_per_page]
         panel_data = []
 
         for p in raw_panels:
-            box_2d = p.get('box_2d')
-            if not box_2d or len(box_2d) != 4:
-                continue
-
-            # box_2d = [y1, x1, y2, x2] in 0-1000 space → pixel coordinates
-            y1, x1, y2, x2 = box_2d
-            px1 = max(0, int(x1 / 1000.0 * pw))
-            py1 = max(0, int(y1 / 1000.0 * ph))
-            px2 = min(pw, int(x2 / 1000.0 * pw))
-            py2 = min(ph, int(y2 / 1000.0 * ph))
-
-            if px2 <= px1 or py2 <= py1:
-                continue
-
-            panel_num = p.get('panel_number', len(panel_data) + 1)
-            panel_data.append({
-                'image': page_image.crop((px1, py1, px2, py2)),
-                'text': self._panel_text(p),
-                'box_2d': box_2d,
-                'comp_feats': self._compute_comp_features(
-                    box_2d, panel_num, self.max_panels_per_page
-                ),
-            })
+            try:
+                if not isinstance(p, dict):
+                    logger.debug(f"Non-dict panel entry ({type(p).__name__}) in: {json_path}")
+                    continue
+                box_2d = p.get('box_2d')
+                if not isinstance(box_2d, (list, tuple)) or len(box_2d) != 4:
+                    continue
+                y1, x1, y2, x2 = box_2d
+                px1 = max(0, int(x1 / 1000.0 * pw))
+                py1 = max(0, int(y1 / 1000.0 * ph))
+                px2 = min(pw, int(x2 / 1000.0 * pw))
+                py2 = min(ph, int(y2 / 1000.0 * ph))
+                if px2 <= px1 or py2 <= py1:
+                    continue
+                panel_num = p.get('panel_number', len(panel_data) + 1)
+                panel_data.append({
+                    'image': page_image.crop((px1, py1, px2, py2)),
+                    'text': self._panel_text(p),
+                    'box_2d': box_2d,
+                    'comp_feats': self._compute_comp_features(
+                        box_2d, panel_num, self.max_panels_per_page
+                    ),
+                })
+            except Exception as e:
+                logger.warning(f"Panel parse error ({type(e).__name__}) in {json_path}: {e}")
 
         return {
             'panels': panel_data,
