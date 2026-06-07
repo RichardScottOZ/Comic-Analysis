@@ -22,6 +22,7 @@ Usage:
 import os
 import argparse
 import json
+import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -35,6 +36,15 @@ import csv
 
 from stage3_panel_features_framework import PanelFeatureExtractor
 from stage3_dataset_vlm import Stage3PanelDatasetVLM, collate_stage3
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[
+        logging.StreamHandler(),                          # console
+        logging.FileHandler('stage3_vlm_errors.log'),    # file — survives worker crashes
+    ]
+)
 
 
 # ============================================================================
