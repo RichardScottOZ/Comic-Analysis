@@ -233,7 +233,7 @@ def main(args):
     )
 
     val_labels = args.val_pss_labels if args.val_pss_labels else args.train_pss_labels
-    val_limit = args.limit // 5 if args.limit else 500
+    val_limit = args.limit // 5 if args.limit else None
 
     val_dataset = Stage3PanelDatasetVLM(
         image_map=image_map,
