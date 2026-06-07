@@ -354,6 +354,7 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/stage3_vlm')
     parser.add_argument('--resume', action='store_true',
                         help="Resume from latest checkpoint in --checkpoint_dir")
+    parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--run_name', type=str, default='stage3_vlm_run')
 
     args = parser.parse_args()
