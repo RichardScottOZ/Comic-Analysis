@@ -126,11 +126,49 @@ class Stage3TrainingObjectives(nn.Module):
 # TRAINING LOOP  (unchanged from train_stage3.py)
 # ============================================================================
 
-def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
+def _make_epoch_loader(dataset, epoch, batch_size, num_workers, start_batch=0, seed=42):
+    """
+    Build a DataLoader for one epoch with a reproducible per-epoch shuffle.
+    If start_batch > 0, the sampler skips already-processed indices so resume
+    picks up immediately without re-loading any skipped data.
+    """
+    # Reproducible shuffle: same seed => same order every time we recreate this loader
+    rng = torch.Generator().manual_seed(seed * 1000 + epoch)
+    all_indices = torch.randperm(len(dataset), generator=rng).tolist()
+
+    # Slice off already-done portion
+    remaining = all_indices[start_batch * batch_size:]
+
+    sampler = torch.utils.data.SequentialSampler(remaining)
+
+    # Wrap with an index-redirecting dataset view
+    class _SubsetView(torch.utils.data.Dataset):
+        def __init__(self, ds, indices):
+            self.ds, self.indices = ds, indices
+        def __len__(self):
+            return len(self.indices)
+        def __getitem__(self, i):
+            return self.ds[self.indices[i]]
+
+    subset = _SubsetView(dataset, remaining)
+    return DataLoader(
+        subset, batch_size=batch_size, shuffle=False,
+        sampler=sampler, num_workers=num_workers,
+        collate_fn=collate_stage3, pin_memory=True
+    ), len(all_indices) // batch_size  # total batches in full epoch
+
+
+def train_epoch(model, objectives, dataloader, optimizer, device, epoch,
+                start_batch=0, total_batches=None,
+                save_every=0, checkpoint_dir=None, save_state_fn=None):
     model.train()
     objectives.train()
     total_loss = 0
-    pbar = tqdm(dataloader, desc=f"Epoch {epoch}")
+    n_batches = 0
+    displayed_total = total_batches or len(dataloader) + start_batch
+
+    pbar = tqdm(dataloader, desc=f"Epoch {epoch}",
+                initial=start_batch, total=displayed_total)
 
     for batch in pbar:
         batch = {k: v.to(device) if torch.is_tensor(v) else v for k, v in batch.items()}
@@ -149,8 +187,9 @@ def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
                 0.5 * objectives.reconstruction_loss(panel_embeddings, batch['panel_mask']) +
                 0.3 * objectives.modality_alignment_loss(model, batch))
 
-        # Skip degenerate batches where all panels are masked (loss has no grad_fn)
         if loss.grad_fn is None:
+            n_batches += 1
+            pbar.update(0)
             continue
 
         optimizer.zero_grad()
@@ -158,9 +197,16 @@ def train_epoch(model, objectives, dataloader, optimizer, device, epoch):
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         total_loss += loss.item()
+        n_batches += 1
         pbar.set_postfix({'loss': f"{loss.item():.4f}"})
 
-    return {'loss': total_loss / len(dataloader) if dataloader else 0}
+        # Mid-epoch checkpoint
+        global_batch = start_batch + n_batches
+        if save_every > 0 and checkpoint_dir and global_batch % save_every == 0:
+            if save_state_fn:
+                save_state_fn(epoch, global_batch, total_loss / n_batches)
+
+    return {'loss': total_loss / n_batches if n_batches > 0 else 0}
 
 
 @torch.no_grad()
@@ -193,18 +239,24 @@ def validate(model, objectives, dataloader, device):
 
 def _find_latest_checkpoint(checkpoint_dir: str):
     """Return the checkpoint file with the highest epoch number, or None."""
-    import glob
-    pattern = str(Path(checkpoint_dir) / 'checkpoint_vlm_epoch_*.pt')
-    files = glob.glob(pattern)
-    if not files:
-        return None
-    # Extract epoch number from filename and return highest
-    def epoch_num(p):
+    import glob as _glob
+
+    # Find highest (epoch, batch) checkpoint — handles both end-of-epoch and mid-epoch
+    epoch_ckpts = _glob.glob(str(Path(checkpoint_dir) / 'checkpoint_vlm_epoch_*.pt'))
+    best = None
+    best_key = (-1, -1)
+    for f in epoch_ckpts:
+        stem = Path(f).stem  # e.g. checkpoint_vlm_epoch_3  or checkpoint_vlm_epoch_3_batch_5000
+        parts = stem.split('_')
         try:
-            return int(Path(p).stem.split('_')[-1])
-        except ValueError:
-            return -1
-    return max(files, key=epoch_num)
+            epoch_num = int(parts[parts.index('epoch') + 1])
+            batch_num = int(parts[parts.index('batch') + 1]) if 'batch' in parts else float('inf')
+        except (ValueError, IndexError):
+            continue
+        if (epoch_num, batch_num) > best_key:
+            best_key = (epoch_num, batch_num)
+            best = f
+    return best
 
 
 def main(args):
@@ -253,6 +305,7 @@ def main(args):
         num_workers=args.num_workers, collate_fn=collate_stage3, pin_memory=True
     )
 
+    ckpt_dir = Path(args.checkpoint_dir)
     model = PanelFeatureExtractor(
         visual_backbone=args.visual_backbone,
         visual_fusion=args.visual_fusion,
@@ -267,9 +320,10 @@ def main(args):
     )
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 0.01)
 
-    Path(args.checkpoint_dir).mkdir(parents=True, exist_ok=True)
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
     best_val_loss = float('inf')
     start_epoch = 1
+    start_batch = 0  # batch offset within start_epoch (for mid-epoch resume)
 
     # Resume from latest checkpoint if --resume is set
     if args.resume:
@@ -280,16 +334,67 @@ def main(args):
             model.load_state_dict(ckpt['model_state_dict'])
             optimizer.load_state_dict(ckpt['optimizer_state_dict'])
             scheduler.load_state_dict(ckpt['scheduler_state_dict'])
-            start_epoch = ckpt['epoch'] + 1
-            best_val_loss = ckpt.get('val_loss', float('inf'))
-            print(f"  Resumed at epoch {ckpt['epoch']} | Val Loss was {ckpt['val_loss']:.4f}")
-            print(f"  Starting from epoch {start_epoch}/{args.epochs}")
+            start_epoch = ckpt['epoch']
+            start_batch = ckpt.get('batch', 0)
+            best_val_loss = ckpt.get('best_val_loss', float('inf'))
+            if start_batch == 0:
+                start_epoch += 1  # completed epoch checkpoint — move to next
+                print(f"  Completed epoch {ckpt['epoch']} | Val {ckpt.get('val_loss', '?'):.4f} | Starting epoch {start_epoch}")
+            else:
+                print(f"  Mid-epoch resume: epoch {start_epoch}, batch {start_batch:,} | Starting from batch {start_batch:,}")
         else:
-            print("No checkpoint found in checkpoint_dir — starting from scratch.")
+            print("No checkpoint found — starting from scratch.")
+
+    def save_checkpoint(epoch, batch, loss, val_loss=None):
+        """Save state. batch=0 means end-of-epoch."""
+        if batch == 0:
+            fname = ckpt_dir / f'checkpoint_vlm_epoch_{epoch}.pt'
+        else:
+            fname = ckpt_dir / f'checkpoint_vlm_epoch_{epoch}_batch_{batch}.pt'
+        torch.save({
+            'epoch': epoch,
+            'batch': batch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'train_loss': loss,
+            'val_loss': val_loss,
+            'best_val_loss': best_val_loss,
+        }, fname)
+        # Clean up older mid-epoch checkpoints for this epoch (keep only latest)
+        if batch > 0:
+            import glob as _g
+            for old in _g.glob(str(ckpt_dir / f'checkpoint_vlm_epoch_{epoch}_batch_*.pt')):
+                if old != str(fname):
+                    Path(old).unlink(missing_ok=True)
+        # Keep only last 2 end-of-epoch checkpoints
+        if batch == 0:
+            import glob as _g
+            epoch_ckpts = sorted(_g.glob(str(ckpt_dir / 'checkpoint_vlm_epoch_[0-9]*.pt')),
+                                 key=lambda p: int(Path(p).stem.split('_')[-1]))
+            for old in epoch_ckpts[:-2]:
+                Path(old).unlink(missing_ok=True)
 
     for epoch in range(start_epoch, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
-        train_metrics = train_epoch(model, objectives, train_loader, optimizer, device, epoch)
+
+        # Build epoch loader with reproducible shuffle (enables mid-epoch resume)
+        epoch_loader, total_batches = _make_epoch_loader(
+            train_dataset, epoch, args.batch_size, args.num_workers,
+            start_batch=start_batch if epoch == start_epoch else 0,
+            seed=args.shuffle_seed
+        )
+
+        train_metrics = train_epoch(
+            model, objectives, epoch_loader, optimizer, device, epoch,
+            start_batch=start_batch if epoch == start_epoch else 0,
+            total_batches=total_batches,
+            save_every=args.save_every_n_batches,
+            checkpoint_dir=str(ckpt_dir),
+            save_state_fn=lambda e, b, l: save_checkpoint(e, b, l)
+        )
+        start_batch = 0  # only applies to first resumed epoch
+
         val_metrics = validate(model, objectives, val_loader, device)
         scheduler.step()
 
@@ -300,22 +405,11 @@ def main(args):
 
         if val_metrics['loss'] < best_val_loss:
             best_val_loss = val_metrics['loss']
-            torch.save(model.state_dict(), Path(args.checkpoint_dir) / 'best_model_vlm.pt')
+            torch.save(model.state_dict(), ckpt_dir / 'best_model_vlm.pt')
             print("  ✅ Saved best model.")
 
-        # Save every epoch so a crash never loses more than one epoch of work
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'train_loss': train_metrics['loss'],
-            'val_loss': val_metrics['loss'],
-        }, Path(args.checkpoint_dir) / f'checkpoint_vlm_epoch_{epoch}.pt')
-        # Keep only last 2 epoch checkpoints to save disk space
-        prev = Path(args.checkpoint_dir) / f'checkpoint_vlm_epoch_{epoch - 2}.pt'
-        if prev.exists():
-            prev.unlink()
+        # End-of-epoch checkpoint (batch=0 signals completed epoch)
+        save_checkpoint(epoch, 0, train_metrics['loss'], val_metrics['loss'])
 
 
 if __name__ == "__main__":
@@ -354,6 +448,8 @@ if __name__ == "__main__":
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints/stage3_vlm')
     parser.add_argument('--resume', action='store_true',
                         help="Resume from latest checkpoint in --checkpoint_dir")
+    parser.add_argument('--save_every_n_batches', type=int, default=5000,
+                        help="Save mid-epoch checkpoint every N batches (default: 5000 ≈ every ~1.5h)")
     parser.add_argument('--use_wandb', action='store_true')
     parser.add_argument('--run_name', type=str, default='stage3_vlm_run')
 
