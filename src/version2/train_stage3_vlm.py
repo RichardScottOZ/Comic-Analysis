@@ -123,8 +123,19 @@ class Stage3TrainingObjectives(nn.Module):
 
 
 # ============================================================================
-# TRAINING LOOP  (unchanged from train_stage3.py)
+# TRAINING LOOP
 # ============================================================================
+
+class _SubsetView(torch.utils.data.Dataset):
+    """Module-level dataset wrapper that remaps indices — must be at module level to pickle."""
+    def __init__(self, ds, indices):
+        self.ds = ds
+        self.indices = indices
+    def __len__(self):
+        return len(self.indices)
+    def __getitem__(self, i):
+        return self.ds[self.indices[i]]
+
 
 def _make_epoch_loader(dataset, epoch, batch_size, num_workers, start_batch=0, seed=42):
     """
@@ -132,24 +143,11 @@ def _make_epoch_loader(dataset, epoch, batch_size, num_workers, start_batch=0, s
     If start_batch > 0, the sampler skips already-processed indices so resume
     picks up immediately without re-loading any skipped data.
     """
-    # Reproducible shuffle: same seed => same order every time we recreate this loader
     rng = torch.Generator().manual_seed(seed * 1000 + epoch)
     all_indices = torch.randperm(len(dataset), generator=rng).tolist()
 
     # Slice off already-done portion
     remaining = all_indices[start_batch * batch_size:]
-
-    sampler = torch.utils.data.SequentialSampler(remaining)
-
-    # Wrap with an index-redirecting dataset view
-    class _SubsetView(torch.utils.data.Dataset):
-        def __init__(self, ds, indices):
-            self.ds, self.indices = ds, indices
-        def __len__(self):
-            return len(self.indices)
-        def __getitem__(self, i):
-            return self.ds[self.indices[i]]
-
     subset = _SubsetView(dataset, remaining)
     return DataLoader(
         subset, batch_size=batch_size, shuffle=False,
