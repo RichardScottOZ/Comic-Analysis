@@ -265,7 +265,7 @@ class Stage3PanelDatasetVLM(Dataset):
                 box_2d = p.get('box_2d')
                 if not isinstance(box_2d, (list, tuple)) or len(box_2d) != 4:
                     continue
-                y1, x1, y2, x2 = box_2d
+                y1, x1, y2, x2 = [float(v) for v in box_2d]
                 px1 = max(0, int(x1 / 1000.0 * pw))
                 py1 = max(0, int(y1 / 1000.0 * ph))
                 px2 = min(pw, int(x2 / 1000.0 * pw))
