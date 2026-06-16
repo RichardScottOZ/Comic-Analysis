@@ -179,3 +179,12 @@ Extensive testing has been conducted with various Vision-Language Models for tex
     - also https://pyimagesearch.com/2025/06/09/object-detection-and-visual-grounding-with-qwen-2-5/
 
 
+OCR Run not good enough
+
+## 2. State 3 VLM
+- Zero short bounding boxt, text and description from VLM - Gemini 2.5 Flash Lite for million scale affordabilityh
+- train_stage3_vlm
+- Epoch 1 : Train Loss: 2.6390 - Val Loss: 3.1559
+- Epoch 2 : Train Loss: 2.5094 - Val Loss: 2.8478
+- Epoch 3 : Train Loss: 2.4771 - Val Loss: 2.7624
+- 
