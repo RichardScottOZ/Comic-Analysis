@@ -76,7 +76,7 @@ def main(args):
         pss_labels_path=args.pss_labels,
         image_size=args.image_size,
         max_panels_per_page=args.max_panels,
-        only_narrative=False,  # embed all page types for Stage 4 / search
+        only_narrative=True,   # narrative pages only — model trained on these; covers indexed separately if needed
         limit=args.limit
     )
 
