@@ -181,10 +181,12 @@ Extensive testing has been conducted with various Vision-Language Models for tex
 
 OCR Run not good enough
 
-## 2. State 3 VLM
+## 2. Stage 3 VLM
 - Zero short bounding boxt, text and description from VLM - Gemini 2.5 Flash Lite for million scale affordabilityh
 - train_stage3_vlm
 - Epoch 1 : Train Loss: 2.6390 - Val Loss: 3.1559
 - Epoch 2 : Train Loss: 2.5094 - Val Loss: 2.8478
 - Epoch 3 : Train Loss: 2.4771 - Val Loss: 2.7624
-- 
+- Epoch 4 : Train Loss: 2.4594 | Val Loss: 2.6872 
+
+After training: next step is generate_stage3_embeddings_vlm.py over all  1.2M pages → then Stage 4
