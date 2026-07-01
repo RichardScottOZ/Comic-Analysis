@@ -191,6 +191,7 @@ OCR Run not good enough
 - Epoch 5 : Train Loss: 2.4476 | Val Loss: 2.6309
 - Epoch 6 : Train Loss: 2.4382 | Val Loss: 2.6029
 - Epoch 7 : Train Loss: 2.4307 | Val Loss: 2.5938
+- Epoch 8 : Train Loss: 2.4231 | Val Loss: 2.5615
 
 
   ┌───────┬───────┬───────┬────────┐
