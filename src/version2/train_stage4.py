@@ -145,10 +145,35 @@ def contrastive_panel_loss(panel_embeddings: torch.Tensor,
 
 
 # ============================================================================
+# CHECKPOINT HELPERS
+# ============================================================================
+
+def _find_latest_checkpoint(checkpoint_dir: Path):
+    """Return (path, epoch, batch) for the most recent checkpoint, or None."""
+    best = None
+    for p in checkpoint_dir.glob('checkpoint_stage4_epoch_*.pt'):
+        name = p.stem  # e.g. checkpoint_stage4_epoch_3_batch_5000 or checkpoint_stage4_epoch_3
+        parts = name.split('_')
+        try:
+            ep_idx = parts.index('epoch') + 1
+            ep = int(parts[ep_idx])
+            if 'batch' in parts:
+                ba_idx = parts.index('batch') + 1
+                ba = int(parts[ba_idx])
+            else:
+                ba = 0
+            if best is None or (ep, ba) > (best[1], best[2]):
+                best = (p, ep, ba)
+        except (ValueError, IndexError):
+            continue
+    return best
+
+
+# ============================================================================
 # TRAINING LOOP
 # ============================================================================
 
-def train_epoch(model, dataloader, optimizer, device, epoch, args):
+def train_epoch(model, dataloader, optimizer, device, epoch, args, start_batch=0, checkpoint_dir=None):
     """
     Train for one epoch with multi-task learning.
     """
@@ -167,6 +192,8 @@ def train_epoch(model, dataloader, optimizer, device, epoch, args):
     pbar = tqdm(dataloader, desc=f"Epoch {epoch}")
     
     for batch_idx, batch in enumerate(pbar):
+        if batch_idx < start_batch:
+            continue
         # Move to device
         panel_embeddings = batch['panel_embeddings'].to(device)
         panel_mask = batch['panel_mask'].to(device)
@@ -203,26 +230,12 @@ def train_epoch(model, dataloader, optimizer, device, epoch, args):
                 
                 # Predict
                 if task_type == 'visual_closure':
-                    scores = []
-                    for k in range(candidates.shape[0]):
-                        score = model.visual_closure_head(
-                            preceding.unsqueeze(0),
-                            candidates[k].unsqueeze(0)
-                        )
-                        scores.append(score)
-                    scores = torch.stack(scores).t()  # (1, K)
+                    scores = model.visual_closure_head(preceding.unsqueeze(0), candidates.unsqueeze(0))  # (1, K)
                     loss = closure_loss(scores, correct_idx)
                     task_losses['visual_closure'] += loss.item()
                     task_counts['visual_closure'] += 1
                 else:
-                    scores = []
-                    for k in range(candidates.shape[0]):
-                        score = model.text_closure_head(
-                            preceding.unsqueeze(0),
-                            candidates[k].unsqueeze(0)
-                        )
-                        scores.append(score)
-                    scores = torch.stack(scores).t()  # (1, K)
+                    scores = model.text_closure_head(preceding.unsqueeze(0), candidates.unsqueeze(0))  # (1, K)
                     loss = closure_loss(scores, correct_idx)
                     task_losses['text_closure'] += loss.item()
                     task_counts['text_closure'] += 1
@@ -268,6 +281,16 @@ def train_epoch(model, dataloader, optimizer, device, epoch, args):
         batch_loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
         optimizer.step()
+        
+        if checkpoint_dir is not None and args.save_every_n_batches > 0 and (batch_idx + 1) % args.save_every_n_batches == 0:
+            mid_path = checkpoint_dir / f'checkpoint_stage4_epoch_{epoch}_batch_{batch_idx + 1}.pt'
+            torch.save({
+                'epoch': epoch,
+                'batch': batch_idx + 1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'val_loss': None,
+            }, mid_path)
         
         # Update metrics
         total_loss += batch_loss.item()
@@ -338,26 +361,12 @@ def validate(model, dataloader, device, args):
                 correct_idx = torch.tensor([task_data['correct_idx']], device=device)
                 
                 if task_type == 'visual_closure':
-                    scores = []
-                    for k in range(candidates.shape[0]):
-                        score = model.visual_closure_head(
-                            preceding.unsqueeze(0),
-                            candidates[k].unsqueeze(0)
-                        )
-                        scores.append(score)
-                    scores = torch.stack(scores).t()
+                    scores = model.visual_closure_head(preceding.unsqueeze(0), candidates.unsqueeze(0))  # (1, K)
                     loss = closure_loss(scores, correct_idx)
                     task_losses['visual_closure'] += loss.item()
                     task_counts['visual_closure'] += 1
                 else:
-                    scores = []
-                    for k in range(candidates.shape[0]):
-                        score = model.text_closure_head(
-                            preceding.unsqueeze(0),
-                            candidates[k].unsqueeze(0)
-                        )
-                        scores.append(score)
-                    scores = torch.stack(scores).t()
+                    scores = model.text_closure_head(preceding.unsqueeze(0), candidates.unsqueeze(0))  # (1, K)
                     loss = closure_loss(scores, correct_idx)
                     task_losses['text_closure'] += loss.item()
                     task_counts['text_closure'] += 1
@@ -486,17 +495,41 @@ def main(args):
     checkpoint_dir = Path(args.checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     
-    # Training loop
+    # Resume logic
+    start_epoch = 1
+    start_batch = 0
     best_val_loss = float('inf')
     
-    for epoch in range(1, args.epochs + 1):
+    if args.resume:
+        found = _find_latest_checkpoint(checkpoint_dir)
+        if found:
+            ckpt_path, start_epoch, start_batch = found
+            print(f"▶️  Resuming from {ckpt_path} (epoch {start_epoch}, batch {start_batch})")
+            ckpt = torch.load(ckpt_path, map_location=device)
+            model.load_state_dict(ckpt['model_state_dict'])
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            if 'scheduler_state_dict' in ckpt and ckpt['scheduler_state_dict']:
+                scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+            if ckpt.get('val_loss'):
+                best_val_loss = ckpt['val_loss']
+            # If batch > 0, we're mid-epoch; if batch == 0, start_epoch is the next epoch
+            if start_batch == 0:
+                start_epoch += 1  # checkpoint was end-of-epoch, start next
+        else:
+            print("No checkpoint found, starting from scratch.")
+    
+    # Training loop
+    for epoch in range(start_epoch, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
         print("-" * 60)
         
         # Train
         train_loss, train_task_losses, train_counts = train_epoch(
-            model, train_loader, optimizer, device, epoch, args
+            model, train_loader, optimizer, device, epoch, args,
+            start_batch=start_batch if epoch == start_epoch else 0,
+            checkpoint_dir=checkpoint_dir
         )
+        start_batch = 0  # only skip batches for the resumed epoch
         
         # Validate
         val_loss, val_task_losses, val_counts = validate(
@@ -557,6 +590,18 @@ def main(args):
                 'args': vars(args)
             }, checkpoint_path)
             print(f"Saved checkpoint to {checkpoint_path}")
+        
+        # Always save end-of-epoch checkpoint for resume support
+        epoch_ckpt_path = checkpoint_dir / f'checkpoint_stage4_epoch_{epoch}.pt'
+        torch.save({
+            'epoch': epoch,
+            'batch': 0,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'val_loss': val_loss,
+            'args': vars(args)
+        }, epoch_ckpt_path)
     
     if args.use_wandb:
         wandb.finish()
@@ -632,6 +677,10 @@ if __name__ == "__main__":
                        help='Use Weights & Biases for logging')
     parser.add_argument('--run_name', type=str, default='stage4_training',
                        help='Run name for wandb')
+    parser.add_argument('--resume', action='store_true',
+                       help='Resume from latest checkpoint')
+    parser.add_argument('--save_every_n_batches', type=int, default=2000,
+                       help='Save mid-epoch checkpoint every N batches')
     
     args = parser.parse_args()
     main(args)
