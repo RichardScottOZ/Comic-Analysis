@@ -190,8 +190,6 @@ def main(args):
     with open(args.output_metadata, 'w', encoding='utf-8') as f:
         json.dump(metadata_list, f, indent=2)
 
-    progress_file.unlink(missing_ok=True)  # clean up on successful completion
-
     print(
         f"\n✅ Embedding generation complete!\n"
         f"   Embeddings : {args.output_zarr}  shape=({total_samples}, {args.max_panels}, {args.feature_dim})\n"
