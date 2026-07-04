@@ -18,6 +18,7 @@ and generate_stage3_embeddings.py need only import swaps.
 import os
 import json
 import logging
+import pickle
 import torch
 import csv
 from tqdm import tqdm
@@ -95,7 +96,19 @@ class Stage3PanelDatasetVLM(Dataset):
         print(f"Stage3PanelDatasetVLM ready: {len(self.samples):,} samples.")
 
     def _scan_vlm_cache(self) -> set:
-        """Walk vlm_cache_dir once and return a set of canonical_ids (no .json suffix)."""
+        """Walk vlm_cache_dir once and return a set of canonical_ids (no .json suffix).
+        
+        Result is cached to {vlm_cache_dir}/.cache_index.pkl so subsequent runs
+        load in milliseconds instead of re-walking the directory tree.
+        """
+        cache_file = self.vlm_cache_dir / '.cache_index.pkl'
+        if cache_file.exists():
+            print(f"  Loading cache index from {cache_file} ...")
+            with open(cache_file, 'rb') as f:
+                cached = pickle.load(f)
+            print(f"  Loaded {len(cached):,} entries from cache index.")
+            return cached
+
         cached = set()
         root = self.vlm_cache_dir
         for dirpath, _, filenames in os.walk(root):
@@ -108,6 +121,10 @@ class Stage3PanelDatasetVLM(Dataset):
                     # Normalise to forward slashes regardless of OS
                     canonical_id = canonical_id.replace('\\', '/')
                     cached.add(canonical_id)
+
+        print(f"  Saving cache index to {cache_file} ...")
+        with open(cache_file, 'wb') as f:
+            pickle.dump(cached, f)
         return cached
 
     @staticmethod
