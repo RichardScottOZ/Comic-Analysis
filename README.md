@@ -192,6 +192,7 @@ OCR Run not good enough
 - Epoch 6 : Train Loss: 2.4382 | Val Loss: 2.6029
 - Epoch 7 : Train Loss: 2.4307 | Val Loss: 2.5938
 - Epoch 8 : Train Loss: 2.4231 | Val Loss: 2.5615
+- Epoch 9 : Train Loss: 2.4171 | Val Loss: 2.5611
 
 
   ┌───────┬───────┬───────┬────────┐
@@ -221,5 +222,15 @@ OCR Run not good enough
   ├───────┼───────┼───────┼────────────┤
   │ 8     │ 2.423 │ 2.562 │ -0.032     │
   └───────┴───────┴───────┴────────────┘
+
+  ┌───────┬───────┬─────────────┐
+  │ Epoch │ Val   │ Val Δ       │
+  ├───────┼───────┼─────────────┤
+  │ 7     │ 2.594 │ -0.009      │
+  ├───────┼───────┼─────────────┤
+  │ 8     │ 2.562 │ -0.032      │
+  ├───────┼───────┼─────────────┤
+  │ 9     │ 2.561 │ -0.0004     │
+  └───────┴───────┴─────────────┘
 
 After training: next step is generate_stage3_embeddings_vlm.py over all  1.2M pages → then Stage 4
