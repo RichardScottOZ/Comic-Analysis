@@ -281,25 +281,23 @@ class ClosureHead(nn.Module):
             nn.Linear(d_model, 1)
         )
     
-    def forward(self, 
+    def forward(self,
                 preceding_panels: torch.Tensor,
-                candidate_panel: torch.Tensor) -> torch.Tensor:
+                candidates: torch.Tensor) -> torch.Tensor:
         """
         Args:
             preceding_panels: (B, N, D) panels before the gap
-            candidate_panel: (B, D) candidate panel for closure
-            
+            candidates: (B, K, D) candidate panels for closure
+
         Returns:
-            closure_scores: (B,) closure plausibility scores
+            scores: (B, K) closure plausibility scores
         """
-        # Aggregate preceding context
-        context = preceding_panels[:, -1, :]  # Use last panel (B, D)
-        
-        # Concatenate and score
-        combined = torch.cat([context, candidate_panel], dim=-1)  # (B, 2D)
-        closure_score = self.closure_net(combined).squeeze(-1)  # (B,)
-        
-        return closure_score
+        B, K, D = candidates.shape
+        context = preceding_panels[:, -1, :]                        # (B, D)
+        context_exp = context.unsqueeze(1).expand(B, K, D)          # (B, K, D)
+        combined = torch.cat([context_exp, candidates], dim=-1)     # (B, K, 2D)
+        scores = self.closure_net(combined).squeeze(-1)             # (B, K)
+        return scores
 
 
 class CaptionRelevanceHead(nn.Module):
@@ -422,20 +420,11 @@ class ReadingOrderHead(nn.Module):
                          order_matrix[b, i, j] > 0 means panel i comes before j
         """
         B, N, D = panel_embeddings.shape
-        
-        # Compute all pairwise orderings
-        order_matrix = torch.zeros(B, N, N, device=panel_embeddings.device)
-        
-        for i in range(N):
-            for j in range(N):
-                if i != j:
-                    score = self.order_scorer(
-                        panel_embeddings[:, i, :],
-                        panel_embeddings[:, j, :]
-                    )  # (B, 1)
-                    order_matrix[:, i, j] = score.squeeze(-1)
-        
-        return order_matrix
+        pi = panel_embeddings.unsqueeze(2).expand(B, N, N, D).reshape(B * N * N, D)
+        pj = panel_embeddings.unsqueeze(1).expand(B, N, N, D).reshape(B * N * N, D)
+        scores = self.order_scorer(pi, pj).reshape(B, N, N)
+        diag = torch.eye(N, device=panel_embeddings.device).bool().unsqueeze(0)
+        return scores.masked_fill(diag, 0.0)
 
 
 # ============================================================================
