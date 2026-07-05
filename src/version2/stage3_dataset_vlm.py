@@ -290,7 +290,7 @@ class Stage3PanelDatasetVLM(Dataset):
                 box_2d = p.get('box_2d')
                 if not isinstance(box_2d, (list, tuple)) or len(box_2d) != 4:
                     continue
-                y1, x1, y2, x2 = [float(v) for v in box_2d]
+                y1, x1, y2, x2 = [float(v) if v is not None else 0.0 for v in box_2d]
                 px1 = max(0, int(x1 / 1000.0 * pw))
                 py1 = max(0, int(y1 / 1000.0 * ph))
                 px2 = min(pw, int(x2 / 1000.0 * pw))
@@ -301,7 +301,7 @@ class Stage3PanelDatasetVLM(Dataset):
                 panel_data.append({
                     'image': page_image.crop((px1, py1, px2, py2)),
                     'text': self._panel_text(p),
-                    'box_2d': box_2d,
+                    'box_2d': [y1, x1, y2, x2],  # store converted floats, not raw strings
                     'comp_feats': self._compute_comp_features(
                         box_2d, panel_num, self.max_panels_per_page
                     ),
