@@ -352,6 +352,51 @@ def get_embedding_for_image(model, image_path: str, device) -> tuple:
     return emb_np, emb_np
 
 
+def get_embedding_for_multimodal(model, image_path: str, text_query: str, device) -> tuple:
+    """
+    Encode a combined image+text query with the fused Stage 3 model.
+
+    Returns:
+        (panel_emb, page_emb), both (1, 512)
+    """
+    transform = T.Compose(
+        [
+            T.Resize((224, 224)),
+            T.ToTensor(),
+            T.Normalize(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+            ),
+        ]
+    )
+
+    image = Image.open(image_path).convert("RGB")
+    image_tensor = transform(image).unsqueeze(0).to(device)
+
+    tokenizer = _get_tokenizer()
+    enc = tokenizer(
+        [text_query],
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=128,
+    )
+
+    batch = {
+        "images": image_tensor,
+        "input_ids": enc["input_ids"].to(device),
+        "attention_mask": enc["attention_mask"].to(device),
+        "comp_feats": torch.zeros(1, 7, device=device),
+        "modality_mask": torch.tensor([[1.0, 1.0, 0.0]], device=device),
+    }
+
+    with torch.no_grad():
+        emb = model(batch)
+
+    emb_np = emb.cpu().numpy()
+    return emb_np, emb_np
+
+
 def cosine_search(query_emb: np.ndarray, database_embs: np.ndarray, top_k: int = 12) -> tuple:
     """
     Batched cosine similarity search.

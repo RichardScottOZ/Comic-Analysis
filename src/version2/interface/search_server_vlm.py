@@ -13,6 +13,7 @@ from search_utils_vlm import (
     find_similar_pages,
     find_similar_panels,
     get_embedding_for_image,
+    get_embedding_for_multimodal,
     get_embedding_for_text,
     get_panel_crop,
     load_dataset,
@@ -86,6 +87,24 @@ def search():
             temp_path = Path(app.static_folder) / "temp_query.jpg"
             image_file.save(temp_path)
             panel_emb, page_emb = get_embedding_for_image(MODEL, str(temp_path), DEVICE)
+            query_emb = page_emb if search_mode == "page" else panel_emb
+
+        elif query_type == "multimodal":
+            if "image_query" not in request.files:
+                return jsonify({"error": "No image file provided"}), 400
+            image_file = request.files["image_query"]
+            if not image_file or image_file.filename == "":
+                return jsonify({"error": "No image file selected"}), 400
+
+            text_query = request.form.get("text_query", "").strip()
+            if not text_query:
+                return jsonify({"error": "No multimodal text provided"}), 400
+
+            temp_path = Path(app.static_folder) / "temp_query.jpg"
+            image_file.save(temp_path)
+            panel_emb, page_emb = get_embedding_for_multimodal(
+                MODEL, str(temp_path), text_query, DEVICE
+            )
             query_emb = page_emb if search_mode == "page" else panel_emb
 
         elif query_type == "text":

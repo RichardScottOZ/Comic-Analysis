@@ -17,7 +17,12 @@
         button:hover { background-color: #45a049; }
         #results-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
         .result-item { background-color: #1e1e1e; border: 1px solid #333; border-radius: 4px; overflow: hidden; text-align: left; display: flex; flex-direction: column; }
+        .image-wrap { width: 100%; background: #222; display: flex; align-items: center; justify-content: center; overflow: hidden; }
         .result-item img { width: 100%; height: auto; display: block; background: #222; }
+        .page-result .image-wrap { min-height: 240px; max-height: 360px; }
+        .page-result img { max-height: 360px; object-fit: contain; }
+        .panel-result .image-wrap { height: 260px; padding: 8px; box-sizing: border-box; }
+        .panel-result img { width: 100%; height: 100%; object-fit: contain; }
         .result-item .content { padding: 0.75rem; }
         .result-item p { margin: 0.35rem 0; font-size: 0.85rem; color: #bbb; word-wrap: break-word; }
         .score { color: #4CAF50; font-weight: 600; }
@@ -41,6 +46,7 @@
                 <div class="radio-group">
                     <label><input type="radio" name="query_type" value="image" checked> Image Search</label>
                     <label><input type="radio" name="query_type" value="text"> Text Search</label>
+                    <label><input type="radio" name="query_type" value="multimodal"> Multimodal Search</label>
                 </div>
             </div>
 
@@ -62,6 +68,13 @@
                 <input type="text" id="text-query" name="text_query" placeholder="e.g., a hero flying over a city at night">
             </div>
 
+            <div id="multimodal-search-section" class="form-section hidden">
+                <label for="multimodal-image-query">Upload an image:</label>
+                <input type="file" id="multimodal-image-query" name="image_query" accept="image/*">
+                <label for="multimodal-text-query">Add guidance text:</label>
+                <input type="text" id="multimodal-text-query" name="text_query" placeholder="e.g., similar image but angrier dialogue and occult vibe">
+            </div>
+
             <button type="submit">Search</button>
         </form>
     </div>
@@ -77,12 +90,19 @@
         const resultsContainer = document.getElementById('results-container');
         const imageSearchSection = document.getElementById('image-search-section');
         const textSearchSection = document.getElementById('text-search-section');
+        const multimodalSearchSection = document.getElementById('multimodal-search-section');
         const queryTypeRadios = document.querySelectorAll('input[name="query_type"]');
 
         function updateQuerySections() {
             const queryType = document.querySelector('input[name="query_type"]:checked').value;
             imageSearchSection.classList.toggle('hidden', queryType !== 'image');
             textSearchSection.classList.toggle('hidden', queryType !== 'text');
+            multimodalSearchSection.classList.toggle('hidden', queryType !== 'multimodal');
+
+            document.getElementById('image-query').disabled = queryType !== 'image';
+            document.getElementById('text-query').disabled = queryType !== 'text';
+            document.getElementById('multimodal-image-query').disabled = queryType !== 'multimodal';
+            document.getElementById('multimodal-text-query').disabled = queryType !== 'multimodal';
         }
 
         queryTypeRadios.forEach(radio => radio.addEventListener('change', updateQuerySections));
@@ -127,9 +147,11 @@
                         : '';
 
                     const card = document.createElement('div');
-                    card.className = 'result-item';
+                    card.className = `result-item ${item.panel_idx !== undefined ? 'panel-result' : 'page-result'}`;
                     card.innerHTML = `
-                        <img src="${imageUrl}" alt="${item.canonical_id}">
+                        <div class="image-wrap">
+                            <img src="${imageUrl}" alt="${item.canonical_id}">
+                        </div>
                         <div class="content">
                             <p class="score">#${item.rank} · ${item.similarity.toFixed(4)}</p>
                             <p><strong>Comic:</strong> ${item.comic_name || item.canonical_id}</p>
