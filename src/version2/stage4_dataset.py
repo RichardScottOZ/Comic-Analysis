@@ -263,10 +263,15 @@ class Stage4SequenceDataset(Dataset):
         
         shuffled_panels = panel_embeddings[shuffled_indices]
         
-        # Create adjacency matrix for correct order
+        # Build adjacency matrix in SHUFFLED space.
+        # shuffled_indices[k] = original panel index at shuffled position k
+        # inv_perm[orig] = shuffled position of that original panel
+        inv_perm = np.argsort(shuffled_indices)
         adj_matrix = np.zeros((num_panels, num_panels), dtype=np.int64)
         for i in range(num_panels - 1):
-            adj_matrix[i, i + 1] = 1
+            si = inv_perm[i]        # shuffled position of original panel i
+            sj = inv_perm[i + 1]    # shuffled position of original panel i+1
+            adj_matrix[si, sj] = 1
         
         return {
             'shuffled_panels': shuffled_panels,
