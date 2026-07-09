@@ -99,49 +99,63 @@ def contrastive_panel_loss(panel_embeddings: torch.Tensor,
                            panel_mask: torch.Tensor,
                            temperature: float = 0.07) -> torch.Tensor:
     """
-    Contrastive loss for panel embeddings within a sequence.
-    Encourages panels in same sequence to be similar.
-    
+    NT-Xent contrastive loss for panel embeddings.
+
+    For each panel, panels from the SAME page are positives and panels
+    from ALL OTHER pages in the batch are negatives.  This prevents the
+    trivial collapsed solution (all embeddings identical) that the old
+    pull-only formulation produced.
+
     Args:
         panel_embeddings: (B, N, D) contextualized panel embeddings
-        panel_mask: (B, N) valid panel indicators
-        temperature: Temperature for contrastive loss
-        
+        panel_mask: (B, N) valid panel indicators (1 = valid)
+        temperature: softmax temperature
+
     Returns:
-        Scalar contrastive loss
+        Scalar NT-Xent loss
     """
     B, N, D = panel_embeddings.shape
-    
-    # Normalize embeddings
-    embeddings_norm = F.normalize(panel_embeddings, dim=-1)
-    
-    losses = []
+
+    # --- 1. Build a flat list of valid panel embeddings + their page index ---
+    embs, page_ids = [], []
     for b in range(B):
-        # Get valid panels
-        valid_mask = panel_mask[b].bool()
-        valid_panels = embeddings_norm[b][valid_mask]
-        n_valid = valid_panels.shape[0]
-        
-        if n_valid < 2:
-            continue
-        
-        # Compute similarity matrix
-        sim_matrix = torch.mm(valid_panels, valid_panels.t()) / temperature
-        
-        # Mask out self-similarity
-        mask = ~torch.eye(n_valid, device=sim_matrix.device, dtype=torch.bool)
-        
-        # Extract positive similarities
-        pos_sims = sim_matrix[mask].view(n_valid, n_valid - 1)
-        
-        # Loss: negative mean similarity
-        loss = -pos_sims.mean()
-        losses.append(loss)
-    
-    if len(losses) == 0:
+        valid = panel_mask[b].bool()
+        panels = F.normalize(panel_embeddings[b][valid], dim=-1)  # (n_valid, D)
+        embs.append(panels)
+        page_ids.extend([b] * panels.shape[0])
+
+    if len(page_ids) < 2:
         return torch.tensor(0.0, device=panel_embeddings.device)
-    
-    return torch.stack(losses).mean()
+
+    all_embs = torch.cat(embs, dim=0)          # (M, D)
+    page_ids = torch.tensor(page_ids, device=panel_embeddings.device)  # (M,)
+
+    # --- 2. Full pairwise similarity matrix ---
+    sim = torch.mm(all_embs, all_embs.t()) / temperature  # (M, M)
+
+    # --- 3. Masks ---
+    M = all_embs.shape[0]
+    same_page = page_ids.unsqueeze(1) == page_ids.unsqueeze(0)  # (M, M) bool
+    eye = torch.eye(M, device=sim.device, dtype=torch.bool)
+    # Positives: same page, not self
+    pos_mask = same_page & ~eye
+    # Self-similarity is excluded from denominator too
+    neg_inf = torch.finfo(sim.dtype).min
+
+    # --- 4. NT-Xent: for each anchor, log-softmax over all non-self, pick positives ---
+    sim_no_self = sim.masked_fill(eye, neg_inf)          # (M, M)
+    log_probs = sim_no_self - torch.logsumexp(sim_no_self, dim=1, keepdim=True)
+
+    # Average log-prob of all positive pairs per anchor
+    n_pos = pos_mask.sum(dim=1).float().clamp(min=1)
+    loss_per_anchor = -(log_probs * pos_mask).sum(dim=1) / n_pos
+
+    # Only compute loss for anchors that have at least one positive
+    has_pos = pos_mask.any(dim=1)
+    if not has_pos.any():
+        return torch.tensor(0.0, device=panel_embeddings.device)
+
+    return loss_per_anchor[has_pos].mean()
 
 
 # ============================================================================
