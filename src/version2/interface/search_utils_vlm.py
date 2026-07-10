@@ -85,8 +85,20 @@ def load_dataset(
     print(f"Loaded {len(metadata):,} metadata rows", flush=True)
     print(f"Opening zarr: {zarr_path}", flush=True)
     root = zarr.open(zarr_path, mode="r")
-    print("Reading panel embeddings into RAM...", flush=True)
-    panel_embeddings = root["panel_embeddings"][:]
+
+    # Support both Stage 3 (panel_embeddings) and Stage 4 (contextualized_panels + strip_embeddings)
+    is_stage4 = "contextualized_panels" in root
+    if is_stage4:
+        print("Detected Stage 4 zarr format.", flush=True)
+        print("Reading contextualized panel embeddings into RAM...", flush=True)
+        panel_embeddings = root["contextualized_panels"][:]
+        print("Reading strip embeddings into RAM...", flush=True)
+        strip_embeddings = root["strip_embeddings"][:]
+    else:
+        print("Detected Stage 3 zarr format.", flush=True)
+        print("Reading panel embeddings into RAM...", flush=True)
+        panel_embeddings = root["panel_embeddings"][:]
+        strip_embeddings = None
     print("Reading panel masks into RAM...", flush=True)
     panel_masks = root["panel_masks"][:]
 
@@ -103,7 +115,11 @@ def load_dataset(
             page_embs.append(np.zeros(panel_embeddings.shape[-1], dtype=np.float32))
             continue
 
-        page_embs.append(valid_panels.mean(axis=0))
+        # Use strip embedding for page-level search if available (Stage 4), else mean-pool
+        if strip_embeddings is not None:
+            page_embs.append(strip_embeddings[i].astype(np.float32))
+        else:
+            page_embs.append(valid_panels.mean(axis=0))
 
         for panel_idx, emb in enumerate(valid_panels):
             panel_embs.append(emb)
