@@ -196,8 +196,11 @@ OCR Run not good enough
 
 After training: next step is generate_stage3_embeddings_vlm.py over all  1.2M pages → then Stage 4
 
+- Results
+- You can see an example below - Gemini is the best in the world for zero shot comic classification - and as a low budget project Gemini 2.5 Flash results here are generally excellent
+- Note that Gemini 3 Flash is far more expensive, so you would expect this model to be deprecated - GLM 4.7 V can do a decent job too - but no api capability there - could be used locally to work through slowly, but a million pages would take some time.
 
-
-### Stgage 3 similarity query
+### Stage 3 similarity query
 *   Stage 3 model showing a query result via web interface for the text query 'batman catwoman heightened tension encounter'
 ![alt text](images/batman-catwoman-heightened-encounter.jpeg)
+![alt text](images/batman-catwoman-heightened-encounter-2.jpeg)
