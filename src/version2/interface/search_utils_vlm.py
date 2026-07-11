@@ -86,6 +86,12 @@ def load_dataset(
     print(f"Opening zarr: {zarr_path}", flush=True)
     root = zarr.open(zarr_path, mode="r")
 
+    # Align metadata with Zarr store if there is a mismatch
+    panel_masks_shape = root["panel_masks"].shape[0]
+    if len(metadata) > panel_masks_shape:
+        print(f"⚠️ Truncating metadata from {len(metadata):,} to {panel_masks_shape:,} to match Zarr shape.", flush=True)
+        metadata = metadata[:panel_masks_shape]
+
     # Support both Stage 3 (panel_embeddings) and Stage 4 (contextualized_panels + strip_embeddings)
     is_stage4 = "contextualized_panels" in root
     if is_stage4:

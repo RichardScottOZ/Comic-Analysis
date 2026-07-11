@@ -25,9 +25,9 @@ from search_utils_vlm import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # Default to Stage 4 embeddings
-ZARR_PATH = os.environ.get("STAGE4_SEARCH_ZARR", "E:/Comic_Analysis_Results_v2/stage4_embeddings.zarr")
-if not os.path.exists(ZARR_PATH) and os.path.exists("E:/stage4_embeddings.zarr"):
-    ZARR_PATH = "E:/stage4_embeddings.zarr"
+ZARR_PATH = os.environ.get("STAGE4_SEARCH_ZARR", "E:/stage4_embeddings.zarr")
+if not os.path.exists(ZARR_PATH) and os.path.exists("E:/Comic_Analysis_Results_v2/stage4_embeddings.zarr"):
+    ZARR_PATH = "E:/Comic_Analysis_Results_v2/stage4_embeddings.zarr"
 
 METADATA_PATH = Path(
     os.environ.get("STAGE4_SEARCH_METADATA", str(REPO_ROOT / "stage4_metadata.json"))
