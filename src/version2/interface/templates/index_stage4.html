@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Stage 4 Semantic Search</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0d0e15; color: #e0e0e0; margin: 0; padding: 2rem; }
+        header { text-align: center; margin-bottom: 2rem; }
+        h1 { color: #00bcd4; text-shadow: 0 0 10px rgba(0, 188, 212, 0.3); }
+        #search-container { max-width: 700px; margin: 0 auto 2rem auto; padding: 1.5rem; background-color: #161925; border: 1px solid #232a45; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        form { display: flex; flex-direction: column; gap: 1.5rem; }
+        .form-section, .radio-group { display: flex; flex-direction: column; gap: 0.75rem; }
+        .radio-group label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 0.5rem; border: 1px solid #2c3558; background-color: #1f2336; border-radius: 4px; color: #e0e0e0; box-sizing: border-box; }
+        button { padding: 0.75rem; background-color: #00bcd4; color: #0d0e15; border: none; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+        button:hover { background-color: #00acc1; box-shadow: 0 0 10px rgba(0, 188, 212, 0.5); }
+        #results-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .result-item { background-color: #161925; border: 1px solid #232a45; border-radius: 4px; overflow: hidden; text-align: left; display: flex; flex-direction: column; transition: transform 0.2s, box-shadow 0.2s; }
+        .result-item:hover { transform: translateY(-4px); box-shadow: 0 5px 15px rgba(0, 188, 212, 0.15); border-color: #00bcd4; }
+        .image-wrap { width: 100%; background: #0f111a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .result-item img { width: 100%; height: auto; display: block; background: #0f111a; }
+        .page-result .image-wrap { min-height: 240px; max-height: 360px; }
+        .page-result img { max-height: 360px; object-fit: contain; }
+        .panel-result .image-wrap { height: 260px; padding: 8px; box-sizing: border-box; }
+        .panel-result img { width: 100%; height: 100%; object-fit: contain; }
+        .result-item .content { padding: 0.75rem; }
+        .result-item p { margin: 0.35rem 0; font-size: 0.85rem; color: #a0a5c0; word-wrap: break-word; }
+        .score { color: #00bcd4; font-weight: 600; }
+        .summary, .preview, .panel-text, .panel-dialogue, .panel-description { color: #d4d4d4; font-size: 0.82rem; line-height: 1.35; }
+        .panel-dialogue ul { margin: 0.35rem 0 0 1rem; padding: 0; }
+        .panel-dialogue li { margin: 0.2rem 0; }
+        #loader, #error-message { text-align: center; margin-top: 2rem; font-size: 1.2rem; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Comic Stage 4 Semantic Search</h1>
+        <p>Contextualized semantic search over Stage 4 page (strip) and panel embeddings.</p>
+    </header>
+
+    <div id="search-container">
+        <form id="search-form">
+            <div class="form-section">
+                <label><strong>1. Choose Query Type:</strong></label>
+                <div class="radio-group">
+                    <label><input type="radio" name="query_type" value="image" checked> Image Search</label>
+                    <label><input type="radio" name="query_type" value="text"> Text Search</label>
+                    <label><input type="radio" name="query_type" value="multimodal"> Multimodal Search</label>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <label><strong>2. Choose Search Mode:</strong></label>
+                <div class="radio-group">
+                    <label><input type="radio" name="search_mode" value="page" checked> Find Similar Pages (Strip level)</label>
+                    <label><input type="radio" name="search_mode" value="panel"> Find Similar Panels (Contextualized)</label>
+                </div>
+            </div>
+
+            <div id="image-search-section" class="form-section">
+                <label for="image-query">Upload an image:</label>
+                <input type="file" id="image-query" name="image_query" accept="image/*">
+            </div>
+
+            <div id="text-search-section" class="form-section hidden">
+                <label for="text-query">Enter search text:</label>
+                <input type="text" id="text-query" name="text_query" placeholder="e.g., a hero flying over a city at night">
+            </div>
+
+            <div id="multimodal-search-section" class="form-section hidden">
+                <label for="multimodal-image-query">Upload an image:</label>
+                <input type="file" id="multimodal-image-query" name="image_query" accept="image/*">
+                <label for="multimodal-text-query">Add guidance text:</label>
+                <input type="text" id="multimodal-text-query" name="text_query" placeholder="e.g., similar image but angrier dialogue and occult vibe">
+            </div>
+
+            <button type="submit">Search Stage 4</button>
+        </form>
+    </div>
+
+    <div id="loader" class="hidden">Searching contextual embeddings...</div>
+    <div id="error-message" class="hidden"></div>
+    <div id="results-container"></div>
+
+    <script>
+        const form = document.getElementById('search-form');
+        const loader = document.getElementById('loader');
+        const errorMessage = document.getElementById('error-message');
+        const resultsContainer = document.getElementById('results-container');
+        const imageSearchSection = document.getElementById('image-search-section');
+        const textSearchSection = document.getElementById('text-search-section');
+        const multimodalSearchSection = document.getElementById('multimodal-search-section');
+        const queryTypeRadios = document.querySelectorAll('input[name="query_type"]');
+
+        function updateQuerySections() {
+            const queryType = document.querySelector('input[name="query_type"]:checked').value;
+            imageSearchSection.classList.toggle('hidden', queryType !== 'image');
+            textSearchSection.classList.toggle('hidden', queryType !== 'text');
+            multimodalSearchSection.classList.toggle('hidden', queryType !== 'multimodal');
+
+            document.getElementById('image-query').disabled = queryType !== 'image';
+            document.getElementById('text-query').disabled = queryType !== 'text';
+            document.getElementById('multimodal-image-query').disabled = queryType !== 'multimodal';
+            document.getElementById('multimodal-text-query').disabled = queryType !== 'multimodal';
+        }
+
+        queryTypeRadios.forEach(radio => radio.addEventListener('change', updateQuerySections));
+        updateQuerySections();
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loader.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+            resultsContainer.innerHTML = '';
+
+            const formData = new FormData(form);
+
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                loader.classList.add('hidden');
+
+                if (!response.ok) {
+                    errorMessage.textContent = data.error || 'Search failed.';
+                    errorMessage.classList.remove('hidden');
+                    return;
+                }
+
+                if (!data.length) {
+                    errorMessage.textContent = 'No results found.';
+                    errorMessage.classList.remove('hidden');
+                    return;
+                }
+
+                data.forEach(item => {
+                    const encodedId = encodeURIComponent(item.canonical_id);
+                    const imageUrl = item.panel_idx !== undefined
+                        ? `/panel_image/${encodedId}/${item.panel_idx}`
+                        : `/image/${encodedId}`;
+                    const dialogueHtml = item.panel_dialogue && item.panel_dialogue.length
+                        ? `<div class="panel-dialogue"><strong>Dialogue:</strong><ul>${item.panel_dialogue.map(line => `<li>${line}</li>`).join('')}</ul></div>`
+                        : '';
+
+                    const card = document.createElement('div');
+                    card.className = `result-item ${item.panel_idx !== undefined ? 'panel-result' : 'page-result'}`;
+                    card.innerHTML = `
+                        <div class="image-wrap">
+                            <img src="${imageUrl}" alt="${item.canonical_id}">
+                        </div>
+                        <div class="content">
+                            <p class="score">#${item.rank} · ${item.similarity.toFixed(4)}</p>
+                            <p><strong>Comic:</strong> ${item.comic_name || item.canonical_id}</p>
+                            <p><strong>Page:</strong> ${item.page_name || item.canonical_id}</p>
+                            ${item.page_number ? `<p><strong>Page #:</strong> ${item.page_number}</p>` : ''}
+                            ${item.panel_idx !== undefined ? `<p><strong>Panel:</strong> ${item.panel_idx + 1}</p>` : ''}
+                            ${item.num_panels !== undefined ? `<p><strong>Panels:</strong> ${item.num_panels}</p>` : ''}
+                            ${item.overall_summary ? `<p class="summary"><strong>Summary:</strong> ${item.overall_summary}</p>` : ''}
+                            ${item.page_text_preview ? `<p class="preview"><strong>Text/desc:</strong> ${item.page_text_preview}</p>` : ''}
+                            ${item.panel_description ? `<p class="panel-description"><strong>Description:</strong> ${item.panel_description}</p>` : ''}
+                            ${dialogueHtml}
+                            ${!item.panel_description && item.panel_text ? `<p class="panel-text"><strong>Panel text:</strong> ${item.panel_text}</p>` : ''}
+                        </div>
+                    `;
+                    resultsContainer.appendChild(card);
+                });
+            } catch (err) {
+                loader.classList.add('hidden');
+                errorMessage.textContent = `Request failed: ${err.message}`;
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
