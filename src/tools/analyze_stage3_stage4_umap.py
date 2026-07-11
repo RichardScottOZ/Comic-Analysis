@@ -74,7 +74,8 @@ def analyze_and_plot(embeddings, n_clusters, title, output_img, metadata_list, z
     
     print(f"[{get_timestamp()}] Starting UMAP reduction to 2D (verbose output enabled)...")
     umap_start = time.time()
-    reducer = umap.UMAP(n_components=2, random_state=None, metric='cosine', verbose=True, n_jobs=-1, low_memory=True)
+    # Set init='random' to prevent spectral layout pairwise distance crashes on disconnected components
+    reducer = umap.UMAP(n_components=2, init='random', random_state=None, metric='cosine', verbose=True, n_jobs=-1, low_memory=True)
     coords_2d = reducer.fit_transform(normalized)
     print(f"[{get_timestamp()}] UMAP finished in {time.time() - umap_start:.2f} seconds.")
     
