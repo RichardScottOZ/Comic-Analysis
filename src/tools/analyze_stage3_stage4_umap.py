@@ -158,7 +158,11 @@ def analyze_and_plot(embeddings, n_clusters, title, output_img, metadata_list, z
     plt.title(f"UMAP Projection & KMeans Clusters (K={n_clusters})\n{title}", fontsize=14, fontweight='bold')
     plt.xlabel("UMAP Dimension 1")
     plt.ylabel("UMAP Dimension 2")
-    plt.legend(title="Cluster ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+    leg = plt.legend(title="Cluster ID", bbox_to_anchor=(1.05, 1), loc='upper left')
+    if leg:
+        handles = getattr(leg, "legend_handles", getattr(leg, "legendHandles", []))
+        for handle in handles:
+            handle.set_sizes([50.0]) # Make legend dots readable
     plt.tight_layout()
     plt.savefig(output_img, dpi=150)
     plt.close()
