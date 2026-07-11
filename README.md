@@ -199,5 +199,5 @@ After training: next step is generate_stage3_embeddings_vlm.py over all  1.2M pa
 
 
 ### Stgage 3 similarity query
-*   An early model showed panel similarities, with the model cutting things off at 12 panels.
+*   Stage 3 model showing a query result via web interface for the text query 'batman catwoman heightened tension encounter'
 ![alt text](images/batman-catwoman-heightened-encounter.jpeg)
