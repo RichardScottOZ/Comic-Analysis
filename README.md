@@ -194,43 +194,13 @@ OCR Run not good enough
 - Epoch 8 : Train Loss: 2.4231 | Val Loss: 2.5615
 - Epoch 9 : Train Loss: 2.4171 | Val Loss: 2.5611
 
-
-  ┌───────┬───────┬───────┬────────┐
-  │ Epoch │ Train │ Val   │ Val Δ  │
-  ├───────┼───────┼───────┼────────┤
-  │ 1     │ 2.639 │ 3.156 │ —      │
-  ├───────┼───────┼───────┼────────┤
-  │ 2     │ 2.509 │ 2.848 │ -0.308 │
-  ├───────┼───────┼───────┼────────┤
-  │ 3     │ 2.477 │ 2.762 │ -0.086 │
-  ├───────┼───────┼───────┼────────┤
-  │ 4     │ 2.459 │ 2.687 │ -0.075 │
-  ├───────┼───────┼───────┼────────┤
-  │ 5     │ 2.448 │ 2.631 │ -0.056 │
-  ├───────┼───────┼───────┼────────┤
-  │ 6     │ 2.438 │ 2.603 │ -0.028 │
-  └───────┴───────┴───────┴────────┘
-
-   ┌───────┬───────┬───────┬────────────┐
-  │ Epoch │ Train │ Val   │ Val Δ      │
-  ├───────┼───────┼───────┼────────────┤
-  │ 5     │ 2.448 │ 2.631 │ -0.056     │
-  ├───────┼───────┼───────┼────────────┤
-  │ 6     │ 2.438 │ 2.603 │ -0.028     │
-  ├───────┼───────┼───────┼────────────┤
-  │ 7     │ 2.431 │ 2.594 │ -0.009     │
-  ├───────┼───────┼───────┼────────────┤
-  │ 8     │ 2.423 │ 2.562 │ -0.032     │
-  └───────┴───────┴───────┴────────────┘
-
-  ┌───────┬───────┬─────────────┐
-  │ Epoch │ Val   │ Val Δ       │
-  ├───────┼───────┼─────────────┤
-  │ 7     │ 2.594 │ -0.009      │
-  ├───────┼───────┼─────────────┤
-  │ 8     │ 2.562 │ -0.032      │
-  ├───────┼───────┼─────────────┤
-  │ 9     │ 2.561 │ -0.0004     │
-  └───────┴───────┴─────────────┘
-
 After training: next step is generate_stage3_embeddings_vlm.py over all  1.2M pages → then Stage 4
+
+- Results
+- You can see an example below - Gemini is the best in the world for zero shot comic classification - and as a low budget project Gemini 2.5 Flash results here are generally excellent
+- Note that Gemini 3 Flash is far more expensive, so you would expect this model to be deprecated - GLM 4.7 V can do a decent job too - but no api capability there - could be used locally to work through slowly, but a million pages would take some time.
+
+### Stage 3 similarity query
+*   Stage 3 model showing a query result via web interface for the text query 'batman catwoman heightened tension encounter'
+![alt text](images/batman-catwoman-heightened-encounter.jpeg)
+![alt text](images/batman-catwoman-heightened-encounter-2.jpeg)
