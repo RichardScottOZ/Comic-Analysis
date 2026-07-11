@@ -162,7 +162,10 @@ def analyze_and_plot(embeddings, n_clusters, title, output_img, metadata_list, z
     if leg:
         handles = getattr(leg, "legend_handles", getattr(leg, "legendHandles", []))
         for handle in handles:
-            handle.set_sizes([50.0]) # Make legend dots readable
+            if hasattr(handle, 'set_sizes'):
+                handle.set_sizes([50.0])
+            elif hasattr(handle, 'set_markersize'):
+                handle.set_markersize(10.0) # Line2D marker size is linear
     plt.tight_layout()
     plt.savefig(output_img, dpi=150)
     plt.close()
