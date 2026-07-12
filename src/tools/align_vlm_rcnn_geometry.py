@@ -88,13 +88,16 @@ def align_panels_for_page(row_dict):
             continue
         box2d = p.get('box_2d')
         bbox_px = None
-        if isinstance(box2d, (list, tuple)) and len(box2d) == 4:
-            y1, x1, y2, x2 = [float(v) for v in box2d]
-            px = x1 / 1000.0 * width
-            py = y1 / 1000.0 * height
-            pw = (x2 - x1) / 1000.0 * width
-            ph = (y2 - y1) / 1000.0 * height
-            bbox_px = [px, py, pw, ph]
+        if isinstance(box2d, (list, tuple)) and len(box2d) == 4 and all(v is not None for v in box2d):
+            try:
+                y1, x1, y2, x2 = [float(v) for v in box2d]
+                px = x1 / 1000.0 * width
+                py = y1 / 1000.0 * height
+                pw = (x2 - x1) / 1000.0 * width
+                ph = (y2 - y1) / 1000.0 * height
+                bbox_px = [px, py, pw, ph]
+            except (ValueError, TypeError):
+                bbox_px = None
             
         text_parts = []
         desc = p.get('description', '').strip()
