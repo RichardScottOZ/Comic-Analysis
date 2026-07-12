@@ -4,11 +4,12 @@
 Align VLM panel text and grounding (box_2d) with precise RCNN bounding boxes (bbox)
 across the dataset using spatial overlap (IoU) and greedy matching.
 
-Uses a ThreadPoolExecutor for safe, deadlock-free parallel disk I/O on Windows,
-showing an interactive progress bar.
+Supports incremental saving and resume capability to survive interruptions.
+Uses ThreadPoolExecutor for concurrent disk I/O.
 """
 
 import os
+import sys
 import json
 import argparse
 import pandas as pd
@@ -99,7 +100,7 @@ def align_panels_for_page(row_dict):
         desc = p.get('description', '').strip()
         if desc:
             text_parts.append(desc)
-        for tc in p.get('text_content', []):
+        for tc in (p.get('text_content') or []):
             if isinstance(tc, dict) and tc.get('text'):
                 t = str(tc['text']).strip()
                 if t:
@@ -205,12 +206,30 @@ def align_panels_for_page(row_dict):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Reconcile and align VLM and RCNN panel geometries via ThreadPool")
+    parser = argparse.ArgumentParser(description="Reconcile VLM and RCNN panel geometries with Resume Support")
     parser.add_argument('--limit', type=int, default=None, help="Limit number of pages to process")
-    parser.add_argument('--workers', type=int, default=16, help="Number of thread pool workers")
+    parser.add_argument('--workers', type=int, default=4, help="Number of thread pool workers")
     parser.add_argument('--output', type=str, default=DEFAULT_OUT, help="Path to save aligned JSON metadata")
+    parser.add_argument('--save_every', type=int, default=5000, help="Save progress incrementally every N pages")
     args = parser.parse_args()
     
+    # 1. Load existing file for Resuming
+    existing_cids = set()
+    aligned_dataset = []
+    
+    if os.path.exists(args.output):
+        print(f"Found existing output file: {args.output}")
+        try:
+            with open(args.output, 'r', encoding='utf-8') as f:
+                aligned_dataset = json.load(f)
+            # Gather completed canonical IDs
+            existing_cids = {item['canonical_id'] for item in aligned_dataset if 'canonical_id' in item}
+            print(f"  Resuming: {len(existing_cids):,} pages already processed.")
+        except Exception as e:
+            print(f"  Error loading {args.output} for resume: {e}. Starting fresh.")
+            aligned_dataset = []
+            
+    # 2. Load page list to align
     print(f"Loading page list from: {INPUT_CSV}")
     df = pd.read_csv(INPUT_CSV)
     
@@ -219,33 +238,60 @@ def main():
         df = df.head(args.limit)
         
     records = df.to_dict('records')
+    
+    # Filter out already processed pages
+    if existing_cids:
+        records = [r for r in records if r['vlm_canonical_id'] not in existing_cids]
+        
     total = len(records)
-    print(f"Total pages to align: {total:,}")
+    print(f"Remaining pages to align: {total:,}")
+    if total == 0:
+        print("All pages already processed. Done!")
+        return
+        
+    temp_results = []
     
-    aligned_dataset = []
-    
-    print(f"\nStarting parallel ThreadPool alignment using {args.workers} workers...")
+    print(f"\nStarting ThreadPool alignment using {args.workers} workers...")
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
-        # Stream tasks lazily to avoid memory bloat
+        # Stream tasks lazily to avoid memory leaks/bloat
         results = tqdm(
             executor.map(align_panels_for_page, records),
             total=total,
             desc="Aligning panels"
         )
-        # Collect results, skipping None values from errors
-        for res in results:
-            if res is not None:
-                aligned_dataset.append(res)
-                
-    print(f"\nAlignment complete! Successfully aligned {len(aligned_dataset):,} / {total:,} records.")
-    
-    print("Sorting aligned dataset by sequence_index to match Zarr order...")
-    aligned_dataset.sort(key=lambda x: x['sequence_index'])
-    
-    print(f"Saving aligned metadata to: {args.output}")
-    with open(args.output, 'w', encoding='utf-8') as f:
-        json.dump(aligned_dataset, f, indent=2)
         
+        for idx, res in enumerate(results):
+            if res is not None:
+                temp_results.append(res)
+                
+            # Incremental save checkpoint
+            if (idx + 1) % args.save_every == 0:
+                aligned_dataset.extend(temp_results)
+                temp_results = []
+                
+                # Sort by sequence_index to maintain array order structure
+                aligned_dataset.sort(key=lambda x: x['sequence_index'])
+                
+                # Write to temp file first to prevent corruption during writes
+                temp_out = args.output + ".tmp"
+                with open(temp_out, 'w', encoding='utf-8') as f:
+                    json.dump(aligned_dataset, f, indent=2)
+                # Atomic swap
+                if os.path.exists(args.output):
+                    os.remove(args.output)
+                os.rename(temp_out, args.output)
+                
+                print(f"\n  Checkpoint: Saved {len(aligned_dataset):,} completed pages to disk.")
+                sys.stdout.flush()
+                
+    # Final flush
+    if temp_results:
+        aligned_dataset.extend(temp_results)
+        aligned_dataset.sort(key=lambda x: x['sequence_index'])
+        with open(args.output, 'w', encoding='utf-8') as f:
+            json.dump(aligned_dataset, f, indent=2)
+            
+    print(f"\nLoop complete! Successfully aligned {len(aligned_dataset):,} records.")
     print("Dataset generation complete!")
 
 if __name__ == '__main__':
